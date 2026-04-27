@@ -284,26 +284,26 @@ def get_dashboard_stats():
     mes_end = f"{mes_actual}-{last_day:02d}"
 
     # Clientes activos
-    clientes_data = db.table("clientes").select("id", count="exact").eq("activo", True).execute()
-    clientes_activos = clientes_data.count or 0
+    clientes_data = db.table("clientes").select("id").eq("activo", True).execute()
+    clientes_activos = len(clientes_data.data or [])
 
     # Citas hoy
-    citas_hoy_data = db.table("citas").select("id, hora, observaciones, id_cliente, clientes(nombre)", count="exact").eq("fecha", today.isoformat()).eq("estado", "pendiente").order("hora").execute()
+    citas_hoy_data = db.table("citas").select("id, hora, observaciones, id_cliente, clientes(nombre)").eq("fecha", today.isoformat()).eq("estado", "pendiente").order("hora").execute()
     citas_hoy = citas_hoy_data.data or []
     for c in citas_hoy:
         c["nombre_cliente"] = (c.pop("clientes", None) or {}).get("nombre", "—")
 
     # Próximas 48h
     from datetime import timedelta
-    mañana = (today + timedelta(days=2)).isoformat()
-    proximas_data = db.table("citas").select("id, fecha, hora, id_cliente, clientes(nombre)").gte("fecha", today.isoformat()).lte("fecha", mañana).eq("estado", "pendiente").order("fecha").order("hora").execute()
+    manana = (today + timedelta(days=2)).isoformat()
+    proximas_data = db.table("citas").select("id, fecha, hora, id_cliente, clientes(nombre)").gte("fecha", today.isoformat()).lte("fecha", manana).eq("estado", "pendiente").order("fecha").order("hora").execute()
     proximas_citas = proximas_data.data or []
     for c in proximas_citas:
         c["nombre_cliente"] = (c.pop("clientes", None) or {}).get("nombre", "—")
 
     # Mensualidades pendientes mes actual
-    mens_pend = db.table("mensualidades").select("id", count="exact").like("mes", f"{mes_actual}%").eq("pagado", "No").execute()
-    mens_pendientes = mens_pend.count or 0
+    mens_pend = db.table("mensualidades").select("id").like("mes", f"{mes_actual}%").eq("pagado", "No").execute()
+    mens_pendientes = len(mens_pend.data or [])
 
     # Ventas mes actual
     ventas_mes = db.table("ventas").select("total_pvp, total_benef, pagado").gte("fecha", mes_start).lte("fecha", mes_end).execute()
