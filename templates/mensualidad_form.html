@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Nueva mensualidad — INFORBAXE{% endblock %}
+{% block page_title %}➕ Nueva mensualidad{% endblock %}
+{% block page_sub %}Gestión de mensualidades{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('mensualidades') }}" class="btn btn-secondary">← Volver</a>
+{% endblock %}
+{% block content %}
+<div style="max-width:520px; margin:0 auto;">
+  <div class="card">
+    <form method="POST">
+      <div class="form-group">
+        <label class="form-label">Cliente *</label>
+        <select name="id_cliente" class="form-control" required>
+          <option value="">Selecciona un cliente...</option>
+          {% for c in clientes %}
+          <option value="{{ c.id }}">{{ c.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Concepto *</label>
+        <input type="text" name="concepto" class="form-control" placeholder="Ej: Mantenimiento web, Hosting..." required>
+      </div>
+      <div class="form-grid form-grid-2">
+        <div class="form-group">
+          <label class="form-label">Importe (€) *</label>
+          <input type="number" name="importe" class="form-control" step="0.01" min="0" placeholder="0.00" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Mes (YYYY-MM) *</label>
+          <input type="month" name="mes" class="form-control" required
+                 value="{{ today_mes if today_mes else '' }}">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Pagado</label>
+        <select name="pagado" class="form-control">
+          <option value="No">No</option>
+          <option value="Sí">Sí</option>
+        </select>
+      </div>
+      <div style="display:flex; gap:12px; justify-content:flex-end; margin-top:8px;">
+        <a href="{{ url_for('mensualidades') }}" class="btn btn-secondary">Cancelar</a>
+        <button type="submit" class="btn btn-primary">💾 Crear mensualidad</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

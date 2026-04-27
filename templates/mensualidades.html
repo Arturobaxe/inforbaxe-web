@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}Mensualidades — INFORBAXE{% endblock %}
+{% block page_title %}📅 Mensualidades{% endblock %}
+{% block page_sub %}Año {{ año }}{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('mensualidad_nueva') }}" class="btn btn-primary">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    Nueva mensualidad
+  </a>
+{% endblock %}
+{% block extra_head %}
+<style>
+  .mens-grid { overflow-x: auto; }
+  .mens-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
+  .mens-table th, .mens-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .mens-table thead th { background: var(--bg3); color: var(--t3); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; position: sticky; top: 0; z-index:2;}
+  .mens-table thead th:first-child { position: sticky; left: 0; z-index:3; background: var(--bg3); }
+  .mens-table tbody td:first-child { position: sticky; left: 0; background: var(--bg2); z-index:1; font-weight: 600; min-width: 160px; }
+  .mens-table tbody tr:hover td:first-child { background: var(--bg3); }
+  .mens-table tbody tr:hover { background: var(--bg3); }
+
+  .cell-paid {
+    background: rgba(16,185,129,0.15);
+    color: var(--green);
+    border-radius: 6px;
+    text-align: center;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 5px 4px;
+    transition: all 0.15s;
+    display: block;
+    width: 100%;
+  }
+  .cell-paid:hover { background: rgba(16,185,129,0.25); }
+  .cell-unpaid {
+    background: rgba(239,68,68,0.12);
+    color: var(--red);
+    border-radius: 6px;
+    text-align: center;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 5px 4px;
+    transition: all 0.15s;
+    display: block;
+    width: 100%;
+  }
+  .cell-unpaid:hover { background: rgba(239,68,68,0.22); }
+  .cell-empty {
+    background: var(--bg3);
+    border-radius: 6px;
+    text-align: center;
+    color: var(--t4);
+    font-size: 11px;
+    padding: 5px 4px;
+    display: block;
+  }
+  .cell-overdue {
+    background: rgba(239,68,68,0.22);
+    color: var(--red);
+    border-radius: 6px;
+    text-align: center;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 5px 4px;
+    transition: all 0.15s;
+    display: block;
+    border: 1px solid rgba(239,68,68,0.4);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.7} }
+
+  .totals-row td { background: var(--bg1) !important; color: var(--t2); font-size: 11px; font-weight: 600; padding-top: 10px; }
+  .totals-row td:first-child { color: var(--t3); }
+</style>
+{% endblock %}
+{% block content %}
+
+<!-- Controls -->
+<div class="card mb-4">
+  <form method="GET" style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end;">
+    <!-- Year nav -->
+    <div style="display:flex; align-items:center; gap:8px;">
+      <a href="?año={{ año - 1 }}&filtro={{ filtro }}&buscar={{ buscar }}" class="btn btn-secondary btn-sm">◀</a>
+      <span style="font-size:20px; font-weight:700; color:var(--green); font-family:'DM Mono',monospace; min-width:52px; text-align:center;">{{ año }}</span>
+      <a href="?año={{ año + 1 }}&filtro={{ filtro }}&buscar={{ buscar }}" class="btn btn-secondary btn-sm">▶</a>
+    </div>
+
+    <input type="hidden" name="año" value="{{ año }}">
+    <input type="text" name="buscar" value="{{ buscar }}" placeholder="🔍 Buscar cliente..." class="form-control" style="max-width:200px;">
+
+    <select name="filtro" class="form-control" style="max-width:150px;">
+      <option value="all" {% if filtro=='all' %}selected{% endif %}>Todos</option>
+      <option value="paid" {% if filtro=='paid' %}selected{% endif %}>✅ Pagados</option>
+      <option value="unpaid" {% if filtro=='unpaid' %}selected{% endif %}>❌ Pendientes</option>
+    </select>
+
+    <button type="submit" class="btn btn-secondary">Filtrar</button>
+  </form>
+</div>
+
+{% if clientes %}
+<div class="card">
+  <div class="mens-grid">
+    <table class="mens-table">
+      <thead>
+        <tr>
+          <th>Cliente</th>
+          {% for mes in meses %}
+          <th style="text-align:center; min-width:70px;">
+            {{ mes[5:] }}
+            {% if mes == today_mes %}<br><span style="color:var(--green);">●</span>{% endif %}
+          </th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in clientes %}
+        <tr>
+          <td>
+            <a href="{{ url_for('cliente_historial', id_cliente=c.id) }}" style="color:var(--t1);">{{ c.nombre }}</a>
+            {% if not c.activo %}<span class="badge badge-gray" style="margin-left:4px;">Baja</span>{% endif %}
+          </td>
+          {% for mes in meses %}
+          {% set m = c.meses.get(mes) %}
+          <td style="padding:4px 6px;">
+            {% if m %}
+              {% set vencido = (mes < today_mes) and m.pagado != 'Sí' %}
+              {% if m.pagado == 'Sí' %}
+                <button class="cell-paid" onclick="togglePago({{ m.id }}, 'No', this)" title="Pagado · {{ m.importe }}€ · {{ m.concepto }}">
+                  ✓ {{ m.importe }}€
+                </button>
+              {% elif vencido %}
+                <button class="cell-overdue" onclick="togglePago({{ m.id }}, 'Sí', this)" title="{{ m.concepto }} · VENCIDO">
+                  ⚠ {{ m.importe }}€
+                </button>
+              {% else %}
+                <button class="cell-unpaid" onclick="togglePago({{ m.id }}, 'Sí', this)" title="{{ m.concepto }} · pendiente">
+                  ✗ {{ m.importe }}€
+                </button>
+              {% endif %}
+            {% else %}
+              <span class="cell-empty">—</span>
+            {% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+        <!-- Totals -->
+        <tr class="totals-row">
+          <td>TOTAL PAGADO</td>
+          {% for mes in meses %}
+          <td style="text-align:center; color:var(--green); font-family:'DM Mono',monospace;">
+            {{ totales_mes[mes].pagado }}€
+          </td>
+          {% endfor %}
+        </tr>
+        <tr class="totals-row">
+          <td>PENDIENTE</td>
+          {% for mes in meses %}
+          <td style="text-align:center; color:{% if totales_mes[mes].pendiente > 0 %}var(--red){% else %}var(--t4){% endif %}; font-family:'DM Mono',monospace;">
+            {{ totales_mes[mes].pendiente }}€
+          </td>
+          {% endfor %}
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <div class="empty-state">
+    <div class="empty-state-icon">📅</div>
+    <div class="empty-state-text">No hay mensualidades para {{ año }}</div>
+    <a href="{{ url_for('mensualidad_nueva') }}" class="btn btn-primary mt-4">Añadir mensualidad</a>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+{% block scripts %}
+<script>
+function togglePago(id, nuevoEstado, btn) {
+  const original = btn.innerHTML;
+  btn.innerHTML = '...';
+  btn.disabled = true;
+
+  fetch(`/api/mensualidades/${id}/toggle`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({pagado: nuevoEstado})
+  })
+  .then(r => r.json())
+  .then(() => location.reload())
+  .catch(() => {
+    btn.innerHTML = original;
+    btn.disabled = false;
+    alert('Error al actualizar');
+  });
+}
+</script>
+{% endblock %}

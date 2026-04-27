@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Ventas — INFORBAXE{% endblock %}
+{% block page_title %}🛒 Ventas{% endblock %}
+{% block page_sub %}{{ ventas|length }} registros filtrados{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('venta_nueva') }}" class="btn btn-primary">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    Nueva venta
+  </a>
+{% endblock %}
+{% block content %}
+
+<!-- Filtros -->
+<div class="card mb-4">
+  <form method="GET" style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;">
+    <div>
+      <label class="form-label">Mes (YYYY-MM)</label>
+      <input type="month" name="mes" value="{{ filtros.mes }}" class="form-control" style="max-width:160px;">
+    </div>
+    <div>
+      <label class="form-label">Cliente</label>
+      <select name="id_cliente" class="form-control" style="max-width:200px;">
+        <option value="">Todos</option>
+        {% for c in clientes %}
+        <option value="{{ c.id }}" {% if filtros.id_cliente == c.id|string %}selected{% endif %}>{{ c.nombre }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="form-label">Método</label>
+      <select name="metodo" class="form-control" style="max-width:140px;">
+        <option value="">Todos</option>
+        {% for m in metodos %}
+        <option value="{{ m }}" {% if filtros.metodo == m %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="form-label">Pagado</label>
+      <select name="pagado" class="form-control" style="max-width:110px;">
+        <option value="">Todos</option>
+        <option value="Sí" {% if filtros.pagado=='Sí' %}selected{% endif %}>Sí</option>
+        <option value="No" {% if filtros.pagado=='No' %}selected{% endif %}>No</option>
+      </select>
+    </div>
+    <button type="submit" class="btn btn-secondary" style="margin-top:auto;">Filtrar</button>
+    <a href="{{ url_for('ventas') }}" class="btn btn-danger" style="margin-top:auto;">✖ Limpiar</a>
+  </form>
+</div>
+
+<!-- Resumen totales -->
+{% if ventas %}
+<div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:14px; margin-bottom:20px;">
+  <div class="stat-card green">
+    <div class="stat-label">Total facturado</div>
+    <div class="stat-value green" style="font-size:22px;">{{ "%.2f"|format(total_pvp) }}€</div>
+  </div>
+  <div class="stat-card cyan">
+    <div class="stat-label">Beneficio neto</div>
+    <div class="stat-value" style="font-size:22px; color:var(--cyan);">{{ "%.2f"|format(total_benef) }}€</div>
+  </div>
+  <div class="stat-card amber">
+    <div class="stat-label">Nº ventas</div>
+    <div class="stat-value" style="font-size:22px; color:var(--amber);">{{ ventas|length }}</div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Tabla -->
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Fecha</th>
+          <th>Cliente</th>
+          <th>Productos</th>
+          <th>Total PVP</th>
+          <th>Beneficio</th>
+          <th>Método</th>
+          <th>Pagado</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for v in ventas %}
+        <tr>
+          <td class="td-mono td-muted">{{ v.id }}</td>
+          <td class="td-mono">{{ v.fecha }}</td>
+          <td>
+            <a href="{{ url_for('cliente_historial', id_cliente=v.id_cliente) }}" style="font-weight:600; color:var(--t1);">{{ v.nombre_cliente }}</a>
+          </td>
+          <td style="max-width:220px;">
+            {% if v.productos %}
+              {% for p in v.productos[:3] %}
+                <span style="font-size:12px; color:var(--t2);">{{ p.nombre }} ({{ "%.2f"|format(p.pvp|float) }}€) x{{ p.cantidad }}</span>{% if not loop.last %}, {% endif %}
+              {% endfor %}
+              {% if v.productos|length > 3 %}<span class="td-muted"> +{{ v.productos|length - 3 }} más</span>{% endif %}
+            {% else %}
+              <span class="td-muted">—</span>
+            {% endif %}
+          </td>
+          <td class="td-mono font-semibold text-green">{{ "%.2f"|format(v.total_pvp|float) }}€</td>
+          <td class="td-mono" style="color:var(--cyan);">{{ "%.2f"|format(v.total_benef|float) }}€</td>
+          <td><span class="badge badge-blue">{{ v.metodo_pago }}</span></td>
+          <td>
+            {% if v.pagado == 'Sí' %}
+              <span class="badge badge-green">✓ Sí</span>
+            {% else %}
+              <span class="badge badge-red">✗ No</span>
+            {% endif %}
+          </td>
+          <td>
+            <div style="display:flex; gap:5px; justify-content:flex-end;">
+              <a href="{{ url_for('venta_editar', id_venta=v.id) }}" class="btn btn-blue btn-sm">✏️</a>
+              <button onclick="confirmDelete('/api/ventas/{{ v.id }}', '¿Eliminar venta #{{ v.id }}?')" class="btn btn-danger btn-sm">🗑️</button>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9"><div class="empty-state"><div class="empty-state-icon">🛒</div><div class="empty-state-text">Sin ventas</div></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

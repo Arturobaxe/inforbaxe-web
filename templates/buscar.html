@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Búsqueda — INFORBAXE{% endblock %}
+{% block page_title %}🔍 Búsqueda global{% endblock %}
+{% block page_sub %}{{ 'Resultados para "' + q + '"' if q else 'Busca clientes, ventas y citas' }}{% endblock %}
+{% block content %}
+
+<div class="card mb-4">
+  <form method="GET" style="display:flex; gap:10px;">
+    <input type="text" name="q" value="{{ q }}" class="form-control"
+           placeholder="Busca clientes, ventas o citas..." autofocus style="flex:1;">
+    <button type="submit" class="btn btn-primary">Buscar</button>
+  </form>
+</div>
+
+{% if q %}
+  <!-- Clientes -->
+  <div class="card mb-4">
+    <div class="card-header">
+      <div class="card-title">👥 Clientes ({{ resultados.clientes|length }})</div>
+    </div>
+    {% if resultados.clientes %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Nombre</th><th>Email</th><th>Teléfono</th><th></th></tr></thead>
+        <tbody>
+          {% for c in resultados.clientes %}
+          <tr>
+            <td><strong>{{ c.nombre }}</strong></td>
+            <td class="td-muted">{{ c.email or '—' }}</td>
+            <td class="td-mono td-muted">{{ c.telefono or '—' }}</td>
+            <td><a href="{{ url_for('cliente_historial', id_cliente=c.id) }}" class="btn btn-secondary btn-sm">Ver historial</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state" style="padding:20px;"><div class="empty-state-text">Sin resultados</div></div>
+    {% endif %}
+  </div>
+
+  <!-- Ventas -->
+  <div class="card mb-4">
+    <div class="card-header">
+      <div class="card-title">🛒 Ventas ({{ resultados.ventas|length }})</div>
+    </div>
+    {% if resultados.ventas %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Fecha</th><th>Cliente</th><th>Total</th><th>Comentarios</th><th></th></tr></thead>
+        <tbody>
+          {% for v in resultados.ventas %}
+          <tr>
+            <td class="td-mono">{{ v.fecha }}</td>
+            <td><strong>{{ v.nombre_cliente }}</strong></td>
+            <td class="td-mono text-green">{{ "%.2f"|format(v.total_pvp|float) }}€</td>
+            <td class="td-muted">{{ v.comentarios[:60] if v.comentarios else '—' }}</td>
+            <td><a href="{{ url_for('venta_editar', id_venta=v.id) }}" class="btn btn-secondary btn-sm">Editar</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state" style="padding:20px;"><div class="empty-state-text">Sin resultados</div></div>
+    {% endif %}
+  </div>
+
+  <!-- Citas -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">🗓️ Citas ({{ resultados.citas|length }})</div>
+    </div>
+    {% if resultados.citas %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Fecha</th><th>Hora</th><th>Cliente</th><th>Observaciones</th><th></th></tr></thead>
+        <tbody>
+          {% for c in resultados.citas %}
+          <tr>
+            <td class="td-mono">{{ c.fecha }}</td>
+            <td class="td-mono">{{ c.hora[:5] if c.hora else '—' }}</td>
+            <td><strong>{{ c.nombre_cliente }}</strong></td>
+            <td class="td-muted">{{ c.observaciones[:60] if c.observaciones else '—' }}</td>
+            <td><a href="{{ url_for('cita_editar', id_cita=c.id) }}" class="btn btn-secondary btn-sm">Editar</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state" style="padding:20px;"><div class="empty-state-text">Sin resultados</div></div>
+    {% endif %}
+  </div>
+{% else %}
+<div class="card">
+  <div class="empty-state">
+    <div class="empty-state-icon">🔍</div>
+    <div class="empty-state-text">Escribe algo para buscar en toda la aplicación</div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

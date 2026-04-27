@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Citas — INFORBAXE{% endblock %}
+{% block page_title %}🗓️ Citas{% endblock %}
+{% block page_sub %}{{ citas|length }} citas{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('cita_nueva') }}" class="btn btn-primary">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    Nueva cita
+  </a>
+{% endblock %}
+{% block content %}
+
+<div class="card mb-4">
+  <form method="GET" style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;">
+    <div>
+      <label class="form-label">Desde</label>
+      <input type="date" name="desde" value="{{ filtros.desde }}" class="form-control">
+    </div>
+    <div>
+      <label class="form-label">Buscar cliente</label>
+      <input type="text" name="buscar" value="{{ filtros.buscar }}" class="form-control" placeholder="Nombre...">
+    </div>
+    <div>
+      <label class="form-label">Estado</label>
+      <select name="estado" class="form-control">
+        <option value="">Todos</option>
+        <option value="pendiente" {% if filtros.estado=='pendiente' %}selected{% endif %}>Pendiente</option>
+        <option value="completada" {% if filtros.estado=='completada' %}selected{% endif %}>Completada</option>
+        <option value="cancelada" {% if filtros.estado=='cancelada' %}selected{% endif %}>Cancelada</option>
+      </select>
+    </div>
+    <button type="submit" class="btn btn-secondary" style="margin-top:auto;">Filtrar</button>
+    <a href="{{ url_for('citas') }}" class="btn btn-danger" style="margin-top:auto;">✖</a>
+  </form>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Hora</th>
+          <th>Cliente</th>
+          <th>Observaciones</th>
+          <th>Estado</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in citas %}
+        {% set es_hoy = c.fecha == hoy %}
+        <tr style="{{ 'background: rgba(16,185,129,0.05);' if es_hoy else '' }}">
+          <td class="td-mono font-semibold {% if es_hoy %}text-green{% endif %}">
+            {{ c.fecha }}{% if es_hoy %} <span class="badge badge-green">HOY</span>{% endif %}
+          </td>
+          <td class="td-mono">{{ c.hora[:5] if c.hora else '—' }}</td>
+          <td>
+            <a href="{{ url_for('cliente_historial', id_cliente=c.id_cliente) }}" style="font-weight:600; color:var(--t1);">{{ c.nombre_cliente }}</a>
+          </td>
+          <td style="max-width:260px; color:var(--t2); font-size:12px;">{{ c.observaciones[:80] if c.observaciones else '—' }}</td>
+          <td>
+            {% if c.estado == 'pendiente' %}   <span class="badge badge-amber">⏳ Pendiente</span>
+            {% elif c.estado == 'completada' %} <span class="badge badge-green">✓ Completada</span>
+            {% elif c.estado == 'cancelada' %}  <span class="badge badge-gray">✗ Cancelada</span>
+            {% else %}                           <span class="badge badge-gray">{{ c.estado }}</span>
+            {% endif %}
+          </td>
+          <td>
+            <div style="display:flex; gap:5px; justify-content:flex-end;">
+              <a href="{{ url_for('cita_editar', id_cita=c.id) }}" class="btn btn-blue btn-sm">✏️</a>
+              <button onclick="confirmDelete('/api/citas/{{ c.id }}', '¿Eliminar cita de {{ c.nombre_cliente }}?')" class="btn btn-danger btn-sm">🗑️</button>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6"><div class="empty-state"><div class="empty-state-icon">🗓️</div><div class="empty-state-text">Sin citas</div></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>INFORBAXE — Acceso</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg0: #0A0D12; --bg1: #111520; --bg2: #181D2A; --bg3: #1E2535;
+      --green: #10B981; --green-dim: rgba(16,185,129,0.15); --green-glow: rgba(16,185,129,0.35);
+      --red: #EF4444; --red-dim: rgba(239,68,68,0.12);
+      --border: rgba(255,255,255,0.07); --border-hi: rgba(255,255,255,0.13);
+      --t1: #F1F5F9; --t2: #94A3B8; --t3: #64748B;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg0);
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      -webkit-font-smoothing: antialiased;
+      position: relative; overflow: hidden;
+    }
+    /* Mesh background */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0;
+      background: radial-gradient(ellipse 70% 60% at 20% 50%, rgba(16,185,129,0.06) 0%, transparent 70%),
+                  radial-gradient(ellipse 60% 50% at 80% 30%, rgba(59,130,246,0.05) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .login-wrap {
+      position: relative; z-index: 1;
+      width: 100%; max-width: 400px;
+      padding: 16px;
+      animation: fadeUp 0.4s ease;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: none; }
+    }
+
+    .login-logo {
+      text-align: center; margin-bottom: 32px;
+    }
+    .login-logo-name {
+      font-size: 28px; font-weight: 700;
+      color: var(--green);
+      letter-spacing: -0.5px;
+    }
+    .login-logo-sub { font-size: 13px; color: var(--t3); margin-top: 4px; }
+
+    .login-card {
+      background: var(--bg1);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 36px 32px;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+    }
+    .login-card h1 { font-size: 20px; font-weight: 700; color: var(--t1); margin-bottom: 6px; }
+    .login-card p { font-size: 13px; color: var(--t3); margin-bottom: 28px; }
+
+    .form-group { margin-bottom: 16px; }
+    .form-label { display: block; font-size: 11px; font-weight: 600; color: var(--t2); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .form-control {
+      width: 100%;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 11px 14px;
+      color: var(--t1);
+      font-size: 14px;
+      font-family: 'DM Sans', sans-serif;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .form-control:focus { border-color: var(--green); box-shadow: 0 0 0 3px var(--green-dim); }
+    .form-control::placeholder { color: var(--t3); }
+
+    .error-msg {
+      background: var(--red-dim);
+      border: 1px solid rgba(239,68,68,0.25);
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: var(--red);
+      font-size: 13px;
+      margin-bottom: 16px;
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .btn-login {
+      width: 100%;
+      background: var(--green);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      font-family: 'DM Sans', sans-serif;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-top: 8px;
+      letter-spacing: 0.01em;
+    }
+    .btn-login:hover { background: #0ea572; box-shadow: 0 0 20px var(--green-glow); }
+    .btn-login:active { transform: scale(0.98); }
+
+    .login-footer { text-align: center; margin-top: 20px; font-size: 12px; color: var(--t3); }
+  </style>
+</head>
+<body>
+<div class="login-wrap">
+  <div class="login-logo">
+    <div class="login-logo-name">INFORBAXE</div>
+    <div class="login-logo-sub">Sistema de gestión de clientes</div>
+  </div>
+
+  <div class="login-card">
+    <h1>Bienvenido</h1>
+    <p>Introduce tus credenciales para continuar</p>
+
+    {% if error %}
+    <div class="error-msg">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      {{ error }}
+    </div>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('login') }}">
+      <div class="form-group">
+        <label class="form-label" for="username">Usuario</label>
+        <input class="form-control" type="text" id="username" name="username" placeholder="Tu nombre de usuario" required autofocus>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="password">Contraseña</label>
+        <input class="form-control" type="password" id="password" name="password" placeholder="••••••••" required>
+      </div>
+      <button type="submit" class="btn-login">Entrar →</button>
+    </form>
+  </div>
+
+  <div class="login-footer">INFORBAXE · Gestión privada</div>
+</div>
+</body>
+</html>

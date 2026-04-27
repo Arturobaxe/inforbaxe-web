@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Editar' if cliente else 'Nuevo' }} cliente — INFORBAXE{% endblock %}
+{% block page_title %}{{ '✏️ Editar cliente' if cliente else '➕ Nuevo cliente' }}{% endblock %}
+{% block page_sub %}Gestión de clientes{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('clientes') }}" class="btn btn-secondary">← Volver</a>
+{% endblock %}
+{% block content %}
+
+<div style="max-width:520px; margin:0 auto;">
+  <div class="card">
+    <form method="POST">
+      <div class="form-group">
+        <label class="form-label">Nombre completo *</label>
+        <input type="text" name="nombre" class="form-control"
+               value="{{ cliente.nombre if cliente else '' }}"
+               placeholder="Nombre del cliente" required autofocus>
+      </div>
+      <div class="form-grid form-grid-2">
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" name="email" class="form-control"
+                 value="{{ cliente.email if cliente else '' }}"
+                 placeholder="email@ejemplo.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Teléfono</label>
+          <input type="tel" name="telefono" class="form-control"
+                 value="{{ cliente.telefono if cliente else '' }}"
+                 placeholder="600 000 000">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notas internas</label>
+        <textarea name="notas" class="form-control" rows="3"
+                  placeholder="Observaciones sobre el cliente...">{{ cliente.notas if cliente else '' }}</textarea>
+      </div>
+
+      <div style="display:flex; gap:12px; justify-content:flex-end; margin-top:8px;">
+        <a href="{{ url_for('clientes') }}" class="btn btn-secondary">Cancelar</a>
+        <button type="submit" class="btn btn-primary">
+          💾 {{ 'Guardar cambios' if cliente else 'Crear cliente' }}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

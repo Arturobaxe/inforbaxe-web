@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — INFORBAXE{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block page_sub %}Resumen del día · {{ today.strftime('%d/%m/%Y') }}{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('venta_nueva') }}" class="btn btn-primary">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    Nueva venta
+  </a>
+  <a href="{{ url_for('cita_nueva') }}" class="btn btn-secondary">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    Nueva cita
+  </a>
+{% endblock %}
+{% block content %}
+
+<!-- Stat cards -->
+<div class="stat-grid">
+  <div class="stat-card green">
+    <div class="stat-label">Clientes activos</div>
+    <div class="stat-value green">{{ stats.clientes_activos }}</div>
+    <div class="stat-sub">Total en el sistema</div>
+    <div class="stat-icon">👥</div>
+  </div>
+  <div class="stat-card blue">
+    <div class="stat-label">Citas hoy</div>
+    <div class="stat-value">{{ stats.citas_hoy | length }}</div>
+    <div class="stat-sub">{{ today.strftime('%d de %B') }}</div>
+    <div class="stat-icon">🗓️</div>
+  </div>
+  <div class="stat-card amber">
+    <div class="stat-label">Mensualidades pendientes</div>
+    <div class="stat-value amber">{{ stats.mensualidades_pendientes }}</div>
+    <div class="stat-sub">Este mes sin cobrar</div>
+    <div class="stat-icon">📅</div>
+  </div>
+  <div class="stat-card green">
+    <div class="stat-label">Facturación del mes</div>
+    <div class="stat-value green">{{ "%.2f"|format(stats.ventas_mes.total) }}€</div>
+    <div class="stat-sub">{{ stats.ventas_mes.num }} ventas · {{ stats.ventas_mes.mes }}</div>
+    <div class="stat-icon">🛒</div>
+  </div>
+  <div class="stat-card cyan">
+    <div class="stat-label">Beneficio del mes</div>
+    <div class="stat-value" style="color:var(--cyan)">{{ "%.2f"|format(stats.ventas_mes.beneficio) }}€</div>
+    <div class="stat-sub">Margen neto estimado</div>
+    <div class="stat-icon">💰</div>
+  </div>
+</div>
+
+<!-- Main grid -->
+<div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+
+  <!-- Citas hoy -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">📅 Citas de hoy</div>
+        <div class="card-sub">{{ today.strftime('%A, %d de %B') }}</div>
+      </div>
+      <a href="{{ url_for('citas') }}" class="btn btn-secondary btn-sm">Ver todas</a>
+    </div>
+    {% if stats.citas_hoy %}
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        {% for c in stats.citas_hoy %}
+        <div style="display:flex; align-items:center; gap:12px; padding:10px 12px; background:var(--bg3); border-radius:8px;">
+          <div style="font-size:11px; font-weight:700; color:var(--green); font-family:'DM Mono',monospace; width:40px;">{{ c.hora[:5] if c.hora else '—' }}</div>
+          <div style="flex:1;">
+            <div style="font-size:13px; font-weight:600;">{{ c.nombre_cliente }}</div>
+            {% if c.observaciones %}<div style="font-size:11px; color:var(--t3); margin-top:2px;">{{ c.observaciones[:60] }}</div>{% endif %}
+          </div>
+          <span class="badge badge-green">Pendiente</span>
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state">
+        <div class="empty-state-icon">✅</div>
+        <div class="empty-state-text">Sin citas para hoy</div>
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Notificaciones próximas 48h -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">🔔 Próximas 48 horas</div>
+        <div class="card-sub">Recordatorio de citas</div>
+      </div>
+    </div>
+    {% if stats.proximas_citas %}
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        {% for c in stats.proximas_citas %}
+        <div style="display:flex; align-items:center; gap:12px; padding:10px 12px; background:var(--bg3); border-radius:8px; border-left: 3px solid var(--amber);">
+          <div>
+            <div style="font-size:13px; font-weight:600;">{{ c.nombre_cliente }}</div>
+            <div style="font-size:11px; color:var(--t3); margin-top:2px;">
+              {{ c.fecha }} · {{ c.hora[:5] if c.hora else '' }}
+            </div>
+          </div>
+          <a href="{{ url_for('cita_editar', id_cita=c.id) }}" class="btn btn-secondary btn-sm" style="margin-left:auto;">Ver</a>
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state">
+        <div class="empty-state-icon">🗓️</div>
+        <div class="empty-state-text">Sin citas próximas</div>
+      </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- Accesos rápidos -->
+<div class="card mt-4">
+  <div class="card-title" style="margin-bottom:14px;">⚡ Accesos rápidos</div>
+  <div style="display:flex; gap:12px; flex-wrap:wrap;">
+    <a href="{{ url_for('cliente_nuevo') }}" class="btn btn-secondary">👤 Nuevo cliente</a>
+    <a href="{{ url_for('venta_nueva') }}" class="btn btn-secondary">🛒 Nueva venta</a>
+    <a href="{{ url_for('cita_nueva') }}" class="btn btn-secondary">🗓️ Nueva cita</a>
+    <a href="{{ url_for('mensualidad_nueva') }}" class="btn btn-secondary">📅 Nueva mensualidad</a>
+    <a href="{{ url_for('mensualidades') }}?filtro=unpaid" class="btn btn-danger">⚠️ Ver pendientes</a>
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Clientes — INFORBAXE{% endblock %}
+{% block page_title %}👥 Clientes{% endblock %}
+{% block page_sub %}{{ clientes|length }} clientes en el sistema{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('cliente_nuevo') }}" class="btn btn-primary">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    Añadir cliente
+  </a>
+{% endblock %}
+{% block content %}
+
+<div class="card">
+  <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
+    <input type="text" id="table-search" placeholder="🔍  Filtrar por nombre, email o teléfono..." class="form-control" style="max-width:380px;">
+    <label class="toggle-switch" style="margin-left:auto; gap:8px;">
+      <input type="checkbox" id="filter-activos" checked>
+      <div class="toggle-track"></div>
+      <span style="font-size:13px; color:var(--t2);">Solo activos</span>
+    </label>
+  </div>
+
+  <div class="table-wrap">
+    <table id="clientes-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Nombre</th>
+          <th>Email</th>
+          <th>Teléfono</th>
+          <th>Estado</th>
+          <th>Alta</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in clientes %}
+        <tr class="client-row" data-activo="{{ 'true' if c.activo else 'false' }}" data-search="{{ c.nombre }} {{ c.email }} {{ c.telefono }}">
+          <td class="td-mono td-muted">{{ c.id }}</td>
+          <td>
+            <a href="{{ url_for('cliente_historial', id_cliente=c.id) }}" style="font-weight:600; color:var(--t1);">
+              {{ c.nombre }}
+            </a>
+            {% if c.notas %}<div style="font-size:11px; color:var(--t3);">{{ c.notas[:50] }}</div>{% endif %}
+          </td>
+          <td class="td-muted">{{ c.email or '—' }}</td>
+          <td class="td-mono td-muted">{{ c.telefono or '—' }}</td>
+          <td>
+            {% if c.activo %}
+              <span class="badge badge-green">Activo</span>
+            {% else %}
+              <span class="badge badge-gray">Inactivo</span>
+            {% endif %}
+          </td>
+          <td class="td-muted td-mono" style="font-size:12px;">{{ c.fecha_alta or '—' }}</td>
+          <td>
+            <div style="display:flex; gap:6px; justify-content:flex-end;">
+              <a href="{{ url_for('cliente_historial', id_cliente=c.id) }}" class="btn btn-secondary btn-sm" title="Ver historial">📋</a>
+              <a href="{{ url_for('cliente_editar', id_cliente=c.id) }}" class="btn btn-blue btn-sm" title="Editar">✏️</a>
+              <button onclick="confirmDelete('/api/clientes/{{ c.id }}', '¿Eliminar al cliente {{ c.nombre }}? Esta acción no se puede deshacer.')" class="btn btn-danger btn-sm" title="Eliminar">🗑️</button>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="empty-state">Sin clientes registrados</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+const searchInput = document.getElementById('table-search');
+const filterActivos = document.getElementById('filter-activos');
+
+function filterTable() {
+  const q = searchInput.value.toLowerCase();
+  const soloActivos = filterActivos.checked;
+  document.querySelectorAll('.client-row').forEach(row => {
+    const matchSearch = !q || row.dataset.search.toLowerCase().includes(q);
+    const matchActivo = !soloActivos || row.dataset.activo === 'true';
+    row.style.display = (matchSearch && matchActivo) ? '' : 'none';
+  });
+}
+searchInput.addEventListener('input', filterTable);
+filterActivos.addEventListener('change', filterTable);
+</script>
+{% endblock %}

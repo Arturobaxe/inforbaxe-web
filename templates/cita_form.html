@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Editar' if cita else 'Nueva' }} cita — INFORBAXE{% endblock %}
+{% block page_title %}{{ '✏️ Editar cita' if cita else '➕ Nueva cita' }}{% endblock %}
+{% block page_sub %}Gestión de citas{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('citas') }}" class="btn btn-secondary">← Volver</a>
+{% endblock %}
+{% block content %}
+
+<div style="max-width:560px; margin:0 auto;">
+  <div class="card">
+    <form method="POST">
+      <div class="form-group">
+        <label class="form-label">Cliente *</label>
+        <select name="id_cliente" class="form-control" required>
+          <option value="">Selecciona un cliente...</option>
+          {% for c in clientes %}
+          <option value="{{ c.id }}"
+            {% if cita and cita.id_cliente == c.id %}selected
+            {% endif %}>{{ c.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-grid form-grid-2">
+        <div class="form-group">
+          <label class="form-label">Fecha *</label>
+          <input type="date" name="fecha" class="form-control"
+                 value="{{ cita.fecha if cita else fecha_defecto }}" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Hora *</label>
+          <input type="time" name="hora" class="form-control"
+                 value="{{ cita.hora[:5] if cita and cita.hora else '' }}" required>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Estado</label>
+        <select name="estado" class="form-control">
+          <option value="pendiente"  {% if not cita or cita.estado=='pendiente'  %}selected{% endif %}>⏳ Pendiente</option>
+          <option value="completada" {% if cita and cita.estado=='completada' %}selected{% endif %}>✓ Completada</option>
+          <option value="cancelada"  {% if cita and cita.estado=='cancelada'  %}selected{% endif %}>✗ Cancelada</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Observaciones</label>
+        <textarea name="observaciones" class="form-control" rows="4"
+                  placeholder="Notas de la cita...">{{ cita.observaciones if cita else '' }}</textarea>
+      </div>
+
+      <div style="display:flex; gap:12px; justify-content:flex-end; margin-top:8px;">
+        <a href="{{ url_for('citas') }}" class="btn btn-secondary">Cancelar</a>
+        <button type="submit" class="btn btn-primary">
+          💾 {{ 'Guardar cambios' if cita else 'Crear cita' }}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

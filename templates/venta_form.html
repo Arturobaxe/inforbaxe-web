@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Editar' if venta else 'Nueva' }} venta — INFORBAXE{% endblock %}
+{% block page_title %}{{ '✏️ Editar venta' if venta else '➕ Nueva venta' }}{% endblock %}
+{% block page_sub %}Gestión de ventas{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('ventas') }}" class="btn btn-secondary">← Volver</a>
+{% endblock %}
+{% block extra_head %}
+<style>
+.prod-row {
+  display:flex; gap:8px; align-items:center;
+  padding:8px 12px; background:var(--bg3); border-radius:8px; margin-bottom:8px;
+}
+.prod-row-name { flex:2; font-weight:600; }
+.prod-row-nums { display:flex; gap:8px; font-family:'DM Mono',monospace; font-size:12px; color:var(--t2); }
+.prod-row-delete { background:none; border:none; cursor:pointer; color:var(--t3); font-size:16px; padding:0 4px; }
+.prod-row-delete:hover { color:var(--red); }
+</style>
+{% endblock %}
+{% block content %}
+
+<div style="max-width:800px; margin:0 auto;">
+  <form method="POST" id="venta-form">
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+
+      <!-- Left -->
+      <div>
+        <div class="card mb-4">
+          <div class="card-title" style="margin-bottom:16px;">📋 Datos de la venta</div>
+          <div class="form-group">
+            <label class="form-label">Cliente *</label>
+            <select name="id_cliente" class="form-control" required>
+              <option value="">Selecciona un cliente...</option>
+              {% for c in clientes %}
+              <option value="{{ c.id }}" {% if venta and venta.id_cliente == c.id %}selected{% endif %}>{{ c.nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-grid form-grid-2">
+            <div class="form-group">
+              <label class="form-label">Fecha *</label>
+              <input type="date" name="fecha" class="form-control" value="{{ venta.fecha if venta else today }}" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Pagado</label>
+              <select name="pagado" class="form-control">
+                <option value="Sí" {% if not venta or venta.pagado=='Sí' %}selected{% endif %}>Sí</option>
+                <option value="No" {% if venta and venta.pagado=='No' %}selected{% endif %}>No</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Método de pago</label>
+            <select name="metodo_pago" class="form-control">
+              {% for m in metodos %}
+              <option value="{{ m }}" {% if venta and venta.metodo_pago == m %}selected{% endif %}>{{ m }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Comentarios</label>
+            <textarea name="comentarios" class="form-control" rows="3" placeholder="Notas opcionales...">{{ venta.comentarios if venta else '' }}</textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: productos -->
+      <div>
+        <div class="card">
+          <div class="card-title" style="margin-bottom:12px;">📦 Productos</div>
+
+          <!-- Añadir producto -->
+          <div style="display:grid; grid-template-columns:1fr; gap:8px; margin-bottom:12px; padding:12px; background:var(--bg3); border-radius:8px;">
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">Nombre producto</label>
+              <input type="text" id="prod-nombre" class="form-control" list="prod-list" placeholder="Nombre del producto...">
+              <datalist id="prod-list">
+                {% for p in productos_nombres %}
+                <option value="{{ p.nombre }}">
+                {% endfor %}
+              </datalist>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;">
+              <div class="form-group" style="margin:0;">
+                <label class="form-label">PVP (€)</label>
+                <input type="number" id="prod-pvp" class="form-control" step="0.01" min="0" placeholder="0.00">
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label class="form-label">Beneficio (€)</label>
+                <input type="number" id="prod-benef" class="form-control" step="0.01" min="0" placeholder="0.00">
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label class="form-label">Cantidad</label>
+                <input type="number" id="prod-cant" class="form-control" min="1" value="1">
+              </div>
+            </div>
+            <button type="button" onclick="addProducto()" class="btn btn-primary" style="width:100%;">➕ Añadir producto</button>
+          </div>
+
+          <!-- Lista de productos -->
+          <div id="productos-list"></div>
+          <input type="hidden" name="productos_json" id="productos-json">
+
+          <!-- Totales -->
+          <div style="margin-top:12px; padding:12px; background:var(--bg1); border-radius:8px; font-family:'DM Mono',monospace; font-size:13px;">
+            <div style="display:flex; justify-content:space-between; color:var(--t2);">Total PVP: <span id="total-pvp" style="color:var(--green);">0.00 €</span></div>
+            <div style="display:flex; justify-content:space-between; color:var(--t2); margin-top:4px;">Beneficio: <span id="total-benef" style="color:var(--cyan);">0.00 €</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:12px; justify-content:flex-end; margin-top:20px;">
+      <a href="{{ url_for('ventas') }}" class="btn btn-secondary">Cancelar</a>
+      <button type="submit" class="btn btn-primary">💾 {{ 'Guardar cambios' if venta else 'Crear venta' }}</button>
+    </div>
+  </form>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+let productos = {{ venta.productos | tojson if venta and venta.productos else '[]' }};
+
+function renderProductos() {
+  const list = document.getElementById('productos-list');
+  let pvpTotal = 0, benefTotal = 0;
+  list.innerHTML = productos.map((p, i) => {
+    const linea = p.pvp * p.cantidad;
+    pvpTotal += linea;
+    benefTotal += p.beneficio * p.cantidad;
+    return `<div class="prod-row">
+      <div class="prod-row-name">${p.nombre}</div>
+      <div class="prod-row-nums">
+        <span>${parseFloat(p.pvp).toFixed(2)}€</span>
+        <span style="color:var(--cyan)">+${parseFloat(p.beneficio).toFixed(2)}€</span>
+        <span>×${p.cantidad}</span>
+        <span style="color:var(--green)">${linea.toFixed(2)}€</span>
+      </div>
+      <button type="button" class="prod-row-delete" onclick="removeProducto(${i})">✕</button>
+    </div>`;
+  }).join('');
+  document.getElementById('total-pvp').textContent = pvpTotal.toFixed(2) + ' €';
+  document.getElementById('total-benef').textContent = benefTotal.toFixed(2) + ' €';
+  document.getElementById('productos-json').value = JSON.stringify(productos);
+}
+
+function addProducto() {
+  const nombre = document.getElementById('prod-nombre').value.trim();
+  const pvp = parseFloat(document.getElementById('prod-pvp').value.replace(',','.')) || 0;
+  const benef = parseFloat(document.getElementById('prod-benef').value.replace(',','.')) || 0;
+  const cant = parseInt(document.getElementById('prod-cant').value) || 1;
+  if (!nombre) { alert('Introduce el nombre del producto'); return; }
+  productos.push({nombre, pvp, beneficio: benef, cantidad: cant});
+  renderProductos();
+  document.getElementById('prod-nombre').value = '';
+  document.getElementById('prod-pvp').value = '';
+  document.getElementById('prod-benef').value = '';
+  document.getElementById('prod-cant').value = '1';
+  document.getElementById('prod-nombre').focus();
+}
+
+function removeProducto(i) {
+  productos.splice(i, 1);
+  renderProductos();
+}
+
+document.getElementById('venta-form').addEventListener('submit', () => {
+  document.getElementById('productos-json').value = JSON.stringify(productos);
+});
+
+// Auto-fill today's date if new
+const fechaInput = document.querySelector('input[name="fecha"]');
+if (!fechaInput.value) fechaInput.value = new Date().toISOString().split('T')[0];
+
+renderProductos();
+</script>
+{% endblock %}
