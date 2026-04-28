@@ -691,6 +691,49 @@ def api_delete_presupuesto(id_presupuesto):
     db.delete_presupuesto(id_presupuesto)
     return jsonify({"ok": True})
 
+# ── AÑADIR ESTAS RUTAS NUEVAS A app.py ──────────────────────────────────────
+# Pégalas dentro de app.py, antes del bloque "if __name__ == '__main__':"
+
+# Búsqueda de cliente por ID (para cliente_form)
+@app.route("/api/clientes/buscar")
+@login_required
+def api_buscar_cliente():
+    id_val = request.args.get("id", "").strip()
+    if not id_val:
+        return jsonify({"error": "ID requerido"}), 400
+    # Intentar por ID numérico
+    try:
+        cliente = db.get_cliente(int(id_val))
+        if cliente:
+            return jsonify(cliente)
+    except (ValueError, Exception):
+        pass
+    # Intentar buscar por nombre si no es numérico
+    clientes = db.get_clientes()
+    match = next((c for c in clientes if c.get("nombre", "").lower() == id_val.lower()), None)
+    if match:
+        return jsonify(match)
+    return jsonify({"error": f"No se encontró cliente con ID '{id_val}'"}), 404
+
+
+# Editar mensualidad (PATCH)
+@app.route("/api/mensualidades/<int:id_mens>/editar", methods=["PATCH"])
+@login_required
+def api_editar_mensualidad(id_mens):
+    data = request.get_json() or {}
+    concepto = data.get("concepto", "").strip()
+    importe  = data.get("importe")
+    mes      = data.get("mes", "").strip()
+    pagado   = data.get("pagado", "No")
+    if not concepto or not mes or importe is None:
+        return jsonify({"error": "Faltan campos"}), 400
+    try:
+        importe = round(float(importe), 2)
+    except Exception:
+        return jsonify({"error": "Importe inválido"}), 400
+    db.update_mensualidad(id_mens, concepto, importe, mes, pagado)
+    return jsonify({"ok": True})
+
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)

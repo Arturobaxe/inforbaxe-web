@@ -5,98 +5,155 @@
 {% block topbar_actions %}
   <a href="{{ url_for('mensualidad_nueva') }}" class="btn btn-primary">
     <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-    Nueva mensualidad
+    <span>Nueva mensualidad</span>
   </a>
 {% endblock %}
 {% block extra_head %}
 <style>
-  .mens-grid { overflow-x: auto; }
+  .mens-grid { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .mens-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
-  .mens-table th, .mens-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-  .mens-table thead th { background: var(--bg3); color: var(--t3); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; position: sticky; top: 0; z-index:2;}
-  .mens-table thead th:first-child { position: sticky; left: 0; z-index:3; background: var(--bg3); }
-  .mens-table tbody td:first-child { position: sticky; left: 0; background: var(--bg2); z-index:1; font-weight: 600; min-width: 160px; }
-  .mens-table tbody tr:hover td:first-child { background: var(--bg3); }
-  .mens-table tbody tr:hover { background: var(--bg3); }
+  .mens-table th, .mens-table td { padding: 8px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .mens-table thead th { background: var(--bg2); color: var(--t3); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; position: sticky; top: 0; z-index:2; }
+  .mens-table thead th:first-child { position: sticky; left: 0; z-index:3; background: var(--bg2); }
+  .mens-table tbody td:first-child { position: sticky; left: 0; background: var(--bg1); z-index:1; font-weight: 600; min-width: 160px; max-width: 200px; }
+  .mens-table tbody tr:hover td:first-child { background: var(--bg2); }
+  .mens-table tbody tr:hover td { background: rgba(232,130,12,0.02); }
 
   .cell-paid {
-    background: rgba(16,185,129,0.15);
+    background: rgba(28,158,90,0.12);
     color: var(--green);
     border-radius: 6px;
     text-align: center;
     cursor: pointer;
     font-size: 11px;
-    font-weight: 600;
-    padding: 5px 4px;
+    font-weight: 700;
+    padding: 4px 3px;
     transition: all 0.15s;
     display: block;
     width: 100%;
+    border: none;
+    font-family: inherit;
   }
-  .cell-paid:hover { background: rgba(16,185,129,0.25); }
+  .cell-paid:hover { background: rgba(28,158,90,0.22); }
   .cell-unpaid {
-    background: rgba(239,68,68,0.12);
-    color: var(--red);
-    border-radius: 6px;
-    text-align: center;
-    cursor: pointer;
-    font-size: 11px;
-    font-weight: 600;
-    padding: 5px 4px;
-    transition: all 0.15s;
-    display: block;
-    width: 100%;
-  }
-  .cell-unpaid:hover { background: rgba(239,68,68,0.22); }
-  .cell-empty {
-    background: var(--bg3);
-    border-radius: 6px;
-    text-align: center;
-    color: var(--t4);
-    font-size: 11px;
-    padding: 5px 4px;
-    display: block;
-  }
-  .cell-overdue {
-    background: rgba(239,68,68,0.22);
+    background: rgba(220,38,38,0.09);
     color: var(--red);
     border-radius: 6px;
     text-align: center;
     cursor: pointer;
     font-size: 11px;
     font-weight: 700;
-    padding: 5px 4px;
+    padding: 4px 3px;
     transition: all 0.15s;
     display: block;
-    border: 1px solid rgba(239,68,68,0.4);
+    width: 100%;
+    border: none;
+    font-family: inherit;
+  }
+  .cell-unpaid:hover { background: rgba(220,38,38,0.20); }
+  .cell-empty {
+    background: var(--bg3);
+    border-radius: 6px;
+    text-align: center;
+    color: var(--t4);
+    font-size: 11px;
+    padding: 4px 3px;
+    display: block;
+  }
+  .cell-overdue {
+    background: rgba(220,38,38,0.18);
+    color: var(--red);
+    border-radius: 6px;
+    text-align: center;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 3px;
+    transition: all 0.15s;
+    display: block;
+    border: 1px solid rgba(220,38,38,0.35);
+    width: 100%;
+    font-family: inherit;
     animation: pulse 2s infinite;
   }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.7} }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.72} }
 
-  .totals-row td { background: var(--bg1) !important; color: var(--t2); font-size: 11px; font-weight: 600; padding-top: 10px; }
-  .totals-row td:first-child { color: var(--t3); }
+  /* Celda con menú de acciones al hacer hover */
+  .cell-wrap { position: relative; min-width: 68px; }
+  .cell-actions {
+    display: none;
+    position: absolute;
+    top: 100%; left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg1);
+    border: 1px solid var(--border-hi);
+    border-radius: 8px;
+    box-shadow: 0 4px 18px rgba(27,35,64,0.14);
+    z-index: 50;
+    min-width: 140px;
+    overflow: hidden;
+    animation: fadeIn 0.12s ease;
+  }
+  .cell-wrap:hover .cell-actions,
+  .cell-wrap:focus-within .cell-actions { display: block; }
+  .cell-action-btn {
+    display: flex; align-items: center; gap: 8px;
+    width: 100%; padding: 8px 12px;
+    background: none; border: none; cursor: pointer;
+    font-size: 12px; color: var(--t1); font-family: inherit;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.12s;
+    text-align: left;
+  }
+  .cell-action-btn:last-child { border-bottom: none; }
+  .cell-action-btn:hover { background: var(--bg2); }
+  .cell-action-btn.danger { color: var(--red); }
+
+  .totals-row td { background: var(--bg2) !important; color: var(--t2); font-size: 11px; font-weight: 700; padding-top: 10px; border-top: 2px solid var(--border-hi); }
+  .totals-row td:first-child { color: var(--t3); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; }
+
+  /* Modal editar mensualidad */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(27,35,64,0.50);
+    z-index: 1000; align-items: center; justify-content: center;
+    backdrop-filter: blur(2px);
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: var(--bg1);
+    border: 1px solid var(--border-hi);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    width: 100%; max-width: 400px;
+    box-shadow: 0 8px 40px rgba(27,35,64,0.22);
+    animation: fadeIn 0.18s ease;
+  }
+  .modal-title { font-size: 15px; font-weight: 700; margin-bottom: 16px; color: var(--t1); }
+
+  @media (max-width: 768px) {
+    .mens-table tbody td:first-child { min-width: 120px; font-size: 12px; }
+    .cell-actions { left: 0; transform: none; }
+  }
 </style>
 {% endblock %}
 {% block content %}
 
 <!-- Controls -->
 <div class="card mb-4">
-  <form method="GET" style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end;">
-    <!-- Year nav -->
+  <form method="GET" style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;">
     <div style="display:flex; align-items:center; gap:8px;">
       <a href="?año={{ año - 1 }}&filtro={{ filtro }}&buscar={{ buscar }}" class="btn btn-secondary btn-sm">◀</a>
-      <span style="font-size:20px; font-weight:700; color:var(--green); font-family:'DM Mono',monospace; min-width:52px; text-align:center;">{{ año }}</span>
+      <span style="font-size:20px; font-weight:800; color:var(--accent); min-width:52px; text-align:center;">{{ año }}</span>
       <a href="?año={{ año + 1 }}&filtro={{ filtro }}&buscar={{ buscar }}" class="btn btn-secondary btn-sm">▶</a>
     </div>
-
     <input type="hidden" name="año" value="{{ año }}">
-    <input type="text" name="buscar" value="{{ buscar }}" placeholder="🔍 Buscar cliente..." class="form-control" style="max-width:200px;">
-
+    <input type="text" name="buscar" value="{{ buscar }}" placeholder="Buscar cliente..." class="form-control" style="max-width:200px;">
     <select name="filtro" class="form-control" style="max-width:150px;">
       <option value="all" {% if filtro=='all' %}selected{% endif %}>Todos</option>
       <option value="paid" {% if filtro=='paid' %}selected{% endif %}>✅ Pagados</option>
       <option value="unpaid" {% if filtro=='unpaid' %}selected{% endif %}>❌ Pendientes</option>
     </select>
-
     <button type="submit" class="btn btn-secondary">Filtrar</button>
   </form>
 </div>
@@ -109,9 +166,8 @@
         <tr>
           <th>Cliente</th>
           {% for mes in meses %}
-          <th style="text-align:center; min-width:70px;">
-            {{ mes[5:] }}
-            {% if mes == today_mes %}<br><span style="color:var(--green);">●</span>{% endif %}
+          <th style="text-align:center; min-width:72px;">
+            {{ mes[5:] }}{% if mes == today_mes %} <span style="color:var(--accent);">●</span>{% endif %}
           </th>
           {% endfor %}
         </tr>
@@ -121,26 +177,40 @@
         <tr>
           <td>
             <a href="{{ url_for('cliente_historial', id_cliente=c.id) }}" style="color:var(--t1);">{{ c.nombre }}</a>
-            {% if not c.activo %}<span class="badge badge-gray" style="margin-left:4px;">Baja</span>{% endif %}
+            {% if not c.activo %}<span class="badge badge-gray" style="margin-left:4px; font-size:10px;">Baja</span>{% endif %}
           </td>
           {% for mes in meses %}
           {% set m = c.meses.get(mes) %}
-          <td style="padding:4px 6px;">
+          <td style="padding:3px 5px;">
             {% if m %}
               {% set vencido = (mes < today_mes) and m.pagado != 'Sí' %}
-              {% if m.pagado == 'Sí' %}
-                <button class="cell-paid" onclick="togglePago({{ m.id }}, 'No', this)" title="Pagado · {{ m.importe }}€ · {{ m.concepto }}">
-                  ✓ {{ m.importe }}€
-                </button>
-              {% elif vencido %}
-                <button class="cell-overdue" onclick="togglePago({{ m.id }}, 'Sí', this)" title="{{ m.concepto }} · VENCIDO">
-                  ⚠ {{ m.importe }}€
-                </button>
-              {% else %}
-                <button class="cell-unpaid" onclick="togglePago({{ m.id }}, 'Sí', this)" title="{{ m.concepto }} · pendiente">
-                  ✗ {{ m.importe }}€
-                </button>
-              {% endif %}
+              <div class="cell-wrap">
+                {% if m.pagado == 'Sí' %}
+                  <button class="cell-paid" onclick="togglePago({{ m.id }}, 'No', this)" title="Pagado · {{ m.importe }}€ · {{ m.concepto }}">
+                    ✓ {{ m.importe }}€
+                  </button>
+                {% elif vencido %}
+                  <button class="cell-overdue" onclick="togglePago({{ m.id }}, 'Sí', this)" title="{{ m.concepto }} · VENCIDO">
+                    ⚠ {{ m.importe }}€
+                  </button>
+                {% else %}
+                  <button class="cell-unpaid" onclick="togglePago({{ m.id }}, 'Sí', this)" title="{{ m.concepto }} · pendiente">
+                    ✗ {{ m.importe }}€
+                  </button>
+                {% endif %}
+                <!-- Menú acciones -->
+                <div class="cell-actions">
+                  <div style="padding:5px 12px 4px; font-size:10px; color:var(--t3); font-weight:700; text-transform:uppercase; letter-spacing:0.07em;">{{ m.concepto[:20] }}</div>
+                  <button class="cell-action-btn" onclick="abrirEditar({{ m.id }}, '{{ m.concepto | replace("'","\\'")|safe }}', {{ m.importe }}, '{{ m.mes }}', '{{ m.pagado }}')">
+                    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    Editar
+                  </button>
+                  <button class="cell-action-btn danger" onclick="eliminarMensualidad({{ m.id }}, '{{ c.nombre | replace("'","\\'")|safe }}', '{{ mes }}')">
+                    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+                    Eliminar
+                  </button>
+                </div>
+              </div>
             {% else %}
               <span class="cell-empty">—</span>
             {% endif %}
@@ -148,19 +218,16 @@
           {% endfor %}
         </tr>
         {% endfor %}
-        <!-- Totals -->
         <tr class="totals-row">
-          <td>TOTAL PAGADO</td>
+          <td>Total pagado</td>
           {% for mes in meses %}
-          <td style="text-align:center; color:var(--green); font-family:'DM Mono',monospace;">
-            {{ totales_mes[mes].pagado }}€
-          </td>
+          <td style="text-align:center; color:var(--green);">{{ totales_mes[mes].pagado }}€</td>
           {% endfor %}
         </tr>
         <tr class="totals-row">
-          <td>PENDIENTE</td>
+          <td>Pendiente</td>
           {% for mes in meses %}
-          <td style="text-align:center; color:{% if totales_mes[mes].pendiente > 0 %}var(--red){% else %}var(--t4){% endif %}; font-family:'DM Mono',monospace;">
+          <td style="text-align:center; color:{% if totales_mes[mes].pendiente > 0 %}var(--red){% else %}var(--t4){% endif %};">
             {{ totales_mes[mes].pendiente }}€
           </td>
           {% endfor %}
@@ -179,14 +246,45 @@
 </div>
 {% endif %}
 
+<!-- Modal editar mensualidad -->
+<div class="modal-overlay" id="modal-editar">
+  <div class="modal-box">
+    <div class="modal-title">✏️ Editar mensualidad</div>
+    <input type="hidden" id="edit-id">
+    <div class="form-group">
+      <label class="form-label">Concepto</label>
+      <input type="text" id="edit-concepto" class="form-control" placeholder="Ej: Mantenimiento mensual">
+    </div>
+    <div class="form-grid form-grid-2">
+      <div class="form-group">
+        <label class="form-label">Importe (€)</label>
+        <input type="number" id="edit-importe" class="form-control" step="0.01" min="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Mes</label>
+        <input type="month" id="edit-mes" class="form-control">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Estado</label>
+      <select id="edit-pagado" class="form-control">
+        <option value="No">❌ Pendiente</option>
+        <option value="Sí">✅ Pagado</option>
+      </select>
+    </div>
+    <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:8px;">
+      <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarEditar()">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 {% block scripts %}
 <script>
 function togglePago(id, nuevoEstado, btn) {
-  const original = btn.innerHTML;
   btn.innerHTML = '...';
   btn.disabled = true;
-
   fetch(`/api/mensualidades/${id}/toggle`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -194,11 +292,56 @@ function togglePago(id, nuevoEstado, btn) {
   })
   .then(r => r.json())
   .then(() => location.reload())
-  .catch(() => {
-    btn.innerHTML = original;
-    btn.disabled = false;
-    alert('Error al actualizar');
-  });
+  .catch(() => { btn.disabled = false; alert('Error al actualizar'); });
 }
+
+function eliminarMensualidad(id, nombre, mes) {
+  if (!confirm(`¿Eliminar mensualidad de ${nombre} para ${mes}? Esta acción no se puede deshacer.`)) return;
+  fetch(`/api/mensualidades/${id}`, { method: 'DELETE' })
+    .then(r => r.json())
+    .then(() => location.reload())
+    .catch(() => alert('Error al eliminar'));
+}
+
+function abrirEditar(id, concepto, importe, mes, pagado) {
+  document.getElementById('edit-id').value      = id;
+  document.getElementById('edit-concepto').value = concepto;
+  document.getElementById('edit-importe').value  = importe;
+  document.getElementById('edit-mes').value      = mes;
+  document.getElementById('edit-pagado').value   = pagado;
+  document.getElementById('modal-editar').classList.add('open');
+}
+
+function cerrarModal() {
+  document.getElementById('modal-editar').classList.remove('open');
+}
+
+function guardarEditar() {
+  const id       = document.getElementById('edit-id').value;
+  const concepto = document.getElementById('edit-concepto').value.trim();
+  const importe  = parseFloat(document.getElementById('edit-importe').value);
+  const mes      = document.getElementById('edit-mes').value;
+  const pagado   = document.getElementById('edit-pagado').value;
+  if (!concepto || !mes || isNaN(importe)) { alert('Completa todos los campos'); return; }
+
+  fetch(`/api/mensualidades/${id}/editar`, {
+    method: 'PATCH',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ concepto, importe, mes, pagado })
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.ok) { location.reload(); }
+    else { alert('Error: ' + (d.error || 'desconocido')); }
+  })
+  .catch(() => alert('Error al guardar'));
+}
+
+// Cerrar modal al clic fuera
+document.getElementById('modal-editar').addEventListener('click', function(e) {
+  if (e.target === this) cerrarModal();
+});
+// Cerrar con Escape
+document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarModal(); });
 </script>
 {% endblock %}
