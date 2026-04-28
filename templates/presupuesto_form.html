@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Editar' if presupuesto else 'Nuevo' }} presupuesto — INFORBAXE{% endblock %}
+{% block page_title %}{{ '✏️ Editar presupuesto' if presupuesto else '📄 Nuevo presupuesto' }}{% endblock %}
+{% block page_sub %}Gestión de presupuestos{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('presupuestos') }}" class="btn btn-secondary">← Volver</a>
+  {% if presupuesto %}
+  <a href="{{ url_for('presupuesto_pdf', id_presupuesto=presupuesto.id) }}" target="_blank" class="btn btn-green">📄 Ver PDF</a>
+  {% endif %}
+{% endblock %}
+{% block extra_head %}
+<style>
+.prod-row { display:flex; gap:8px; align-items:center; padding:9px 12px; background:var(--bg3); border-radius:8px; margin-bottom:6px; }
+.prod-row-name { flex:2; font-weight:600; font-size:13px; color:var(--t1); }
+.prod-row-nums { display:flex; gap:8px; font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--t2); }
+.prod-row-delete { background:none; border:none; cursor:pointer; color:var(--t4); font-size:15px; padding:0 4px; transition:color 0.15s; }
+.prod-row-delete:hover { color:var(--red); }
+.pvp-display { background:var(--blue-dim); border:1px solid rgba(59,139,255,0.25); border-radius:7px; padding:9px 12px; font-family:'JetBrains Mono',monospace; font-size:18px; font-weight:700; color:var(--blue); text-align:center; }
+</style>
+{% endblock %}
+{% block content %}
+<div style="max-width:860px; margin:0 auto;">
+  <form method="POST" id="presup-form">
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+      <div>
+        <div class="card mb-4">
+          <div class="card-title" style="margin-bottom:16px;">📋 Datos del presupuesto</div>
+          <div class="form-group">
+            <label class="form-label">Cliente *</label>
+            <select name="id_cliente" class="form-control" required>
+              <option value="">Selecciona un cliente...</option>
+              {% for c in clientes %}
+              <option value="{{ c.id }}" {% if presupuesto and presupuesto.id_cliente == c.id %}selected{% endif %}>{{ c.nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-grid form-grid-2">
+            <div class="form-group">
+              <label class="form-label">Fecha *</label>
+              <input type="date" name="fecha" class="form-control" value="{{ presupuesto.fecha if presupuesto else today }}" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Validez (días)</label>
+              <input type="number" name="validez_dias" class="form-control" min="1" value="{{ presupuesto.validez_dias if presupuesto else 30 }}">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Estado</label>
+            <select name="estado" class="form-control">
+              <option value="pendiente" {% if not presupuesto or presupuesto.estado=='pendiente' %}selected{% endif %}>⏳ Pendiente</option>
+              <option value="aceptado"  {% if presupuesto and presupuesto.estado=='aceptado'  %}selected{% endif %}>✓ Aceptado</option>
+              <option value="rechazado" {% if presupuesto and presupuesto.estado=='rechazado' %}selected{% endif %}>✗ Rechazado</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Notas</label>
+            <textarea name="notas" class="form-control" rows="3" placeholder="Condiciones, detalles...">{{ presupuesto.notas if presupuesto else '' }}</textarea>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <div class="card-title" style="margin-bottom:12px;">📦 Añadir línea</div>
+          <div style="padding:12px; background:var(--bg3); border-radius:9px; margin-bottom:14px;">
+            <div class="form-group" style="margin-bottom:8px;">
+              <label class="form-label">Producto</label>
+              <input type="text" id="prod-nombre" class="form-control" list="prod-list" placeholder="Selecciona o escribe...">
+              <datalist id="prod-list">
+                {% for p in productos_nombres %}
+                <option value="{{ p.nombre }}">
+                {% endfor %}
+              </datalist>
+            </div>
+            <div class="form-grid form-grid-3" style="margin-bottom:8px;">
+              <div class="form-group" style="margin:0;">
+                <label class="form-label">Mi coste (€)</label>
+                <input type="number" id="prod-coste" class="form-control" step="0.01" min="0" placeholder="0.00" oninput="calcPVP()">
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label class="form-label">Beneficio (€)</label>
+                <input type="number" id="prod-benef" class="form-control" step="0.01" min="0" placeholder="0.00" oninput="calcPVP()">
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label class="form-label">Cantidad</label>
+                <input type="number" id="prod-cant" class="form-control" min="1" value="1">
+              </div>
+            </div>
+            <div style="margin-bottom:10px;">
+              <label class="form-label">PVP al cliente</label>
+              <div class="pvp-display" id="pvp-display">0.00 €</div>
+            </div>
+            <button type="button" onclick="addProducto()" class="btn btn-primary" style="width:100%;">➕ Añadir línea</button>
+          </div>
+          <div id="productos-list"></div>
+          <input type="hidden" name="productos_json" id="productos-json">
+          <div style="margin-top:10px; padding:12px; background:var(--bg1); border-radius:8px; font-family:'JetBrains Mono',monospace; font-size:12.5px;">
+            <div style="display:flex; justify-content:space-between; color:var(--t3);">Total PVP: <span id="total-pvp" style="color:var(--blue);font-weight:700;">0.00 €</span></div>
+            <div style="display:flex; justify-content:space-between; color:var(--t3); margin-top:4px;">Beneficio: <span id="total-benef" style="color:var(--green);font-weight:700;">0.00 €</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:12px; justify-content:flex-end; margin-top:20px;">
+      <a href="{{ url_for('presupuestos') }}" class="btn btn-secondary">Cancelar</a>
+      <button type="submit" class="btn btn-primary">💾 {{ 'Guardar' if presupuesto else 'Crear presupuesto' }}</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let productos = {{ presupuesto.productos | tojson if presupuesto and presupuesto.productos else '[]' }};
+function calcPVP() {
+  const c = parseFloat(document.getElementById('prod-coste').value)||0;
+  const b = parseFloat(document.getElementById('prod-benef').value)||0;
+  document.getElementById('pvp-display').textContent = (c+b).toFixed(2)+' €';
+}
+function renderProductos() {
+  const list = document.getElementById('productos-list');
+  let pvpT=0, benT=0;
+  list.innerHTML = productos.map((p,i)=>{
+    pvpT += p.pvp*p.cantidad; benT += p.beneficio*p.cantidad;
+    return `<div class="prod-row">
+      <div class="prod-row-name">${p.nombre}</div>
+      <div class="prod-row-nums">
+        <span style="color:var(--blue)">${parseFloat(p.pvp).toFixed(2)}€</span>
+        <span style="color:var(--green)">+${parseFloat(p.beneficio).toFixed(2)}€</span>
+        <span>×${p.cantidad}</span>
+      </div>
+      <button type="button" class="prod-row-delete" onclick="removeProducto(${i})">✕</button>
+    </div>`;
+  }).join('');
+  document.getElementById('total-pvp').textContent = pvpT.toFixed(2)+' €';
+  document.getElementById('total-benef').textContent = benT.toFixed(2)+' €';
+  document.getElementById('productos-json').value = JSON.stringify(productos);
+}
+function addProducto() {
+  const nombre = document.getElementById('prod-nombre').value.trim();
+  const coste = parseFloat(document.getElementById('prod-coste').value)||0;
+  const benef = parseFloat(document.getElementById('prod-benef').value)||0;
+  const pvp = coste+benef;
+  const cant = parseInt(document.getElementById('prod-cant').value)||1;
+  if (!nombre) { alert('Introduce el nombre'); return; }
+  productos.push({nombre,coste,pvp,beneficio:benef,cantidad:cant});
+  renderProductos();
+  ['prod-nombre','prod-coste','prod-benef'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('prod-cant').value='1';
+  document.getElementById('pvp-display').textContent='0.00 €';
+  document.getElementById('prod-nombre').focus();
+}
+function removeProducto(i) { productos.splice(i,1); renderProductos(); }
+document.getElementById('presup-form').addEventListener('submit',()=>{
+  document.getElementById('productos-json').value=JSON.stringify(productos);
+});
+renderProductos();
+</script>
+{% endblock %}

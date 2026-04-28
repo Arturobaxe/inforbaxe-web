@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Presupuestos — INFORBAXE{% endblock %}
+{% block page_title %}📄 Presupuestos{% endblock %}
+{% block page_sub %}{{ presupuestos|length }} presupuestos{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('presupuesto_nuevo') }}" class="btn btn-primary">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    Nuevo presupuesto
+  </a>
+{% endblock %}
+{% block content %}
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Fecha</th>
+          <th>Cliente</th>
+          <th>Productos</th>
+          <th>Total PVP</th>
+          <th>Estado</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in presupuestos %}
+        <tr>
+          <td class="td-mono td-muted">{{ p.id }}</td>
+          <td class="td-mono">{{ p.fecha }}</td>
+          <td><a href="{{ url_for('cliente_historial', id_cliente=p.id_cliente) }}" style="font-weight:600;color:var(--t1);">{{ p.nombre_cliente }}</a></td>
+          <td style="max-width:200px; font-size:12px; color:var(--t2);">
+            {% if p.productos %}
+              {% for pr in p.productos[:2] %}{{ pr.nombre }}{% if not loop.last %}, {% endif %}{% endfor %}
+              {% if p.productos|length > 2 %} +{{ p.productos|length - 2 }} más{% endif %}
+            {% else %}—{% endif %}
+          </td>
+          <td class="td-mono" style="color:var(--blue);font-weight:700;">{{ "%.2f"|format(p.total_pvp|float) }}€</td>
+          <td>
+            {% if p.estado == 'pendiente' %}
+              <span class="badge badge-amber">⏳ Pendiente</span>
+            {% elif p.estado == 'aceptado' %}
+              <span class="badge badge-green">✓ Aceptado</span>
+            {% elif p.estado == 'rechazado' %}
+              <span class="badge badge-gray">✗ Rechazado</span>
+            {% endif %}
+          </td>
+          <td>
+            <div style="display:flex; gap:5px; justify-content:flex-end;">
+              <a href="{{ url_for('presupuesto_pdf', id_presupuesto=p.id) }}" target="_blank" class="btn btn-secondary btn-sm" title="Ver PDF">📄</a>
+              <a href="{{ url_for('presupuesto_editar', id_presupuesto=p.id) }}" class="btn btn-blue btn-sm">✏️</a>
+              {% if p.estado == 'pendiente' %}
+              <a href="{{ url_for('presupuesto_convertir', id_presupuesto=p.id) }}" class="btn btn-green btn-sm" title="Convertir a venta">🛒</a>
+              {% endif %}
+              <button onclick="confirmDelete('/api/presupuestos/{{ p.id }}', '¿Eliminar presupuesto #{{ p.id }}?')" class="btn btn-danger btn-sm">🗑️</button>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7">
+          <div class="empty-state"><div class="empty-state-icon">📄</div><div class="empty-state-text">Sin presupuestos</div></div>
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

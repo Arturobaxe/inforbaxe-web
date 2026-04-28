@@ -106,9 +106,10 @@ def _calc_totales(productos):
         q = int(p.get("cantidad", 1) or 1)
         pvp = _flt(p.get("pvp", 0))
         benef = _flt(p.get("beneficio", 0))
-        total_pvp += q * pvp
+        coste = _flt(p.get("coste", pvp - benef))
+        total_pvp   += q * pvp
         total_benef += q * benef
-        total_coste += q * (pvp - benef)
+        total_coste += q * coste
     return total_pvp, total_benef, total_coste
 
 
@@ -120,7 +121,7 @@ def get_ventas(id_cliente=None, mes=None, limit=500):
          .limit(limit))
     if id_cliente:
         q = q.eq("id_cliente", id_cliente)
-    if mes:  # YYYY-MM
+    if mes:
         start = f"{mes}-01"
         year, m = mes.split("-")
         import calendar
@@ -128,7 +129,6 @@ def get_ventas(id_cliente=None, mes=None, limit=500):
         end = f"{mes}-{last_day:02d}"
         q = q.gte("fecha", start).lte("fecha", end)
     data = q.execute().data or []
-    # Flatten nombre de cliente
     for v in data:
         v["nombre_cliente"] = (v.get("clientes") or {}).get("nombre", "—")
         v.pop("clientes", None)
@@ -199,7 +199,6 @@ def get_mensualidades(año=None, id_cliente=None):
 
 def add_mensualidad(id_cliente, concepto, importe, mes, pagado="No"):
     db = get_db()
-    # upsert: si ya existe la combinación cliente+concepto+mes, actualiza
     r = db.table("mensualidades").upsert({
         "id_cliente": int(id_cliente),
         "concepto": concepto.strip(),
@@ -283,17 +282,14 @@ def get_dashboard_stats():
     mes_start = f"{mes_actual}-01"
     mes_end = f"{mes_actual}-{last_day:02d}"
 
-    # Clientes activos
     clientes_data = db.table("clientes").select("id").eq("activo", True).execute()
     clientes_activos = len(clientes_data.data or [])
 
-    # Citas hoy
     citas_hoy_data = db.table("citas").select("id, hora, observaciones, id_cliente, clientes(nombre)").eq("fecha", today.isoformat()).eq("estado", "pendiente").order("hora").execute()
     citas_hoy = citas_hoy_data.data or []
     for c in citas_hoy:
         c["nombre_cliente"] = (c.pop("clientes", None) or {}).get("nombre", "—")
 
-    # Próximas 48h
     from datetime import timedelta
     manana = (today + timedelta(days=2)).isoformat()
     proximas_data = db.table("citas").select("id, fecha, hora, id_cliente, clientes(nombre)").gte("fecha", today.isoformat()).lte("fecha", manana).eq("estado", "pendiente").order("fecha").order("hora").execute()
@@ -301,11 +297,9 @@ def get_dashboard_stats():
     for c in proximas_citas:
         c["nombre_cliente"] = (c.pop("clientes", None) or {}).get("nombre", "—")
 
-    # Mensualidades pendientes mes actual
     mens_pend = db.table("mensualidades").select("id").like("mes", f"{mes_actual}%").eq("pagado", "No").execute()
     mens_pendientes = len(mens_pend.data or [])
 
-    # Ventas mes actual
     ventas_mes = db.table("ventas").select("total_pvp, total_benef, pagado").gte("fecha", mes_start).lte("fecha", mes_end).execute()
     ventas_data = ventas_mes.data or []
     total_ventas_mes = sum(_flt(v.get("total_pvp", 0)) for v in ventas_data)
@@ -370,3 +364,86 @@ def get_historial_cliente(id_cliente):
             _flt(m.get("importe", 0)) for m in mensualidades if m.get("pagado") == "No"
         ),
     }
+
+
+# ── PRESUPUESTOS ──────────────────────────────────────────────────────────────
+
+def get_presupuestos(id_cliente=None):
+    db = get_db()
+    q = (db.table("presupuestos")
+         .select("*, clientes(nombre)")
+         .order("fecha", desc=True)
+         .limit(500))
+    if id_cliente:
+        q = q.eq("id_cliente", id_cliente)
+    data = q.execute().data or []
+    for p in data:
+        p["nombre_cliente"] = (p.get("clientes") or {}).get("nombre", "—")
+        p.pop("clientes", None)
+        if isinstance(p.get("productos"), str):
+            try: p["productos"] = json.loads(p["productos"])
+            except: p["productos"] = []
+    return data
+
+
+def get_presupuesto(id_presupuesto):
+    db = get_db()
+    try:
+        r = db.table("presupuestos").select("*, clientes(nombre)").eq("id", id_presupuesto).single().execute()
+        p = r.data
+        if p:
+            p["nombre_cliente"] = (p.get("clientes") or {}).get("nombre", "—")
+            p.pop("clientes", None)
+            if isinstance(p.get("productos"), str):
+                try: p["productos"] = json.loads(p["productos"])
+                except: p["productos"] = []
+        return p
+    except Exception:
+        return None
+
+
+def _calc_totales_presup(productos):
+    total_pvp = total_benef = 0.0
+    for p in productos:
+        q = int(p.get("cantidad", 1) or 1)
+        pvp = _flt(p.get("pvp", 0))
+        benef = _flt(p.get("beneficio", 0))
+        total_pvp += q * pvp
+        total_benef += q * benef
+    return total_pvp, total_benef
+
+
+def add_presupuesto(id_cliente, fecha, productos, estado, notas, validez_dias=30):
+    db = get_db()
+    total_pvp, total_benef = _calc_totales_presup(productos)
+    r = db.table("presupuestos").insert({
+        "id_cliente": int(id_cliente),
+        "fecha": str(fecha),
+        "productos": productos,
+        "total_pvp": round(total_pvp, 2),
+        "total_benef": round(total_benef, 2),
+        "estado": estado,
+        "notas": notas,
+        "validez_dias": validez_dias,
+    }).execute()
+    return r.data[0] if r.data else None
+
+
+def update_presupuesto(id_presupuesto, id_cliente, fecha, productos, estado, notas, validez_dias=30):
+    db = get_db()
+    total_pvp, total_benef = _calc_totales_presup(productos)
+    db.table("presupuestos").update({
+        "id_cliente": int(id_cliente),
+        "fecha": str(fecha),
+        "productos": productos,
+        "total_pvp": round(total_pvp, 2),
+        "total_benef": round(total_benef, 2),
+        "estado": estado,
+        "notas": notas,
+        "validez_dias": validez_dias,
+    }).eq("id", id_presupuesto).execute()
+
+
+def delete_presupuesto(id_presupuesto):
+    db = get_db()
+    db.table("presupuestos").delete().eq("id", id_presupuesto).execute()
