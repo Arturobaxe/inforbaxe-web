@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>{% block title %}INFORBAXE{% endblock %}</title>
+  <title>{% block title %}INFORBAXE{% endblock %}
+	<link rel="icon" type="image/jpeg" href="{{ url_for('static', filename='logo.jpg') }}">
+	<link rel="apple-touch-icon" href="{{ url_for('static', filename='logo.jpg') }}">
+  </title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -731,13 +734,18 @@
       </a>
     </div>
 
-    <div class="sidebar-footer">
+   <div class="sidebar-footer">
       <div class="sidebar-user">
         <div class="sidebar-avatar">{{ session.get('username', 'A')[0].upper() }}</div>
-        <span contenteditable="true">{{ session.get('username', 'Admin') }}</span>
+        <span>{{ session.get('username', 'Admin') }}</span>
         <a href="{{ url_for('logout') }}" class="btn-logout" title="Cerrar sesión">
           <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         </a>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--sidebar-border);opacity:0.6;">
+        <img src="{{ url_for('static', filename='logo.jpg') }}" style="width:20px;height:20px;border-radius:4px;object-fit:cover;">
+        <span style="font-size:10px;color:var(--st4);font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">INFORBAXE</span>
+        <span style="font-size:9px;color:var(--st4);margin-left:auto;">Sesión iniciada</span>
       </div>
     </div>
   </nav>
