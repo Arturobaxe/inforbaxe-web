@@ -541,12 +541,14 @@
   <!-- ── Sidebar ──────────────────────────────────────────────── -->
   <nav class="sidebar" id="sidebar">
     <div class="sidebar-brand">
-      <div class="brand-logo">IB</div>
-      <div class="brand-text">
-        <div class="brand-name">INFOR<span>BAXE</span></div>
-        <div class="brand-sub">Panel de gestión</div>
-      </div>
-    </div>
+  <img src="{{ url_for('static', filename='logo.jpg') }}" 
+       alt="INFORBAXE" 
+       style="width:44px; height:44px; border-radius:9px; object-fit:cover; flex-shrink:0;">
+  <div class="brand-text">
+    <div class="brand-name">INFOR<span>BAXE</span></div>
+    <div class="brand-sub">Panel de gestión</div>
+  </div>
+	</div>
 
     <div class="sidebar-search-wrap">
       <div class="sidebar-search">
