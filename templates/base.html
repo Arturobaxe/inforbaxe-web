@@ -535,6 +535,55 @@ tbody tr:nth-child(7){animation-delay:0.28s} tbody tr:nth-child(8){animation-del
   opacity:0; transition:opacity 0.2s; pointer-events:none; }
 .stat-card:hover::after { opacity:1; }
 
+    /* ── MODO CLARO ──────────────────────────────────── */
+    body.light-mode {
+      --bg0:#F4F6FA; --bg1:#FFFFFF; --bg2:#F8F9FC; --bg3:#EEF1F7; --bg4:#E4E8F2;
+      --border:rgba(0,0,0,0.07); --border-hi:rgba(0,0,0,0.13);
+      --t1:#1A1F36; --t2:#4A5280; --t3:#8890B5; --t4:#B8BDD8;
+    }
+    body.dark-mode {
+      --bg0:#0d1117; --bg1:#141922; --bg2:#1c2333; --bg3:#232d42; --bg4:#2a3550;
+      --border:rgba(255,255,255,0.07); --border-hi:rgba(255,255,255,0.13);
+      --t1:#e8edf5; --t2:#8b95a8; --t3:#545f72; --t4:#2a3447;
+    }
+    .theme-toggle {
+      display:flex; align-items:center; gap:6px;
+      background:var(--bg3); border:1px solid var(--border);
+      border-radius:20px; padding:5px 12px;
+      cursor:pointer; font-size:12px; font-weight:600; color:var(--t2);
+      transition:all 0.2s; flex-shrink:0;
+    }
+    .theme-toggle:hover { border-color:var(--accent); color:var(--accent); }
+
+    /* ── FAB MÓVIL ───────────────────────────────────── */
+    .fab {
+      display:none;
+      position:fixed; bottom:22px; right:22px; z-index:200;
+      width:54px; height:54px; border-radius:50%;
+      background:var(--accent); color:#fff;
+      border:none; cursor:pointer; font-size:26px;
+      box-shadow:0 4px 20px var(--accent-glow);
+      align-items:center; justify-content:center;
+      transition:transform 0.2s, box-shadow 0.2s;
+    }
+    .fab:active { transform:scale(0.92); }
+    .fab-menu {
+      display:none; position:fixed; bottom:86px; right:22px; z-index:199;
+      flex-direction:column; gap:10px; align-items:flex-end;
+    }
+    .fab-menu.open { display:flex; }
+    .fab-menu-item {
+      display:flex; align-items:center; gap:10px;
+      background:var(--bg1); border:1px solid var(--border);
+      border-radius:22px; padding:8px 16px 8px 12px;
+      font-size:13px; font-weight:600; color:var(--t1);
+      box-shadow:0 2px 12px rgba(0,0,0,0.15);
+      text-decoration:none; white-space:nowrap;
+      animation: slideUp 0.2s ease both;
+    }
+    .fab-menu-item:hover { background:var(--accent); color:#fff; }
+    @media(max-width:768px){ .fab{ display:flex; } }
+
     /* ── UTILS ───────────────────────────────────────── */
     .flex { display: flex; }
     .items-center { align-items: center; }
@@ -794,6 +843,7 @@ tbody tr:nth-child(7){animation-delay:0.28s} tbody tr:nth-child(8){animation-del
         <div class="topbar-sub" contenteditable="true">{% block page_sub %}{% endblock %}</div>
       </div>
       <div class="topbar-right">
+        <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn" title="Cambiar tema">🌙 Oscuro</button>
         {% block topbar_actions %}{% endblock %}
       </div>
     </div>

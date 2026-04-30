@@ -734,6 +734,22 @@ def api_editar_mensualidad(id_mens):
     db.update_mensualidad(id_mens, concepto, importe, mes, pagado)
     return jsonify({"ok": True})
 
+@app.route("/api/ventas-chart")
+@login_required
+def api_ventas_chart():
+    import calendar
+    from datetime import date
+    hoy = date.today()
+    labels, values = [], []
+    for i in range(5, -1, -1):
+        mes = (hoy.month - i - 1) % 12 + 1
+        año = hoy.year - ((hoy.month - i - 1) // 12 + (1 if (hoy.month-i-1) < 0 else 0))
+        mes_str = f"{año}-{mes:02d}"
+        ventas = db.get_ventas(mes=mes_str)
+        total = sum(float(v.get("total_pvp", 0)) for v in ventas)
+        labels.append(f"{mes:02d}/{str(año)[2:]}")
+        values.append(round(total, 2))
+    return jsonify({"labels": labels, "values": values})
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)

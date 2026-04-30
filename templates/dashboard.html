@@ -12,44 +12,77 @@
     Nueva cita
   </a>
 {% endblock %}
+{% block extra_head %}
+<style>
+/* Notas sticky */
+.notas-sticky {
+  background: #fffbe6;
+  border: 1px solid #f0d060;
+  border-radius: 10px;
+  padding: 14px 16px;
+  position: relative;
+}
+.notas-sticky textarea {
+  width: 100%; border: none; background: transparent;
+  resize: none; font-family: inherit; font-size: 13px;
+  color: #5a4a00; outline: none; min-height: 80px;
+  line-height: 1.6;
+}
+.notas-sticky textarea::placeholder { color: #c9a84c; }
+.notas-saved { font-size: 10px; color: #a08030; margin-top:6px; text-align:right; }
+
+/* Próxima cita badge días */
+.dias-badge {
+  font-size: 11px; font-weight: 700;
+  padding: 3px 8px; border-radius: 20px;
+  background: var(--accent-dim); color: var(--accent);
+  margin-left: auto; flex-shrink:0;
+}
+.dias-badge.urgente { background: var(--red-dim); color: var(--red); }
+.dias-badge.hoy { background: var(--green-dim); color: var(--green); }
+
+/* Chart container */
+.chart-wrap { position:relative; height:160px; }
+</style>
+{% endblock %}
 {% block content %}
 
 <!-- Stat cards -->
 <div class="stat-grid">
   <div class="stat-card green">
     <div class="stat-label">Clientes activos</div>
-    <div class="stat-value green">{{ stats.clientes_activos }}</div>
+    <div class="stat-value green" data-count="{{ stats.clientes_activos }}">{{ stats.clientes_activos }}</div>
     <div class="stat-sub">Total en el sistema</div>
     <div class="stat-icon">👥</div>
   </div>
   <div class="stat-card blue">
     <div class="stat-label">Citas hoy</div>
-    <div class="stat-value">{{ stats.citas_hoy | length }}</div>
+    <div class="stat-value" data-count="{{ stats.citas_hoy | length }}">{{ stats.citas_hoy | length }}</div>
     <div class="stat-sub">{{ today.strftime('%d de %B') }}</div>
     <div class="stat-icon">🗓️</div>
   </div>
   <div class="stat-card amber">
     <div class="stat-label">Mensualidades pendientes</div>
-    <div class="stat-value amber">{{ stats.mensualidades_pendientes }}</div>
+    <div class="stat-value amber" data-count="{{ stats.mensualidades_pendientes }}">{{ stats.mensualidades_pendientes }}</div>
     <div class="stat-sub">Este mes sin cobrar</div>
     <div class="stat-icon">📅</div>
   </div>
   <div class="stat-card green">
     <div class="stat-label">Facturación del mes</div>
-    <div class="stat-value green">{{ "%.2f"|format(stats.ventas_mes.total) }}€</div>
+    <div class="stat-value green" data-count="{{ stats.ventas_mes.total }}" data-decimals="2">{{ "%.2f"|format(stats.ventas_mes.total) }}€</div>
     <div class="stat-sub">{{ stats.ventas_mes.num }} ventas · {{ stats.ventas_mes.mes }}</div>
     <div class="stat-icon">🛒</div>
   </div>
   <div class="stat-card cyan">
     <div class="stat-label">Beneficio del mes</div>
-    <div class="stat-value" style="color:var(--cyan)">{{ "%.2f"|format(stats.ventas_mes.beneficio) }}€</div>
+    <div class="stat-value" style="color:var(--cyan)" data-count="{{ stats.ventas_mes.beneficio }}" data-decimals="2">{{ "%.2f"|format(stats.ventas_mes.beneficio) }}€</div>
     <div class="stat-sub">Margen neto estimado</div>
     <div class="stat-icon">💰</div>
   </div>
 </div>
 
 <!-- Main grid -->
-<div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
 
   <!-- Citas hoy -->
   <div class="card">
@@ -64,7 +97,7 @@
       <div style="display:flex; flex-direction:column; gap:8px;">
         {% for c in stats.citas_hoy %}
         <div style="display:flex; align-items:center; gap:12px; padding:10px 12px; background:var(--bg3); border-radius:8px;">
-          <div style="font-size:11px; font-weight:700; color:var(--green); font-family:'DM Mono',monospace; width:40px;">{{ c.hora[:5] if c.hora else '—' }}</div>
+          <div style="font-size:11px; font-weight:700; color:var(--green); font-family:'JetBrains Mono',monospace; width:40px;">{{ c.hora[:5] if c.hora else '—' }}</div>
           <div style="flex:1;">
             <div style="font-size:13px; font-weight:600;">{{ c.nombre_cliente }}</div>
             {% if c.observaciones %}<div style="font-size:11px; color:var(--t3); margin-top:2px;">{{ c.observaciones[:60] }}</div>{% endif %}
@@ -81,25 +114,25 @@
     {% endif %}
   </div>
 
-  <!-- Notificaciones próximas 48h -->
+  <!-- Próximas 48h con contador días -->
   <div class="card">
     <div class="card-header">
       <div>
-        <div class="card-title">🔔 Próximas 48 horas</div>
+        <div class="card-title">🔔 Próximas citas</div>
         <div class="card-sub">Recordatorio de citas</div>
       </div>
     </div>
     {% if stats.proximas_citas %}
       <div style="display:flex; flex-direction:column; gap:8px;">
         {% for c in stats.proximas_citas %}
-        <div style="display:flex; align-items:center; gap:12px; padding:10px 12px; background:var(--bg3); border-radius:8px; border-left: 3px solid var(--amber);">
-          <div>
+        {% set dias = (c.fecha | string)[:10] %}
+        <div style="display:flex; align-items:center; gap:12px; padding:10px 12px; background:var(--bg3); border-radius:8px; border-left:3px solid var(--amber);">
+          <div style="flex:1;">
             <div style="font-size:13px; font-weight:600;">{{ c.nombre_cliente }}</div>
-            <div style="font-size:11px; color:var(--t3); margin-top:2px;">
-              {{ c.fecha }} · {{ c.hora[:5] if c.hora else '' }}
-            </div>
+            <div style="font-size:11px; color:var(--t3); margin-top:2px;">{{ c.fecha }} · {{ c.hora[:5] if c.hora else '' }}</div>
           </div>
-          <a href="{{ url_for('cita_editar', id_cita=c.id) }}" class="btn btn-secondary btn-sm" style="margin-left:auto;">Ver</a>
+          <span class="dias-badge" data-fecha="{{ c.fecha }}">—</span>
+          <a href="{{ url_for('cita_editar', id_cita=c.id) }}" class="btn btn-secondary btn-sm">Ver</a>
         </div>
         {% endfor %}
       </div>
@@ -109,6 +142,33 @@
         <div class="empty-state-text">Sin citas próximas</div>
       </div>
     {% endif %}
+  </div>
+
+</div>
+
+<!-- Fila inferior: Gráfico + Notas -->
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:20px;">
+
+  <!-- Gráfico ventas mensual -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">📈 Ventas últimos 6 meses</div>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="ventas-chart"></canvas>
+    </div>
+  </div>
+
+  <!-- Notas sticky -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">📝 Notas rápidas</div>
+      <button onclick="clearNotas()" class="btn btn-secondary btn-sm">🗑️ Limpiar</button>
+    </div>
+    <div class="notas-sticky">
+      <textarea id="notas-text" placeholder="Escribe aquí tus notas del día... Se guardan automáticamente." maxlength="1000"></textarea>
+      <div class="notas-saved" id="notas-saved">Sin cambios</div>
+    </div>
   </div>
 
 </div>
@@ -125,4 +185,96 @@
   </div>
 </div>
 
+{% endblock %}
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+// ── Números contando ──────────────────────────────────
+document.querySelectorAll('.stat-value[data-count]').forEach(el => {
+  const final = parseFloat(el.dataset.count);
+  const dec   = parseInt(el.dataset.decimals || '0');
+  const euro  = el.textContent.includes('€');
+  if (isNaN(final) || final === 0) return;
+  el.textContent = '0' + (euro ? '€' : '');
+  let start = null;
+  const step = ts => {
+    if (!start) start = ts;
+    const p = Math.min((ts - start) / 900, 1);
+    const e = 1 - Math.pow(1 - p, 3);
+    el.textContent = (dec ? (final*e).toFixed(dec) : Math.round(final*e)) + (euro ? '€' : '');
+    if (p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+});
+
+// ── Contador días próximas citas ──────────────────────
+document.querySelectorAll('.dias-badge[data-fecha]').forEach(el => {
+  const fecha = new Date(el.dataset.fecha);
+  const hoy   = new Date(); hoy.setHours(0,0,0,0);
+  const diff  = Math.round((fecha - hoy) / 86400000);
+  if (diff === 0)      { el.textContent = 'HOY';        el.classList.add('hoy'); }
+  else if (diff === 1) { el.textContent = 'Mañana';     el.classList.add('urgente'); }
+  else if (diff <= 2)  { el.textContent = `En ${diff}d`; el.classList.add('urgente'); }
+  else                 { el.textContent = `En ${diff}d`; }
+});
+
+// ── Notas sticky ──────────────────────────────────────
+const notasEl  = document.getElementById('notas-text');
+const notasSaved = document.getElementById('notas-saved');
+const NOTAS_KEY  = 'inforbaxe_notas';
+
+notasEl.value = sessionStorage.getItem(NOTAS_KEY) || '';
+let notasTimer;
+notasEl.addEventListener('input', () => {
+  clearTimeout(notasTimer);
+  notasSaved.textContent = 'Guardando...';
+  notasTimer = setTimeout(() => {
+    sessionStorage.setItem(NOTAS_KEY, notasEl.value);
+    notasSaved.textContent = '✓ Guardado · ' + new Date().toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'});
+  }, 600);
+});
+if (notasEl.value) notasSaved.textContent = '✓ Notas cargadas';
+
+function clearNotas() {
+  if (!confirm('¿Limpiar las notas?')) return;
+  notasEl.value = '';
+  sessionStorage.removeItem(NOTAS_KEY);
+  notasSaved.textContent = 'Limpiado';
+}
+
+// ── Gráfico ventas ────────────────────────────────────
+(async () => {
+  try {
+    const res  = await fetch('/api/ventas-chart');
+    const data = await res.json();
+    const ctx  = document.getElementById('ventas-chart').getContext('2d');
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: data.labels,
+        datasets: [{
+          label: 'Facturación €',
+          data: data.values,
+          borderColor: '#E8820C',
+          backgroundColor: 'rgba(232,130,12,0.10)',
+          borderWidth: 2.5,
+          pointBackgroundColor: '#E8820C',
+          pointRadius: 4,
+          tension: 0.4,
+          fill: true,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { size: 11 }, color: '#8890B5' } },
+          y: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { size: 11 }, color: '#8890B5',
+            callback: v => v + '€' } }
+        }
+      }
+    });
+  } catch(e) { console.log('Chart error:', e); }
+})();
+</script>
 {% endblock %}
