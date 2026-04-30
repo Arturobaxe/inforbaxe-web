@@ -9,7 +9,6 @@
   </a>
 {% endblock %}
 {% block content %}
-
 <div class="card mb-4">
   <form method="GET" style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;">
     <div>
@@ -33,41 +32,35 @@
     <a href="{{ url_for('citas') }}" class="btn btn-danger" style="margin-top:auto;">✖</a>
   </form>
 </div>
-
 <div class="card">
   <div class="table-wrap">
     <table>
       <thead>
         <tr>
-          <th>Fecha</th>
-          <th>Hora</th>
-          <th>Cliente</th>
-          <th>Observaciones</th>
-          <th>Estado</th>
-          <th></th>
+          <th>Fecha</th><th>Hora</th><th>Cliente</th><th>Observaciones</th><th>Estado</th><th></th>
         </tr>
       </thead>
       <tbody>
         {% for c in citas %}
         {% set es_hoy = c.fecha == hoy %}
-        <tr style="{{ 'background: rgba(16,185,129,0.05);' if es_hoy else '' }}">
+        <tr id="cita-row-{{ c.id }}">
           <td class="td-mono font-semibold {% if es_hoy %}text-green{% endif %}">
             {{ c.fecha }}{% if es_hoy %} <span class="badge badge-green">HOY</span>{% endif %}
           </td>
           <td class="td-mono">{{ c.hora[:5] if c.hora else '—' }}</td>
+          <td><a href="{{ url_for('cliente_historial', id_cliente=c.id_cliente) }}" style="font-weight:600; color:var(--t1);">{{ c.nombre_cliente }}</a></td>
+          <td style="max-width:220px; color:var(--t2); font-size:12px;">{{ c.observaciones[:80] if c.observaciones else '—' }}</td>
           <td>
-            <a href="{{ url_for('cliente_historial', id_cliente=c.id_cliente) }}" style="font-weight:600; color:var(--t1);">{{ c.nombre_cliente }}</a>
-          </td>
-          <td style="max-width:260px; color:var(--t2); font-size:12px;">{{ c.observaciones[:80] if c.observaciones else '—' }}</td>
-          <td>
-            {% if c.estado == 'pendiente' %}   <span class="badge badge-amber">⏳ Pendiente</span>
-            {% elif c.estado == 'completada' %} <span class="badge badge-green">✓ Completada</span>
-            {% elif c.estado == 'cancelada' %}  <span class="badge badge-gray">✗ Cancelada</span>
-            {% else %}                           <span class="badge badge-gray">{{ c.estado }}</span>
-            {% endif %}
+            {% if c.estado == 'pendiente' %}<span class="badge badge-amber">⏳ Pendiente</span>
+            {% elif c.estado == 'completada' %}<span class="badge badge-green">✓ Completada</span>
+            {% elif c.estado == 'cancelada' %}<span class="badge badge-gray">✗ Cancelada</span>
+            {% else %}<span class="badge badge-gray">{{ c.estado }}</span>{% endif %}
           </td>
           <td>
-            <div style="display:flex; gap:5px; justify-content:flex-end;">
+            <div style="display:flex; gap:4px; justify-content:flex-end;">
+              {% if c.estado == 'pendiente' %}
+              <button onclick="completarCita({{ c.id }})" class="btn btn-green btn-sm" title="Marcar completada">✓</button>
+              {% endif %}
               <a href="{{ url_for('cita_editar', id_cita=c.id) }}" class="btn btn-blue btn-sm">✏️</a>
               <button onclick="confirmDelete('/api/citas/{{ c.id }}', '¿Eliminar cita de {{ c.nombre_cliente }}?')" class="btn btn-danger btn-sm">🗑️</button>
             </div>
@@ -80,5 +73,30 @@
     </table>
   </div>
 </div>
+{% endblock %}
+{% block scripts %}
+<script>
+function completarCita(id) {
+  if (!confirm('¿Marcar esta cita como completada?')) return;
+  fetch(`/api/citas/${id}/completar`, { method: 'POST' })
+    .then(r => r.json())
+    .then(() => location.reload())
+    .catch(() => alert('Error'));
+}
 
+// Swipe para borrar en móvil
+if ('ontouchstart' in window) {
+  document.querySelectorAll('tbody tr[id^="cita-row-"]').forEach(row => {
+    let startX = 0;
+    row.addEventListener('touchstart', e => startX = e.touches[0].clientX, {passive:true});
+    row.addEventListener('touchend', e => {
+      const diff = startX - e.changedTouches[0].clientX;
+      if (diff > 80) {
+        const btn = row.querySelector('.btn-danger');
+        if (btn) btn.click();
+      }
+    }, {passive:true});
+  });
+}
+</script>
 {% endblock %}

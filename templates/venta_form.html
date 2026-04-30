@@ -47,12 +47,16 @@
           <div class="card-title" style="margin-bottom:16px;">📋 Datos de la venta</div>
           <div class="form-group">
             <label class="form-label">Cliente *</label>
-            <select name="id_cliente" class="form-control" required>
-              <option value="">Selecciona un cliente...</option>
-              {% for c in clientes %}
-              <option value="{{ c.id }}" {% if venta and venta.id_cliente == c.id %}selected{% endif %}>{{ c.nombre }}</option>
-              {% endfor %}
-            </select>
+            <label class="form-label">Cliente *</label>
+			<input type="text" id="cliente-search" class="form-control"
+				   placeholder="Escribe para buscar cliente..."
+				   value="{{ venta.nombre_cliente if venta else '' }}"
+				   autocomplete="off">
+			<input type="hidden" name="id_cliente" id="id_cliente_hidden"
+				   value="{{ venta.id_cliente if venta else '' }}" required>
+			<div id="cliente-dropdown" style="display:none;position:absolute;z-index:100;background:var(--bg1);border:1px solid var(--border-hi);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.15);max-height:200px;overflow-y:auto;width:100%;"></div>
+			<style>#cliente-search-wrap{position:relative;}</style>
+			<div id="cliente-search-wrap" style="position:relative;"></div>
           </div>
           <div class="form-grid form-grid-2">
             <div class="form-group">
@@ -157,7 +161,32 @@
 
 {% endblock %}
 {% block scripts %}
+
 <script>
+
+const clientes = [{% for c in clientes %}{id:{{c.id}},nombre:"{{c.nombre}}"},{% endfor %}];
+const csInput = document.getElementById('cliente-search');
+const csDrop  = document.getElementById('cliente-dropdown');
+const csHidden= document.getElementById('id_cliente_hidden');
+
+csInput.addEventListener('input', () => {
+  const q = csInput.value.toLowerCase();
+  const matches = clientes.filter(c => c.nombre.toLowerCase().includes(q)).slice(0,8);
+  if (!q || !matches.length) { csDrop.style.display='none'; return; }
+  csDrop.innerHTML = matches.map(c =>
+    `<div onclick="selectCliente(${c.id},'${c.nombre}')"
+      style="padding:9px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border);"
+      onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">${c.nombre}</div>`
+  ).join('');
+  csDrop.style.display = 'block';
+});
+function selectCliente(id, nombre) {
+  csHidden.value = id;
+  csInput.value  = nombre;
+  csDrop.style.display = 'none';
+}
+document.addEventListener('click', e => { if(!e.target.closest('#cliente-search')) csDrop.style.display='none'; });
+
 // Productos guardados. Cada uno: {nombre, coste, pvp, beneficio, cantidad}
 let productos = {{ venta.productos | tojson if venta and venta.productos else '[]' }};
 
@@ -225,5 +254,12 @@ document.getElementById('prod-nombre').addEventListener('keydown', e => {
 });
 
 renderProductos();
+
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+<script>
+document.getElementById('venta-form').addEventListener('submit', () => {
+  confetti({ particleCount:120, spread:70, origin:{y:0.6} });
+});
+</script>
 </script>
 {% endblock %}

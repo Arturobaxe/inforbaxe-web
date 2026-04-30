@@ -156,32 +156,29 @@ def api_delete_cliente(id_cliente):
 @app.route("/ventas")
 @login_required
 def ventas():
-    mes = request.args.get("mes", "")
+    desde = request.args.get("desde", "")
+    hasta = request.args.get("hasta", "")
     id_cliente = request.args.get("id_cliente", "")
     metodo = request.args.get("metodo", "")
     pagado = request.args.get("pagado", "")
-
-    lista = db.get_ventas(
-        id_cliente=int(id_cliente) if id_cliente else None,
-        mes=mes if mes else None,
-    )
+    lista = db.get_ventas(id_cliente=int(id_cliente) if id_cliente else None)
+    if desde:
+        lista = [v for v in lista if v.get("fecha","") >= desde]
+    if hasta:
+        lista = [v for v in lista if v.get("fecha","") <= hasta]
     if metodo:
         lista = [v for v in lista if v.get("metodo_pago") == metodo]
     if pagado:
         lista = [v for v in lista if v.get("pagado") == pagado]
-
-    total_pvp = sum(float(v.get("total_pvp") or 0) for v in lista)
-    total_benef = sum(float(v.get("total_benef") or 0) for v in lista)
-    clientes_lista = db.get_clientes()
-    return render_template(
-        "ventas.html",
-        ventas=lista,
-        clientes=clientes_lista,
-        metodos=METODOS_PAGO,
-        filtros={"mes": mes, "id_cliente": id_cliente, "metodo": metodo, "pagado": pagado},
-        total_pvp=round(total_pvp, 2),
-        total_benef=round(total_benef, 2),
-    )
+    total_pvp       = sum(float(v.get("total_pvp",0)) for v in lista)
+    total_benef     = sum(float(v.get("total_benef",0)) for v in lista)
+    total_pendiente = sum(float(v.get("total_pvp",0)) for v in lista if v.get("pagado")=="No")
+    num_pendiente   = sum(1 for v in lista if v.get("pagado")=="No")
+    return render_template("ventas.html",
+        ventas=lista, clientes=db.get_clientes(), metodos=METODOS_PAGO,
+        filtros={"desde":desde,"hasta":hasta,"id_cliente":id_cliente,"metodo":metodo,"pagado":pagado},
+        total_pvp=round(total_pvp,2), total_benef=round(total_benef,2),
+        total_pendiente=round(total_pendiente,2), num_pendiente=num_pendiente)
 
 
 @app.route("/ventas/nueva", methods=["GET", "POST"])
@@ -750,6 +747,21 @@ def api_ventas_chart():
         labels.append(f"{mes:02d}/{str(año)[2:]}")
         values.append(round(total, 2))
     return jsonify({"labels": labels, "values": values})
+    
+    @app.route("/api/ventas/<int:id_venta>/cobrar", methods=["POST"])
+@login_required
+def api_cobrar_venta(id_venta):
+    data = request.get_json() or {}
+    metodo = data.get("metodo", "Efectivo")
+    db.get_db().table("ventas").update({"pagado":"Sí","metodo_pago":metodo}).eq("id",id_venta).execute()
+    return jsonify({"ok": True})
+
+@app.route("/api/citas/<int:id_cita>/completar", methods=["POST"])
+@login_required
+def api_completar_cita(id_cita):
+    db.update_cita(id_cita, *[None]*4, estado="completada") # ajusta según tu función
+    db.get_db().table("citas").update({"estado":"completada"}).eq("id",id_cita).execute()
+    return jsonify({"ok": True})
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)

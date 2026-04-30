@@ -1,0 +1,33 @@
+<!-- ── CAMBIOS EN base.html ──────────────────────────────────────────────────
+  Añade esto dentro de <head>, después de <title>:
+-->
+
+<!-- FAVICON con tu logo -->
+<link rel="icon" type="image/jpeg" href="{{ url_for('static', filename='logo.jpg') }}">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='logo.jpg') }}">
+
+
+<!-- ── FOOTER con logo ──────────────────────────────────────────────────────
+  Añade esto justo ANTES del cierre </div> de .sidebar-footer
+  (debajo del div.sidebar-user que ya existe):
+-->
+
+<div style="
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--sidebar-border);
+  opacity: 0.6;
+">
+  <img src="{{ url_for('static', filename='logo.jpg') }}"
+       alt="INFORBAXE"
+       style="width:22px; height:22px; border-radius:5px; object-fit:cover;">
+  <span style="font-size:10px; font-weight:700; color:var(--st3); letter-spacing:0.08em; text-transform:uppercase;">
+    INFORBAXE
+  </span>
+  <span style="font-size:9px; color:var(--st4); margin-left:auto;">
+    Sesión iniciada
+  </span>
+</div>

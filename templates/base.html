@@ -1110,5 +1110,25 @@ document.querySelectorAll('.stat-value').forEach(el => {
 });
 </script>
 {% block scripts %}{% endblock %}
+<button class="fab" id="fab-btn" onclick="toggleFab()">＋</button>
+<div class="fab-menu" id="fab-menu">
+  <a href="/ventas/nueva" class="fab-menu-item">🛒 Nueva venta</a>
+  <a href="/citas/nueva" class="fab-menu-item">🗓️ Nueva cita</a>
+  <a href="/clientes/nuevo" class="fab-menu-item">👤 Nuevo cliente</a>
+</div>
+<script>
+function toggleFab() {
+  const m = document.getElementById('fab-menu');
+  const b = document.getElementById('fab-btn');
+  const open = m.classList.toggle('open');
+  b.textContent = open ? '✕' : '＋';
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.fab') && !e.target.closest('.fab-menu')) {
+    document.getElementById('fab-menu').classList.remove('open');
+    document.getElementById('fab-btn').textContent = '＋';
+  }
+});
+</script>
 </body>
 </html>
