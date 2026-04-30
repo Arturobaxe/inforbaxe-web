@@ -1130,5 +1130,13 @@ document.addEventListener('click', e => {
   }
 });
 </script>
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js')
+      .then(() => console.log('Service Worker registrado'))
+      .catch(err => console.error('Error:', err));
+  }
+</script>
+
 </body>
 </html>

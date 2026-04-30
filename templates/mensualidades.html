@@ -291,7 +291,10 @@ function togglePago(id, nuevoEstado, btn) {
     body: JSON.stringify({pagado: nuevoEstado})
   })
   .then(r => r.json())
-  .then(() => location.reload())
+  .then(() => {
+    playPing();
+    location.reload();
+  })
   .catch(() => { btn.disabled = false; alert('Error al actualizar'); });
 }
 

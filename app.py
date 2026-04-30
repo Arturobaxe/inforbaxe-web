@@ -181,6 +181,33 @@ def ventas():
         total_pendiente=round(total_pendiente,2), num_pendiente=num_pendiente)
 
 
+@app.route("/api/clientes/nuevo", methods=["POST"])
+@login_required
+def api_nuevo_cliente():
+    data = request.get_json() or {}
+    nombre = data.get("nombre","").strip()
+    if not nombre:
+        return jsonify({"error":"Nombre requerido"}), 400
+    c = db.add_cliente(nombre, data.get("email",""), data.get("telefono",""))
+    return jsonify(c)
+    
+@app.route("/api/ventas/<int:id_venta>/cobrar", methods=["POST"])
+@login_required
+def api_cobrar_venta(id_venta):
+    data = request.get_json() or {}
+    metodo = data.get("metodo","Efectivo")
+    db.get_db().table("ventas").update({"pagado":"Sí","metodo_pago":metodo}).eq("id",id_venta).execute()
+    return jsonify({"ok":True})
+
+@app.route("/api/ventas/<int:id_venta>/duplicar", methods=["POST"])
+@login_required
+def api_duplicar_venta(id_venta):
+    ventas_lista = db.get_ventas()
+    v = next((x for x in ventas_lista if x["id"]==id_venta), None)
+    if not v: return jsonify({"ok":False})
+    db.add_venta(v["id_cliente"], date.today().isoformat(), v["productos"], v["metodo_pago"], "No", v["comentarios"])
+    return jsonify({"ok":True})    
+
 @app.route("/ventas/nueva", methods=["GET", "POST"])
 @login_required
 def venta_nueva():

@@ -84,6 +84,16 @@
             <textarea name="comentarios" class="form-control" rows="3" placeholder="Notas opcionales...">{{ venta.comentarios if venta else '' }}</textarea>
           </div>
         </div>
+		<div class="form-group">
+	  <label class="form-label">¿Cliente nuevo?</label>
+	  <button type="button" onclick="toggleNuevoCliente()" class="btn btn-secondary" style="width:100%;">➕ Crear cliente nuevo</button>
+	  <div id="nuevo-cliente-form" style="display:none; margin-top:10px; padding:10px; background:var(--bg3); border-radius:8px;">
+		<input type="text" id="nc-nombre" class="form-control mb-4" placeholder="Nombre *">
+		<input type="text" id="nc-tel" class="form-control mb-4" placeholder="Teléfono">
+		<input type="text" id="nc-email" class="form-control mb-4" placeholder="Email">
+		<button type="button" onclick="crearCliente()" class="btn btn-primary" style="width:100%;">✓ Crear y seleccionar</button>
+	  </div>
+	</div>
       </div>
 
       <!-- Right: productos -->
@@ -161,7 +171,7 @@
 
 {% endblock %}
 {% block scripts %}
-
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
 <script>
 
 const clientes = [{% for c in clientes %}{id:{{c.id}},nombre:"{{c.nombre}}"},{% endfor %}];
@@ -180,21 +190,23 @@ csInput.addEventListener('input', () => {
   ).join('');
   csDrop.style.display = 'block';
 });
+
 function selectCliente(id, nombre) {
   csHidden.value = id;
   csInput.value  = nombre;
   csDrop.style.display = 'none';
 }
-document.addEventListener('click', e => { if(!e.target.closest('#cliente-search')) csDrop.style.display='none'; });
 
-// Productos guardados. Cada uno: {nombre, coste, pvp, beneficio, cantidad}
+document.addEventListener('click', e => {
+  if(!e.target.closest('#cliente-search')) csDrop.style.display='none';
+});
+
 let productos = {{ venta.productos | tojson if venta and venta.productos else '[]' }};
 
 function calcPVP() {
   const coste = parseFloat(document.getElementById('prod-coste').value.replace(',','.')) || 0;
   const benef = parseFloat(document.getElementById('prod-benef').value.replace(',','.')) || 0;
-  const pvp = coste + benef;
-  document.getElementById('pvp-display').textContent = pvp.toFixed(2) + ' €';
+  document.getElementById('pvp-display').textContent = (coste + benef).toFixed(2) + ' €';
 }
 
 function renderProductos() {
@@ -226,10 +238,9 @@ function addProducto() {
   const nombre = document.getElementById('prod-nombre').value.trim();
   const coste  = parseFloat(document.getElementById('prod-coste').value.replace(',','.')) || 0;
   const benef  = parseFloat(document.getElementById('prod-benef').value.replace(',','.')) || 0;
-  const pvp    = coste + benef;
   const cant   = parseInt(document.getElementById('prod-cant').value) || 1;
   if (!nombre) { alert('Introduce el nombre del producto'); return; }
-  productos.push({nombre, coste, pvp, beneficio: benef, cantidad: cant});
+  productos.push({nombre, coste, pvp: coste + benef, beneficio: benef, cantidad: cant});
   renderProductos();
   document.getElementById('prod-nombre').value = '';
   document.getElementById('prod-coste').value  = '';
@@ -244,22 +255,30 @@ function removeProducto(i) {
   renderProductos();
 }
 
-document.getElementById('venta-form').addEventListener('submit', () => {
-  document.getElementById('productos-json').value = JSON.stringify(productos);
-});
-
-// Enter en nombre añade
 document.getElementById('prod-nombre').addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); addProducto(); }
 });
 
-renderProductos();
-
-<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
-<script>
 document.getElementById('venta-form').addEventListener('submit', () => {
+  document.getElementById('productos-json').value = JSON.stringify(productos);
   confetti({ particleCount:120, spread:70, origin:{y:0.6} });
 });
-</script>
+function toggleNuevoCliente() {
+  const f = document.getElementById('nuevo-cliente-form');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
+function crearCliente() {
+  const nombre = document.getElementById('nc-nombre').value.trim();
+  if (!nombre) { alert('El nombre es obligatorio'); return; }
+  fetch('/api/clientes/nuevo', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({nombre, telefono: document.getElementById('nc-tel').value, email: document.getElementById('nc-email').value})
+  }).then(r=>r.json()).then(d=>{
+    selectCliente(d.id, d.nombre);
+    document.getElementById('nuevo-cliente-form').style.display='none';
+    document.getElementById('nc-nombre').value='';
+  }).catch(()=>alert('Error al crear cliente'));
+}
+renderProductos();
 </script>
 {% endblock %}
