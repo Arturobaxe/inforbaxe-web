@@ -4,13 +4,17 @@ app.py - Main Flask application for INFORBAXE web.
 import os
 import json
 import io
-from datetime import date
+import pyotp
+from datetime import date, timedelta
 from functools import wraps
 
 from flask import (
     Flask, render_template, request, redirect, url_for,
     session, jsonify, flash, abort, make_response
 )
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from werkzeug.security import check_password_hash
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -18,10 +22,35 @@ import database as db
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
-ADMIN_USER = os.environ.get("ADMIN_USER", "admin")
-ADMIN_PASS = os.environ.get("ADMIN_PASS", "inforbaxe2025")
+app.config['SESSION_COOKIE_SECURE']   = True
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)
+
+ADMIN_USER  = os.environ.get("ADMIN_USER", "admin")
+ADMIN_PASS  = os.environ.get("ADMIN_PASS", "")   # debe ser hash werkzeug
+TOTP_SECRET = os.environ.get("TOTP_SECRET", "")  # genera con: pyotp.random_base32()
 METODOS_PAGO = ["Efectivo", "Tarjeta", "Bizum", "Transferencia", "Otro"]
 
+# Rate limiter — bloquea IPs con demasiados intentos
+limiter = Limiter(
+    get_remote_address, app=app,
+    default_limits=[],
+    storage_uri="memory://"
+)
+
+# ── Headers de seguridad en todas las respuestas ──────────
+@app.after_request
+def security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options']        = 'DENY'
+    response.headers['X-XSS-Protection']       = '1; mode=block'
+    response.headers['Referrer-Policy']        = 'strict-origin-when-cross-origin'
+    # Ocultar que es Flask
+    response.headers['Server'] = 'INFORBAXE'
+    return response
+
+# ── AUTH ──────────────────────────────────────────────────
 
 def login_required(f):
     @wraps(f)
@@ -33,27 +62,50 @@ def login_required(f):
 
 
 @app.route("/login", methods=["GET", "POST"])
+@limiter.limit("5 per minute")
 def login():
     error = None
     if request.method == "POST":
         u = request.form.get("username", "").strip()
         p = request.form.get("password", "")
-        if u == ADMIN_USER and p == ADMIN_PASS:
-            session["logged_in"] = True
+        if u == ADMIN_USER and check_password_hash(ADMIN_PASS, p):
+            # Paso 1 OK — pedir código 2FA
+            session["pre_2fa"] = True
             session["username"] = u
-            return redirect(url_for("dashboard"))
+            return redirect(url_for("login_2fa"))
         error = "Usuario o contraseña incorrectos"
     return render_template("login.html", error=error)
 
-@app.route('/sw.js')
-def sw():
-    return app.send_static_file('sw.js')
+
+@app.route("/login/2fa", methods=["GET", "POST"])
+@limiter.limit("5 per minute")
+def login_2fa():
+    if not session.get("pre_2fa"):
+        return redirect(url_for("login"))
+    error = None
+    if request.method == "POST":
+        codigo = request.form.get("codigo", "").strip().replace(" ", "")
+        totp   = pyotp.TOTP(TOTP_SECRET)
+        if totp.verify(codigo, valid_window=1):
+            session.pop("pre_2fa", None)
+            session["logged_in"] = True
+            session.permanent = True
+            return redirect(url_for("dashboard"))
+        error = "Código incorrecto. Inténtalo de nuevo."
+    return render_template("login_2fa.html", error=error)
+
 
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect(url_for("login"))
 
+
+@app.route('/sw.js')
+def sw():
+    return app.send_static_file('sw.js')
+
+# ── DASHBOARD ─────────────────────────────────────────────
 
 @app.route("/")
 @login_required
@@ -101,8 +153,7 @@ def cliente_nuevo():
 @login_required
 def cliente_editar(id_cliente):
     cliente = db.get_cliente(id_cliente)
-    if not cliente:
-        abort(404)
+    if not cliente: abort(404)
     if request.method == "POST":
         nombre = request.form.get("nombre", "").strip()
         if not nombre:
@@ -125,10 +176,8 @@ def cliente_historial(id_cliente):
 def api_nuevo_cliente():
     data = request.get_json() or {}
     nombre = data.get("nombre", "").strip()
-    if not nombre:
-        return jsonify({"error": "Nombre requerido"}), 400
-    c = db.add_cliente(nombre, data.get("email", ""), data.get("telefono", ""))
-    return jsonify(c)
+    if not nombre: return jsonify({"error": "Nombre requerido"}), 400
+    return jsonify(db.add_cliente(nombre, data.get("email",""), data.get("telefono","")))
 
 
 @app.route("/api/clientes/<int:id_cliente>", methods=["DELETE"])
@@ -241,9 +290,9 @@ def albaran_pdf(id_venta):
     ventas_lista = db.get_ventas()
     venta = next((v for v in ventas_lista if v["id"] == id_venta), None)
     if not venta: abort(404)
-    cliente = db.get_cliente(venta["id_cliente"])
+    cliente   = db.get_cliente(venta["id_cliente"])
     pdf_bytes = _generar_pdf_albaran(venta, cliente, tipo="Albarán")
-    response = make_response(pdf_bytes)
+    response  = make_response(pdf_bytes)
     response.headers["Content-Type"] = "application/pdf"
     response.headers["Content-Disposition"] = f'inline; filename="albaran_{id_venta}.pdf"'
     return response
@@ -275,10 +324,9 @@ def _generar_pdf_albaran(doc, cliente, tipo="Albarán"):
         s_foot  = ParagraphStyle('ft', fontSize=8,  textColor=GRAY, fontName='Helvetica', alignment=TA_CENTER)
 
         story = []
-        ht = Table([
-            [Paragraph("INFORBAXE", s_title), Paragraph(f"<b>{tipo}</b> #{doc.get('id','')}", s_h2)],
-            [Paragraph("Informática y Tecnología", s_sub), Paragraph(f"Fecha: {doc.get('fecha','')}", s_n)],
-        ], colWidths=[10*cm, 7*cm])
+        ht = Table([[Paragraph("INFORBAXE", s_title), Paragraph(f"<b>{tipo}</b> #{doc.get('id','')}", s_h2)],
+                    [Paragraph("Informática y Tecnología", s_sub), Paragraph(f"Fecha: {doc.get('fecha','')}", s_n)]],
+                   colWidths=[10*cm, 7*cm])
         ht.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),('ALIGN',(1,0),(1,-1),'RIGHT')]))
         story += [ht, Spacer(1,0.4*cm), HRFlowable(width="100%",thickness=2,color=BLUE,spaceAfter=10)]
 
@@ -333,46 +381,27 @@ def mensualidades():
     año = int(request.args.get("año", date.today().year))
     filtro = request.args.get("filtro","all")
     buscar_str = request.args.get("buscar","").strip().lower()
-
-    # ── AUTO-GENERAR mensualidades perpetuas ──────────────────────
-    # Para cada cliente activo que tenga mensualidades en años anteriores,
-    # genera los meses que faltan hasta el mes actual inclusive.
     hoy = date.today()
     mes_actual = hoy.strftime("%Y-%m")
 
-    # Buscar todas las suscripciones activas (clientes activos con mensualidades)
-    todas = db.get_mensualidades()  # sin filtro de año
-    suscripciones = {}  # {(id_cliente, concepto): {importe, ultimo_mes}}
+    todas = db.get_mensualidades()
+    suscripciones = {}
     for m in todas:
-        if not m.get("cliente_activo", True):
-            continue
+        if not m.get("cliente_activo", True): continue
         key = (m["id_cliente"], m["concepto"])
         mes = m["mes"]
         if key not in suscripciones or mes > suscripciones[key]["ultimo_mes"]:
-            suscripciones[key] = {
-                "id_cliente": m["id_cliente"],
-                "concepto": m["concepto"],
-                "importe": m["importe"],
-                "ultimo_mes": mes,
-            }
+            suscripciones[key] = {"id_cliente":m["id_cliente"],"concepto":m["concepto"],"importe":m["importe"],"ultimo_mes":mes}
 
-    # Generar meses faltantes hasta mes actual
     for key, s in suscripciones.items():
-        ultimo = s["ultimo_mes"]  # YYYY-MM
-        ult_año, ult_m = int(ultimo[:4]), int(ultimo[5:])
-        hoy_año, hoy_m = hoy.year, hoy.month
-        # Avanzar mes a mes desde el siguiente al último hasta hoy
+        ult_año, ult_m = int(s["ultimo_mes"][:4]), int(s["ultimo_mes"][5:])
         while True:
             ult_m += 1
-            if ult_m > 12:
-                ult_m = 1
-                ult_año += 1
+            if ult_m > 12: ult_m = 1; ult_año += 1
             nuevo_mes = f"{ult_año}-{ult_m:02d}"
-            if nuevo_mes > mes_actual:
-                break
+            if nuevo_mes > mes_actual: break
             db.add_mensualidad(s["id_cliente"], s["concepto"], s["importe"], nuevo_mes, "No")
 
-    # ── Cargar datos del año solicitado ───────────────────────────
     datos = db.get_mensualidades(año=año)
     if filtro=="paid":     datos = [m for m in datos if m.get("pagado")=="Sí"]
     elif filtro=="unpaid": datos = [m for m in datos if m.get("pagado")!="Sí"]
@@ -617,12 +646,10 @@ def api_delete_presupuesto(id_presupuesto):
     db.delete_presupuesto(id_presupuesto)
     return jsonify({"ok": True})
 
-# ── Añade estas rutas en app.py ──────────────────────────
 
 @app.route("/api/mensualidades/cambiar-precio-futuro", methods=["POST"])
 @login_required
 def api_cambiar_precio_futuro():
-    """Cambia el importe de todas las mensualidades futuras del mismo cliente+concepto."""
     data = request.get_json() or {}
     id_mens   = data.get("id")
     concepto  = data.get("concepto","").strip()
@@ -632,17 +659,10 @@ def api_cambiar_precio_futuro():
         return jsonify({"ok": False, "error": "Faltan datos"}), 400
     try:
         supa = db.get_db()
-        # Buscar id_cliente de esta mensualidad
         m = supa.table("mensualidades").select("id_cliente").eq("id", id_mens).single().execute().data
-        if not m:
-            return jsonify({"ok": False, "error": "No encontrada"}), 404
-        id_cliente = m["id_cliente"]
-        # Actualizar todas las mensualidades >= mes_desde del mismo cliente+concepto
+        if not m: return jsonify({"ok": False, "error": "No encontrada"}), 404
         supa.table("mensualidades").update({"importe": round(float(nuevo_imp), 2)}) \
-            .eq("id_cliente", id_cliente) \
-            .eq("concepto", concepto) \
-            .gte("mes", mes_desde) \
-            .execute()
+            .eq("id_cliente", m["id_cliente"]).eq("concepto", concepto).gte("mes", mes_desde).execute()
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
@@ -651,7 +671,6 @@ def api_cambiar_precio_futuro():
 @app.route("/api/mensualidades/cancelar-membresia", methods=["POST"])
 @login_required
 def api_cancelar_membresia():
-    """Elimina todas las mensualidades futuras (>= mes_desde) del mismo cliente+concepto."""
     data = request.get_json() or {}
     id_mens   = data.get("id")
     concepto  = data.get("concepto","").strip()
@@ -661,17 +680,30 @@ def api_cancelar_membresia():
     try:
         supa = db.get_db()
         m = supa.table("mensualidades").select("id_cliente").eq("id", id_mens).single().execute().data
-        if not m:
-            return jsonify({"ok": False, "error": "No encontrada"}), 404
-        id_cliente = m["id_cliente"]
+        if not m: return jsonify({"ok": False, "error": "No encontrada"}), 404
         supa.table("mensualidades").delete() \
-            .eq("id_cliente", id_cliente) \
-            .eq("concepto", concepto) \
-            .gte("mes", mes_desde) \
-            .execute()
+            .eq("id_cliente", m["id_cliente"]).eq("concepto", concepto).gte("mes", mes_desde).execute()
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
+
+@app.route("/api/ventas-chart")
+@login_required
+def api_ventas_chart():
+    hoy = date.today()
+    labels, values = [], []
+    for i in range(5, -1, -1):
+        m = hoy.month - i
+        y = hoy.year
+        while m <= 0: m += 12; y -= 1
+        mes_str = f"{y}-{m:02d}"
+        ventas  = db.get_ventas(mes=mes_str)
+        total   = sum(float(v.get("total_pvp",0)) for v in ventas)
+        labels.append(f"{m:02d}/{str(y)[2:]}")
+        values.append(round(total, 2))
+    return jsonify({"labels": labels, "values": values})
+
+
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(debug=False, host="0.0.0.0", port=5000)
