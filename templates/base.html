@@ -80,21 +80,6 @@
     button, input, select, textarea { font-family: inherit; }
     img { max-width: 100%; }
 
-    /* Editable global: contenteditable visual */
-    [contenteditable="true"] {
-      outline: none;
-      border-radius: 4px;
-      transition: background 0.15s, box-shadow 0.15s;
-      cursor: text;
-    }
-    [contenteditable="true"]:hover {
-      background: rgba(232,130,12,0.07);
-    }
-    [contenteditable="true"]:focus {
-      background: rgba(232,130,12,0.10);
-      box-shadow: 0 0 0 2px var(--accent);
-    }
-
     /* ── Layout ───────────────────────────────────────── */
     .layout { display: flex; height: 100vh; overflow: hidden; }
 
@@ -573,21 +558,6 @@ tbody tr:nth-child(7){animation-delay:0.28s} tbody tr:nth-child(8){animation-del
     }
     .toggle-switch input:checked + .toggle-track { background: var(--accent); border-color: var(--accent); }
     .toggle-switch input:checked + .toggle-track::after { transform: translateX(16px); background: #fff; }
-
-    /* ── CONTEXT MENU (click derecho editable) ───────── */
-    .ctx-menu {
-      display: none;
-      position: fixed;
-      background: var(--bg1);
-      border: 1px solid var(--border-hi);
-      border-radius: var(--radius);
-      box-shadow: 0 8px 32px rgba(27,35,64,0.18);
-      z-index: 9999;
-      min-width: 200px;
-      overflow: hidden;
-      animation: fadeIn 0.15s ease;
-    }
-    .ctx-menu.visible { display: block; }
     .ctx-item {
       display: flex; align-items: center; gap: 10px;
       padding: 10px 14px;
@@ -607,23 +577,6 @@ tbody tr:nth-child(7){animation-delay:0.28s} tbody tr:nth-child(8){animation-del
       font-size: 10px; font-weight: 700;
       color: var(--t4); text-transform: uppercase; letter-spacing: 0.08em;
     }
-
-    /* Edit toast */
-    .edit-toast {
-      display: none;
-      position: fixed;
-      bottom: 20px; right: 20px;
-      background: var(--corp);
-      color: #fff;
-      padding: 9px 16px;
-      border-radius: var(--radius);
-      font-size: 13px; font-weight: 500;
-      z-index: 9998;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.22);
-      animation: fadeIn 0.2s ease;
-    }
-    .edit-toast.visible { display: flex; align-items: center; gap: 8px; }
-    .edit-toast span { font-size: 14px; }
 
     /* ── MOBILE RESPONSIVE ───────────────────────────── */
     @media (max-width: 768px) {
@@ -671,38 +624,6 @@ tbody tr:nth-child(7){animation-delay:0.28s} tbody tr:nth-child(8){animation-del
 <!-- Mobile overlay -->
 <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
 
-<!-- Context menu personalizado -->
-<div class="ctx-menu" id="ctx-menu">
-  <div class="ctx-label" id="ctx-label">Editar elemento</div>
-  <div class="ctx-item" id="ctx-edit">
-    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-    Editar texto
-  </div>
-  <div class="ctx-item" id="ctx-copy">
-    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-    Copiar texto
-  </div>
-  <div class="ctx-sep"></div>
-  <div class="ctx-item" id="ctx-bold">
-    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/></svg>
-    Negrita
-  </div>
-  <div class="ctx-item" id="ctx-clear">
-    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
-    Limpiar formato
-  </div>
-  <div class="ctx-sep"></div>
-  <div class="ctx-item" id="ctx-save">
-    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-    Guardar cambios
-  </div>
-</div>
-
-<!-- Toast edición -->
-<div class="edit-toast" id="edit-toast">
-  <span>✏️</span>
-  <span id="edit-toast-msg">Haz doble clic en cualquier texto para editar</span>
-</div>
 
 <div class="layout">
 
@@ -713,8 +634,8 @@ tbody tr:nth-child(7){animation-delay:0.28s} tbody tr:nth-child(8){animation-del
            alt="INFORBAXE"
            class="brand-logo-img">
       <div class="brand-text">
-        <div class="brand-name" contenteditable="true" title="Doble clic para editar">INFOR<span>BAXE</span></div>
-        <div class="brand-sub" contenteditable="true" title="Doble clic para editar">Panel de gestión</div>
+        <div class="brand-name">INFOR<span>BAXE</span></div>
+        <div class="brand-sub">Panel de gestión</div>
       </div>
     </div>
 
@@ -729,40 +650,40 @@ tbody tr:nth-child(7){animation-delay:0.28s} tbody tr:nth-child(8){animation-del
     </div>
 
     <div class="sidebar-nav">
-      <div class="nav-section-label" contenteditable="true">Principal</div>
+      <div class="nav-section-label">Principal</div>
       <a href="{{ url_for('dashboard') }}" class="nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
         <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-        <span contenteditable="">Dashboard</span>
+        <span>Dashboard</span>
       </a>
       <a href="{{ url_for('buscar') }}" class="nav-item {% if request.endpoint == 'buscar' %}active{% endif %}">
         <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-        <span contenteditable="">Búsqueda global</span>
+        <span>Búsqueda global</span>
       </a>
 
-      <div class="nav-section-label" contenteditable="true">Gestión</div>
+      <div class="nav-section-label">Gestión</div>
       <a href="{{ url_for('clientes') }}" class="nav-item {% if 'cliente' in request.endpoint %}active{% endif %}">
         <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        <span contenteditable="">Clientes</span>
+        <span>Clientes</span>
       </a>
       <a href="{{ url_for('ventas') }}" class="nav-item {% if 'venta' in request.endpoint %}active{% endif %}">
         <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
-        <span contenteditable="">Ventas</span>
+        <span>Ventas</span>
       </a>
       <a href="{{ url_for('mensualidades') }}" class="nav-item {% if 'mensualidad' in request.endpoint %}active{% endif %}">
         <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-        <span contenteditable="">Mensualidades</span>
+        <span>Mensualidades</span>
       </a>
       <a href="{{ url_for('citas') }}" class="nav-item {% if 'cita' in request.endpoint %}active{% endif %}">
         <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        <span contenteditable="">Citas</span>
+        <span>Citas</span>
       </a>
       <a href="{{ url_for('productos') }}" class="nav-item {% if 'producto' in request.endpoint %}active{% endif %}">
         <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-        <span contenteditable="">Productos</span>
+        <span>Productos</span>
       </a>
       <a href="{{ url_for('presupuestos') }}" class="nav-item {% if 'presupuesto' in request.endpoint %}active{% endif %}">
         <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-        <span contenteditable="">Presupuestos</span>
+        <span>Presupuestos</span>
       </a>
     </div>
 
@@ -796,8 +717,8 @@ tbody tr:nth-child(7){animation-delay:0.28s} tbody tr:nth-child(8){animation-del
       </div>
 
       <div>
-        <div class="topbar-title" contenteditable="true">{% block page_title %}{% endblock %}</div>
-        <div class="topbar-sub" contenteditable="true">{% block page_sub %}{% endblock %}</div>
+        <div class="topbar-title">{% block page_title %}{% endblock %}</div>
+        <div class="topbar-sub">{% block page_sub %}{% endblock %}</div>
       </div>
       <div class="topbar-right">
         {% block topbar_actions %}{% endblock %}
@@ -809,7 +730,7 @@ tbody tr:nth-child(7){animation-delay:0.28s} tbody tr:nth-child(8){animation-del
         {% if messages %}
           <div class="flash-list">
             {% for cat, msg in messages %}
-              <div class="flash flash-{{ cat }}" contenteditable="true">{{ msg }}</div>
+              <div class="flash flash-{{ cat }}">{{ msg }}</div>
             {% endfor %}
           </div>
         {% endif %}
@@ -894,156 +815,7 @@ function confirmDelete(url, msg) {
     .catch(() => alert('Error al eliminar'));
 }
 
-// ── EDICIÓN UNIVERSAL: doble clic en cualquier texto ──────
-document.addEventListener('dblclick', function(e) {
-  const el = e.target.closest('[contenteditable]') || e.target;
-  if (el && el.tagName !== 'A' && el.tagName !== 'BUTTON' && el.tagName !== 'INPUT') {
-    if (!el.hasAttribute('contenteditable') || el.getAttribute('contenteditable') === 'false') {
-      el.setAttribute('contenteditable', 'true');
-    }
-    el.focus();
-    showToast('Editando — pulsa Enter o clic fuera para guardar');
-  }
-});
 
-// ── CONTEXT MENU click derecho ────────────────────────────
-let ctxTarget = null;
-const ctxMenu = document.getElementById('ctx-menu');
-
-document.addEventListener('contextmenu', function(e) {
-  // Siempre mostrar menú personalizado en elementos de texto
-  const target = e.target;
-  if (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA') return;
-
-  e.preventDefault();
-  ctxTarget = target;
-
-  const label = document.getElementById('ctx-label');
-  const tagName = target.tagName.toLowerCase();
-  label.textContent = `Editar: ${tagName}`;
-
-  // Posición
-  const x = Math.min(e.clientX, window.innerWidth - 220);
-  const y = Math.min(e.clientY, window.innerHeight - 250);
-  ctxMenu.style.left = x + 'px';
-  ctxMenu.style.top  = y + 'px';
-  ctxMenu.classList.add('visible');
-});
-
-document.addEventListener('click', function(e) {
-  if (!e.target.closest('#ctx-menu')) {
-    ctxMenu.classList.remove('visible');
-  }
-});
-
-document.getElementById('ctx-edit').addEventListener('click', function() {
-  if (ctxTarget) {
-    if (!ctxTarget.hasAttribute('contenteditable') || ctxTarget.getAttribute('contenteditable') === 'false') {
-      ctxTarget.setAttribute('contenteditable', 'true');
-    }
-    ctxTarget.focus();
-    // Seleccionar todo el texto
-    const range = document.createRange();
-    range.selectNodeContents(ctxTarget);
-    const sel = window.getSelection();
-    sel.removeAllRanges();
-    sel.addRange(range);
-    showToast('Modo edición activado');
-  }
-  ctxMenu.classList.remove('visible');
-});
-
-document.getElementById('ctx-copy').addEventListener('click', function() {
-  if (ctxTarget) {
-    const text = ctxTarget.innerText || ctxTarget.textContent || '';
-    navigator.clipboard.writeText(text.trim()).then(() => showToast('Texto copiado'));
-  }
-  ctxMenu.classList.remove('visible');
-});
-
-document.getElementById('ctx-bold').addEventListener('click', function() {
-  if (ctxTarget) {
-    ctxTarget.setAttribute('contenteditable', 'true');
-    ctxTarget.focus();
-    document.execCommand('bold');
-    showToast('Formato negrita aplicado');
-  }
-  ctxMenu.classList.remove('visible');
-});
-
-document.getElementById('ctx-clear').addEventListener('click', function() {
-  if (ctxTarget) {
-    ctxTarget.setAttribute('contenteditable', 'true');
-    ctxTarget.focus();
-    document.execCommand('removeFormat');
-    showToast('Formato limpiado');
-  }
-  ctxMenu.classList.remove('visible');
-});
-
-document.getElementById('ctx-save').addEventListener('click', function() {
-  saveEdits();
-  ctxMenu.classList.remove('visible');
-});
-
-// Guardar ediciones en localStorage
-function saveEdits() {
-  const editables = document.querySelectorAll('[contenteditable="true"]');
-  const saves = {};
-  editables.forEach((el, i) => {
-    const key = el.dataset.editKey || `editable_${i}`;
-    saves[key] = el.innerHTML;
-  });
-  try {
-    sessionStorage.setItem('inforbaxe_edits_' + location.pathname, JSON.stringify(saves));
-    showToast('Cambios guardados en sesión ✓');
-  } catch(err) {
-    showToast('Guardado localmente');
-  }
-}
-
-// Restaurar ediciones
-function restoreEdits() {
-  try {
-    const saved = sessionStorage.getItem('inforbaxe_edits_' + location.pathname);
-    if (!saved) return;
-    const saves = JSON.parse(saved);
-    const editables = document.querySelectorAll('[contenteditable="true"]');
-    editables.forEach((el, i) => {
-      const key = el.dataset.editKey || `editable_${i}`;
-      if (saves[key]) el.innerHTML = saves[key];
-    });
-  } catch(err) {}
-}
-
-// Toast de edición
-let toastTimer;
-function showToast(msg) {
-  const toast = document.getElementById('edit-toast');
-  document.getElementById('edit-toast-msg').textContent = msg;
-  toast.classList.add('visible');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove('visible'), 2800);
-}
-
-// Ctrl+S para guardar
-document.addEventListener('keydown', function(e) {
-  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-    e.preventDefault();
-    saveEdits();
-  }
-  if (e.key === 'Escape') {
-    ctxMenu.classList.remove('visible');
-  }
-});
-
-// Mostrar toast al cargar por primera vez
-setTimeout(() => {
-  showToast('Doble clic en cualquier texto para editar · Clic derecho para más opciones');
-}, 800);
-
-// Restaurar al cargar
-document.addEventListener('DOMContentLoaded', restoreEdits);
 </script>
 <script>
 document.querySelectorAll('.stat-value').forEach(el => {
@@ -1066,5 +838,25 @@ document.querySelectorAll('.stat-value').forEach(el => {
 });
 </script>
 {% block scripts %}{% endblock %}
+<button class="fab" id="fab-btn" onclick="toggleFab()">＋</button>
+<div class="fab-menu" id="fab-menu">
+  <a href="/ventas/nueva" class="fab-menu-item">🛒 Nueva venta</a>
+  <a href="/citas/nueva" class="fab-menu-item">🗓️ Nueva cita</a>
+  <a href="/clientes/nuevo" class="fab-menu-item">👤 Nuevo cliente</a>
+</div>
+<script>
+function toggleFab() {
+  const m = document.getElementById('fab-menu');
+  const b = document.getElementById('fab-btn');
+  const open = m.classList.toggle('open');
+  b.textContent = open ? '✕' : '＋';
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.fab') && !e.target.closest('.fab-menu')) {
+    document.getElementById('fab-menu').classList.remove('open');
+    document.getElementById('fab-btn').textContent = '＋';
+  }
+});
+</script>
 </body>
 </html>
