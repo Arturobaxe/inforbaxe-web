@@ -45,6 +45,9 @@ def login():
         error = "Usuario o contraseña incorrectos"
     return render_template("login.html", error=error)
 
+@app.route('/sw.js')
+def sw():
+    return app.send_static_file('sw.js')
 
 @app.route("/logout")
 def logout():
