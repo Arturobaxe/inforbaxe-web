@@ -17,7 +17,6 @@
   .mens-table thead th:first-child { position: sticky; left: 0; z-index:3; background: var(--bg2); }
   .mens-table tbody td:first-child { position: sticky; left: 0; background: var(--bg1); z-index:1; font-weight: 600; min-width: 160px; max-width: 200px; }
   .mens-table tbody tr:hover td:first-child { background: var(--bg2); }
-  .mens-table tbody tr:hover td { background: rgba(232,130,12,0.02); }
 
   .cell-paid {
     background: rgba(28,158,90,0.12); color: var(--green);
@@ -52,27 +51,32 @@
 
   .cell-wrap { position: relative; min-width: 68px; }
 
+  /* Botón ··· debajo de cada celda */
   .cell-menu-btn {
     display: block; width: 100%; background: none; border: none;
-    cursor: pointer; font-size: 13px; color: var(--t3);
-    padding: 1px 0; line-height: 1; transition: color 0.12s;
+    cursor: pointer; font-size: 14px; font-weight: 700;
+    color: var(--t3); padding: 1px 0; line-height: 1;
+    transition: color 0.12s; letter-spacing: 2px;
   }
-  .cell-menu-btn:hover { color: var(--t1); }
+  .cell-menu-btn:hover { color: var(--accent); }
 
+  /* Menú desplegable — usa position:absolute para evitar problemas con fixed+scroll */
   .cell-actions {
     display: none;
-    position: fixed;
+    position: absolute;
+    top: calc(100% + 2px);
+    left: 50%;
+    transform: translateX(-50%);
     background: var(--bg1);
     border: 1px solid var(--border-hi);
     border-radius: 8px;
-    box-shadow: 0 4px 18px rgba(27,35,64,0.18);
+    box-shadow: 0 6px 24px rgba(27,35,64,0.18);
     z-index: 9999;
-    min-width: 150px;
-    overflow: hidden;
-    animation: fadeIn 0.12s ease;
+    min-width: 155px;
+    overflow: visible;
   }
-  .cell-actions.visible { display: block; }
-  @keyframes fadeIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:none} }
+  .cell-actions.open { display: block; animation: menuFade 0.12s ease; }
+  @keyframes menuFade { from{opacity:0;transform:translateX(-50%) translateY(-4px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
 
   .cell-action-label {
     padding: 6px 12px 4px;
@@ -92,12 +96,14 @@
   .cell-action-btn:hover { background: var(--bg2); }
   .cell-action-btn.danger { color: var(--red); }
 
+  /* Fila de totales */
   .totals-row td { background: var(--bg2) !important; color: var(--t2); font-size: 11px; font-weight: 700; padding-top: 10px; border-top: 2px solid var(--border-hi); }
   .totals-row td:first-child { color: var(--t3); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; }
 
-  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(27,35,64,0.50); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
+  /* Modal */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(27,35,64,0.50); z-index: 10000; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
   .modal-overlay.open { display: flex; }
-  .modal-box { background: var(--bg1); border: 1px solid var(--border-hi); border-radius: var(--radius-lg); padding: 24px; width: 100%; max-width: 400px; box-shadow: 0 8px 40px rgba(27,35,64,0.22); animation: fadeIn 0.18s ease; }
+  .modal-box { background: var(--bg1); border: 1px solid var(--border-hi); border-radius: var(--radius-lg); padding: 24px; width: 100%; max-width: 400px; box-shadow: 0 8px 40px rgba(27,35,64,0.22); }
   .modal-title { font-size: 15px; font-weight: 700; margin-bottom: 16px; color: var(--t1); }
 </style>
 {% endblock %}
@@ -147,7 +153,7 @@
           <td style="padding:3px 5px;">
             {% if m %}
               {% set vencido = (mes < today_mes) and m.pagado != 'Sí' %}
-              <div class="cell-wrap">
+              <div class="cell-wrap" id="wrap-{{ m.id }}">
                 {% if m.pagado == 'Sí' %}
                   <button class="cell-paid" onclick="togglePago({{ m.id }}, 'No', this)">✓ {{ m.importe }}€</button>
                 {% elif vencido %}
@@ -155,10 +161,10 @@
                 {% else %}
                   <button class="cell-unpaid" onclick="togglePago({{ m.id }}, 'Sí', this)">✗ {{ m.importe }}€</button>
                 {% endif %}
-                <button class="cell-menu-btn" onclick="toggleMenu(event, this.nextElementSibling, '{{ m.concepto|replace("'","\\'")|safe }}')">···</button>
-                <div class="cell-actions">
-                  <div class="cell-action-label">{{ m.concepto[:20] }}</div>
-                  <button class="cell-action-btn" onclick="abrirEditar({{ m.id }}, '{{ m.concepto|replace("'","\\'")|safe }}', {{ m.importe }}, '{{ m.mes }}', '{{ m.pagado }}')">
+                <button class="cell-menu-btn" onclick="toggleMenu({{ m.id }})">···</button>
+                <div class="cell-actions" id="menu-{{ m.id }}">
+                  <div class="cell-action-label">{{ m.concepto[:18] }}</div>
+                  <button class="cell-action-btn" onclick="abrirEditar({{ m.id }}, '{{ m.concepto|replace("'", "\\'")|safe }}', {{ m.importe }}, '{{ m.mes }}', '{{ m.pagado }}')">
                     <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     Editar
                   </button>
@@ -210,7 +216,7 @@
     <input type="hidden" id="edit-id">
     <div class="form-group">
       <label class="form-label">Concepto</label>
-      <input type="text" id="edit-concepto" class="form-control" placeholder="Ej: Mantenimiento mensual">
+      <input type="text" id="edit-concepto" class="form-control">
     </div>
     <div class="form-grid form-grid-2">
       <div class="form-group">
@@ -239,37 +245,36 @@
 {% endblock %}
 {% block scripts %}
 <script>
-// ── Menú contextual ──
-function toggleMenu(event, menuEl, concepto) {
-  event.stopPropagation();
-  const isVisible = menuEl.classList.contains('visible');
+// ── Menú: abre/cierra por ID ──────────────────────────────
+function toggleMenu(id) {
+  const menu = document.getElementById('menu-' + id);
+  const isOpen = menu.classList.contains('open');
   // Cierra todos
-  document.querySelectorAll('.cell-actions.visible').forEach(m => m.classList.remove('visible'));
-  if (isVisible) return;
-  // Posiciona el menú con position:fixed respecto al botón
-  const btn = event.currentTarget;
-  const rect = btn.getBoundingClientRect();
-  menuEl.style.top  = (rect.bottom + 4) + 'px';
-  menuEl.style.left = rect.left + 'px';
-  menuEl.classList.add('visible');
+  document.querySelectorAll('.cell-actions.open').forEach(m => m.classList.remove('open'));
+  // Abre este si estaba cerrado
+  if (!isOpen) menu.classList.add('open');
 }
 
-// Cierra al hacer click fuera
+// Cierra al hacer clic fuera
 document.addEventListener('click', function(e) {
   if (!e.target.closest('.cell-wrap')) {
-    document.querySelectorAll('.cell-actions.visible').forEach(m => m.classList.remove('visible'));
+    document.querySelectorAll('.cell-actions.open').forEach(m => m.classList.remove('open'));
   }
 });
-// Cierra al hacer scroll
-window.addEventListener('scroll', function() {
-  document.querySelectorAll('.cell-actions.visible').forEach(m => m.classList.remove('visible'));
-}, true);
 
-// ── Toggle pago ──
+// Cierra con Escape
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.cell-actions.open').forEach(m => m.classList.remove('open'));
+    cerrarModal();
+  }
+});
+
+// ── Toggle pago ───────────────────────────────────────────
 function togglePago(id, nuevoEstado, btn) {
   btn.innerHTML = '...';
   btn.disabled = true;
-  fetch(`/api/mensualidades/${id}/toggle`, {
+  fetch('/api/mensualidades/' + id + '/toggle', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({pagado: nuevoEstado})
@@ -279,19 +284,19 @@ function togglePago(id, nuevoEstado, btn) {
   .catch(() => { btn.disabled = false; alert('Error al actualizar'); });
 }
 
-// ── Eliminar ──
+// ── Eliminar ──────────────────────────────────────────────
 function eliminarMensualidad(id, nombre, mes) {
-  document.querySelectorAll('.cell-actions.visible').forEach(m => m.classList.remove('visible'));
-  if (!confirm(`¿Eliminar mensualidad de ${nombre} para ${mes}?`)) return;
-  fetch(`/api/mensualidades/${id}`, { method: 'DELETE' })
+  document.querySelectorAll('.cell-actions.open').forEach(m => m.classList.remove('open'));
+  if (!confirm('¿Eliminar mensualidad de ' + nombre + ' para ' + mes + '?')) return;
+  fetch('/api/mensualidades/' + id, { method: 'DELETE' })
     .then(r => r.json())
     .then(() => location.reload())
     .catch(() => alert('Error al eliminar'));
 }
 
-// ── Modal editar ──
+// ── Modal editar ──────────────────────────────────────────
 function abrirEditar(id, concepto, importe, mes, pagado) {
-  document.querySelectorAll('.cell-actions.visible').forEach(m => m.classList.remove('visible'));
+  document.querySelectorAll('.cell-actions.open').forEach(m => m.classList.remove('open'));
   document.getElementById('edit-id').value       = id;
   document.getElementById('edit-concepto').value = concepto;
   document.getElementById('edit-importe').value  = importe;
@@ -311,7 +316,7 @@ function guardarEditar() {
   const mes      = document.getElementById('edit-mes').value;
   const pagado   = document.getElementById('edit-pagado').value;
   if (!concepto || !mes || isNaN(importe)) { alert('Completa todos los campos'); return; }
-  fetch(`/api/mensualidades/${id}/editar`, {
+  fetch('/api/mensualidades/' + id + '/editar', {
     method: 'PATCH',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({ concepto, importe, mes, pagado })
@@ -324,8 +329,8 @@ function guardarEditar() {
 document.getElementById('modal-editar').addEventListener('click', function(e) {
   if (e.target === this) cerrarModal();
 });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarModal(); });
 
+// ── Sonido ────────────────────────────────────────────────
 function playPing() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
