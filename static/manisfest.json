@@ -3,20 +3,10 @@
   "short_name": "INFORBAXE",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#07090f",
-  "theme_color": "#00d4aa",
+  "background_color": "#1B2340",
+  "theme_color": "#E8820C",
   "icons": [
-    {
-      "src": "/static/logo-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/static/logo-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
+    {"src": "/static/logo.jpg", "sizes": "192x192", "type": "image/jpeg"},
+    {"src": "/static/logo.jpg", "sizes": "512x512", "type": "image/jpeg"}
   ]
 }
