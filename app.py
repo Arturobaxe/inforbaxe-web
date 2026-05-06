@@ -330,16 +330,58 @@ def mensualidades():
     año = int(request.args.get("año", date.today().year))
     filtro = request.args.get("filtro","all")
     buscar_str = request.args.get("buscar","").strip().lower()
+
+    # ── AUTO-GENERAR mensualidades perpetuas ──────────────────────
+    # Para cada cliente activo que tenga mensualidades en años anteriores,
+    # genera los meses que faltan hasta el mes actual inclusive.
+    hoy = date.today()
+    mes_actual = hoy.strftime("%Y-%m")
+
+    # Buscar todas las suscripciones activas (clientes activos con mensualidades)
+    todas = db.get_mensualidades()  # sin filtro de año
+    suscripciones = {}  # {(id_cliente, concepto): {importe, ultimo_mes}}
+    for m in todas:
+        if not m.get("cliente_activo", True):
+            continue
+        key = (m["id_cliente"], m["concepto"])
+        mes = m["mes"]
+        if key not in suscripciones or mes > suscripciones[key]["ultimo_mes"]:
+            suscripciones[key] = {
+                "id_cliente": m["id_cliente"],
+                "concepto": m["concepto"],
+                "importe": m["importe"],
+                "ultimo_mes": mes,
+            }
+
+    # Generar meses faltantes hasta mes actual
+    for key, s in suscripciones.items():
+        ultimo = s["ultimo_mes"]  # YYYY-MM
+        ult_año, ult_m = int(ultimo[:4]), int(ultimo[5:])
+        hoy_año, hoy_m = hoy.year, hoy.month
+        # Avanzar mes a mes desde el siguiente al último hasta hoy
+        while True:
+            ult_m += 1
+            if ult_m > 12:
+                ult_m = 1
+                ult_año += 1
+            nuevo_mes = f"{ult_año}-{ult_m:02d}"
+            if nuevo_mes > mes_actual:
+                break
+            db.add_mensualidad(s["id_cliente"], s["concepto"], s["importe"], nuevo_mes, "No")
+
+    # ── Cargar datos del año solicitado ───────────────────────────
     datos = db.get_mensualidades(año=año)
-    if filtro=="paid":   datos = [m for m in datos if m.get("pagado")=="Sí"]
+    if filtro=="paid":     datos = [m for m in datos if m.get("pagado")=="Sí"]
     elif filtro=="unpaid": datos = [m for m in datos if m.get("pagado")!="Sí"]
-    if buscar_str: datos = [m for m in datos if buscar_str in m.get("nombre_cliente","").lower()]
+    if buscar_str:         datos = [m for m in datos if buscar_str in m.get("nombre_cliente","").lower()]
+
     clientes_set = {}
     for m in datos:
         idc = m["id_cliente"]
         if idc not in clientes_set:
             clientes_set[idc] = {"id":idc,"nombre":m["nombre_cliente"],"activo":m.get("cliente_activo",True),"meses":{}}
         clientes_set[idc]["meses"][m["mes"]] = m
+
     meses_año = [f"{año}-{i:02d}" for i in range(1,13)]
     clientes_lista = sorted(clientes_set.values(), key=lambda x: x["nombre"])
     totales_mes = {mes: {
@@ -347,7 +389,7 @@ def mensualidades():
         "pendiente": round(sum(float(m["importe"]) for c in clientes_lista for m in [c["meses"].get(mes)] if m and m.get("pagado")!="Sí"),2),
     } for mes in meses_año}
     return render_template("mensualidades.html", año=año, meses=meses_año, clientes=clientes_lista,
-        totales_mes=totales_mes, filtro=filtro, buscar=buscar_str, today_mes=date.today().strftime("%Y-%m"))
+        totales_mes=totales_mes, filtro=filtro, buscar=buscar_str, today_mes=mes_actual)
 
 
 @app.route("/mensualidades/nueva", methods=["GET","POST"])
