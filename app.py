@@ -617,6 +617,61 @@ def api_delete_presupuesto(id_presupuesto):
     db.delete_presupuesto(id_presupuesto)
     return jsonify({"ok": True})
 
+# ── Añade estas rutas en app.py ──────────────────────────
+
+@app.route("/api/mensualidades/cambiar-precio-futuro", methods=["POST"])
+@login_required
+def api_cambiar_precio_futuro():
+    """Cambia el importe de todas las mensualidades futuras del mismo cliente+concepto."""
+    data = request.get_json() or {}
+    id_mens   = data.get("id")
+    concepto  = data.get("concepto","").strip()
+    mes_desde = data.get("mes_desde","")
+    nuevo_imp = data.get("nuevo_importe")
+    if not id_mens or not concepto or not mes_desde or nuevo_imp is None:
+        return jsonify({"ok": False, "error": "Faltan datos"}), 400
+    try:
+        supa = db.get_db()
+        # Buscar id_cliente de esta mensualidad
+        m = supa.table("mensualidades").select("id_cliente").eq("id", id_mens).single().execute().data
+        if not m:
+            return jsonify({"ok": False, "error": "No encontrada"}), 404
+        id_cliente = m["id_cliente"]
+        # Actualizar todas las mensualidades >= mes_desde del mismo cliente+concepto
+        supa.table("mensualidades").update({"importe": round(float(nuevo_imp), 2)}) \
+            .eq("id_cliente", id_cliente) \
+            .eq("concepto", concepto) \
+            .gte("mes", mes_desde) \
+            .execute()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/mensualidades/cancelar-membresia", methods=["POST"])
+@login_required
+def api_cancelar_membresia():
+    """Elimina todas las mensualidades futuras (>= mes_desde) del mismo cliente+concepto."""
+    data = request.get_json() or {}
+    id_mens   = data.get("id")
+    concepto  = data.get("concepto","").strip()
+    mes_desde = data.get("mes_desde","")
+    if not id_mens or not concepto or not mes_desde:
+        return jsonify({"ok": False, "error": "Faltan datos"}), 400
+    try:
+        supa = db.get_db()
+        m = supa.table("mensualidades").select("id_cliente").eq("id", id_mens).single().execute().data
+        if not m:
+            return jsonify({"ok": False, "error": "No encontrada"}), 404
+        id_cliente = m["id_cliente"]
+        supa.table("mensualidades").delete() \
+            .eq("id_cliente", id_cliente) \
+            .eq("concepto", concepto) \
+            .gte("mes", mes_desde) \
+            .execute()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)
