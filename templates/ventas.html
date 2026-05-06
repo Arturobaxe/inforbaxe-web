@@ -12,30 +12,20 @@
 
 <div class="card mb-4">
   <form method="GET" style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;">
-    <div>
-      <label class="form-label">Desde</label>
-      <input type="date" name="desde" value="{{ filtros.desde }}" class="form-control" style="max-width:150px;">
-    </div>
-    <div>
-      <label class="form-label">Hasta</label>
-      <input type="date" name="hasta" value="{{ filtros.hasta }}" class="form-control" style="max-width:150px;">
-    </div>
+    <div><label class="form-label">Desde</label><input type="date" name="desde" value="{{ filtros.desde }}" class="form-control" style="max-width:150px;"></div>
+    <div><label class="form-label">Hasta</label><input type="date" name="hasta" value="{{ filtros.hasta }}" class="form-control" style="max-width:150px;"></div>
     <div>
       <label class="form-label">Cliente</label>
       <select name="id_cliente" class="form-control" style="max-width:190px;">
         <option value="">Todos</option>
-        {% for c in clientes %}
-        <option value="{{ c.id }}" {% if filtros.id_cliente == c.id|string %}selected{% endif %}>{{ c.nombre }}</option>
-        {% endfor %}
+        {% for c in clientes %}<option value="{{ c.id }}" {% if filtros.id_cliente == c.id|string %}selected{% endif %}>{{ c.nombre }}</option>{% endfor %}
       </select>
     </div>
     <div>
       <label class="form-label">Método</label>
       <select name="metodo" class="form-control" style="max-width:130px;">
         <option value="">Todos</option>
-        {% for m in metodos %}
-        <option value="{{ m }}" {% if filtros.metodo == m %}selected{% endif %}>{{ m }}</option>
-        {% endfor %}
+        {% for m in metodos %}<option value="{{ m }}" {% if filtros.metodo == m %}selected{% endif %}>{{ m }}</option>{% endfor %}
       </select>
     </div>
     <div>
@@ -77,10 +67,7 @@
   <div class="table-wrap">
     <table>
       <thead>
-        <tr>
-          <th>#</th><th>Fecha</th><th>Cliente</th><th>Productos</th>
-          <th>Total PVP</th><th>Beneficio</th><th>Método</th><th>Pagado</th><th></th>
-        </tr>
+        <tr><th>#</th><th>Fecha</th><th>Cliente</th><th>Productos</th><th>Total PVP</th><th>Beneficio</th><th>Método</th><th>Pagado</th><th></th></tr>
       </thead>
       <tbody>
         {% for v in ventas %}
@@ -140,6 +127,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
 <script>
 let ventaIdCobro = null;
 
@@ -157,9 +145,14 @@ function confirmarCobro() {
   fetch(`/api/ventas/${ventaIdCobro}/cobrar`, {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({metodo})
-  }).then(() => location.reload()).catch(() => alert('Error'));
+  }).then(() => {
+    confetti({ particleCount:120, spread:70, origin:{y:0.6} });
+    setTimeout(() => location.reload(), 1200);
+  }).catch(() => alert('Error'));
 }
-document.getElementById('modal-cobro').addEventListener('click', e => { if(e.target===document.getElementById('modal-cobro')) cerrarModal(); });
+document.getElementById('modal-cobro').addEventListener('click', e => {
+  if(e.target===document.getElementById('modal-cobro')) cerrarModal();
+});
 
 function duplicarVenta(id) {
   if (!confirm('¿Duplicar esta venta con fecha de hoy?')) return;
