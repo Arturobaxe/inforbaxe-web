@@ -4,145 +4,115 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>INFORBAXE — Acceso</title>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg0: #0A0D12; --bg1: #111520; --bg2: #181D2A; --bg3: #1E2535;
-      --green: #10B981; --green-dim: rgba(16,185,129,0.15); --green-glow: rgba(16,185,129,0.35);
-      --red: #EF4444; --red-dim: rgba(239,68,68,0.12);
-      --border: rgba(255,255,255,0.07); --border-hi: rgba(255,255,255,0.13);
-      --t1: #F1F5F9; --t2: #94A3B8; --t3: #64748B;
+      --bg:    #0F1420;
+      --card:  #1B2340;
+      --card2: #232D50;
+      --accent:#E8820C;
+      --green: #1C9E5A;
+      --red:   #DC2626;
+      --t1:    #EFF2FF;
+      --t2:    #A8B0D8;
+      --t3:    #6B7499;
+      --border:rgba(255,255,255,0.08);
     }
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: 'DM Sans', sans-serif;
-      background: var(--bg0);
-      min-height: 100vh;
-      display: flex; align-items: center; justify-content: center;
-      -webkit-font-smoothing: antialiased;
-      position: relative; overflow: hidden;
-    }
-    /* Mesh background */
-    body::before {
-      content: '';
-      position: fixed; inset: 0; z-index: 0;
-      background: radial-gradient(ellipse 70% 60% at 20% 50%, rgba(16,185,129,0.06) 0%, transparent 70%),
-                  radial-gradient(ellipse 60% 50% at 80% 30%, rgba(59,130,246,0.05) 0%, transparent 70%);
-      pointer-events: none;
-    }
-
-    .login-wrap {
-      position: relative; z-index: 1;
-      width: 100%; max-width: 400px;
-      padding: 16px;
-      animation: fadeUp 0.4s ease;
-    }
-    @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(20px); }
-      to   { opacity: 1; transform: none; }
-    }
-
-    .login-logo {
-      text-align: center; margin-bottom: 32px;
-    }
-    .login-logo-name {
-      font-size: 28px; font-weight: 700;
-      color: var(--green);
-      letter-spacing: -0.5px;
-    }
-    .login-logo-sub { font-size: 13px; color: var(--t3); margin-top: 4px; }
-
-    .login-card {
-      background: var(--bg1);
-      border: 1px solid var(--border);
-      border-radius: 18px;
-      padding: 36px 32px;
-      box-shadow: 0 24px 64px rgba(0,0,0,0.5);
-    }
-    .login-card h1 { font-size: 20px; font-weight: 700; color: var(--t1); margin-bottom: 6px; }
-    .login-card p { font-size: 13px; color: var(--t3); margin-bottom: 28px; }
-
-    .form-group { margin-bottom: 16px; }
-    .form-label { display: block; font-size: 11px; font-weight: 600; color: var(--t2); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
-    .form-control {
-      width: 100%;
-      background: var(--bg3);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 11px 14px;
-      color: var(--t1);
-      font-size: 14px;
-      font-family: 'DM Sans', sans-serif;
-      outline: none;
-      transition: border-color 0.2s, box-shadow 0.2s;
-    }
-    .form-control:focus { border-color: var(--green); box-shadow: 0 0 0 3px var(--green-dim); }
-    .form-control::placeholder { color: var(--t3); }
-
-    .error-msg {
-      background: var(--red-dim);
-      border: 1px solid rgba(239,68,68,0.25);
-      border-radius: 8px;
-      padding: 10px 14px;
-      color: var(--red);
-      font-size: 13px;
-      margin-bottom: 16px;
-      display: flex; align-items: center; gap: 8px;
-    }
-
-    .btn-login {
-      width: 100%;
-      background: var(--green);
-      color: #fff;
-      border: none;
-      border-radius: 10px;
-      padding: 12px;
-      font-size: 15px;
-      font-weight: 600;
-      font-family: 'DM Sans', sans-serif;
-      cursor: pointer;
-      transition: all 0.2s;
-      margin-top: 8px;
-      letter-spacing: 0.01em;
-    }
-    .btn-login:hover { background: #0ea572; box-shadow: 0 0 20px var(--green-glow); }
-    .btn-login:active { transform: scale(0.98); }
-
-    .login-footer { text-align: center; margin-top: 20px; font-size: 12px; color: var(--t3); }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Sora',sans-serif;background:var(--bg);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;}
+    .wrap{width:100%;max-width:380px;animation:up 0.4s ease;}
+    @keyframes up{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+    .logo{text-align:center;margin-bottom:28px;}
+    .logo-name{font-size:26px;font-weight:800;color:var(--t1);}
+    .logo-name span{color:var(--accent);}
+    .logo-sub{font-size:11px;color:var(--t3);margin-top:4px;text-transform:uppercase;letter-spacing:0.08em;}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:32px 28px;box-shadow:0 24px 64px rgba(0,0,0,0.4);}
+    .card-title{font-size:18px;font-weight:700;color:var(--t1);margin-bottom:5px;}
+    .card-sub{font-size:13px;color:var(--t3);margin-bottom:24px;}
+    .form-label{display:block;font-size:10px;font-weight:700;color:var(--t3);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;}
+    .form-group{margin-bottom:14px;}
+    .form-control{width:100%;background:var(--card2);border:1px solid var(--border);border-radius:9px;padding:11px 13px;color:var(--t1);font-size:14px;font-family:inherit;outline:none;transition:border-color 0.2s,box-shadow 0.2s;}
+    .form-control:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(232,130,12,0.15);}
+    .form-control::placeholder{color:var(--t3);}
+    .btn{width:100%;background:var(--accent);color:#fff;border:none;border-radius:9px;padding:12px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;transition:all 0.2s;margin-top:6px;}
+    .btn:hover{background:#D4720A;box-shadow:0 4px 20px rgba(232,130,12,0.3);}
+    .btn:active{transform:scale(0.98);}
+    .error{background:rgba(220,38,38,0.12);border:1px solid rgba(220,38,38,0.25);border-radius:8px;padding:10px 13px;color:var(--red);font-size:13px;margin-bottom:14px;}
+    .success{background:rgba(28,158,90,0.12);border:1px solid rgba(28,158,90,0.25);border-radius:8px;padding:10px 13px;color:var(--green);font-size:13px;margin-bottom:14px;}
+    .code-input{text-align:center;font-size:28px;font-weight:800;letter-spacing:10px;font-family:monospace;}
+    .step-indicator{display:flex;gap:6px;justify-content:center;margin-bottom:20px;}
+    .step{width:28px;height:4px;border-radius:2px;background:var(--border);}
+    .step.active{background:var(--accent);}
+    .step.done{background:var(--green);}
+    .back-btn{background:none;border:none;color:var(--t3);font-size:12px;cursor:pointer;margin-top:12px;width:100%;text-align:center;padding:6px;font-family:inherit;}
+    .back-btn:hover{color:var(--t2);}
+    .footer{text-align:center;margin-top:18px;font-size:11px;color:var(--t3);}
   </style>
 </head>
 <body>
-<div class="login-wrap">
-  <div class="login-logo">
-    <div class="login-logo-name">INFORBAXE</div>
-    <div class="login-logo-sub">Sistema de gestión de clientes</div>
+<div class="wrap">
+  <div class="logo">
+    <div class="logo-name">INFOR<span>BAXE</span></div>
+    <div class="logo-sub">Sistema de gestión privado</div>
   </div>
 
-  <div class="login-card">
-    <h1>Bienvenido</h1>
-    <p>Introduce tus credenciales para continuar</p>
+  <div class="card">
 
-    {% if error %}
-    <div class="error-msg">
-      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-      {{ error }}
+    {% if step == 1 %}
+    <!-- PASO 1: Usuario y contraseña -->
+    <div class="step-indicator">
+      <div class="step active"></div>
+      <div class="step"></div>
     </div>
-    {% endif %}
+    <div class="card-title">Bienvenido</div>
+    <div class="card-sub">Introduce tus credenciales</div>
 
-    <form method="POST" action="{{ url_for('login') }}">
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+    <form method="POST" action="/login">
+      <input type="hidden" name="step" value="1">
       <div class="form-group">
-        <label class="form-label" for="username">Usuario</label>
-        <input class="form-control" type="text" id="username" name="username" placeholder="Tu nombre de usuario" required autofocus>
+        <label class="form-label">Usuario</label>
+        <input class="form-control" type="text" name="username" placeholder="Tu usuario" required autofocus autocomplete="username">
       </div>
       <div class="form-group">
-        <label class="form-label" for="password">Contraseña</label>
-        <input class="form-control" type="password" id="password" name="password" placeholder="••••••••" required>
+        <label class="form-label">Contraseña</label>
+        <input class="form-control" type="password" name="password" placeholder="••••••••" required autocomplete="current-password">
       </div>
-      <button type="submit" class="btn-login">Entrar →</button>
+      <button type="submit" class="btn">Continuar →</button>
     </form>
-  </div>
 
-  <div class="login-footer">INFORBAXE · Gestión privada</div>
+    {% elif step == 2 %}
+    <!-- PASO 2: Código 2FA -->
+    <div class="step-indicator">
+      <div class="step done"></div>
+      <div class="step active"></div>
+    </div>
+    <div class="card-title">Verificación</div>
+    <div class="card-sub">Hemos enviado un código de 6 dígitos a tu email</div>
+
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+    {% if msg %}<div class="success">{{ msg }}</div>{% endif %}
+
+    <form method="POST" action="/login/verificar">
+      <div class="form-group">
+        <label class="form-label">Código de verificación</label>
+        <input class="form-control code-input" type="text" name="codigo"
+               placeholder="000000" maxlength="6" required autofocus
+               autocomplete="one-time-code" inputmode="numeric">
+      </div>
+      <button type="submit" class="btn">✓ Verificar acceso</button>
+    </form>
+    <form method="POST" action="/login/reenviar">
+      <button type="submit" class="back-btn">¿No llegó? Reenviar código</button>
+    </form>
+    <form method="GET" action="/login">
+      <button type="submit" class="back-btn">← Volver al inicio</button>
+    </form>
+
+    {% endif %}
+  </div>
+  <div class="footer">INFORBAXE · Acceso protegido con 2FA</div>
 </div>
 </body>
 </html>
