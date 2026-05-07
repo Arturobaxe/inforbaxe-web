@@ -24,6 +24,7 @@ app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
 ADMIN_USER = os.environ.get("ADMIN_USER", "admin")
 ADMIN_PASS = os.environ.get("ADMIN_PASS", "inforbaxe2025")
 METODOS_PAGO = ["Efectivo", "Tarjeta", "Bizum", "Transferencia", "Otro"]
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "inforbaxe@gmail.com")
 _login_attempts = {}
 MAX_ATTEMPTS = 5
 BLOCK_SECONDS = 300
