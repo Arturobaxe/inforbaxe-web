@@ -26,7 +26,7 @@ def enviar_codigo_2fa(email_destino, codigo):
         return False
     data = json.dumps({
         "from": "INFORBAXE <onboarding@resend.dev>",
-        "to": [email_destino],
+        "to": ["inforbaxe@gmail.com"],
         "subject": f"Tu código INFORBAXE: {codigo}",
         "text": f"Tu código de acceso es: {codigo}\n\nVálido 10 minutos.\n\nSi no has solicitado este código, ignóralo."
     }).encode()
