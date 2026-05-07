@@ -19,11 +19,29 @@ def generar_codigo():
     return ''.join(random.choices(string.digits, k=6))
 
 def enviar_codigo_2fa(email_destino, codigo):
-    """Envía el código 2FA por email."""
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"🔐 Tu código de acceso INFORBAXE: {codigo}"
-    msg["From"]    = GMAIL_USER
-    msg["To"]      = email_destino
+    import urllib.request, json
+    api_key = os.environ.get("RESEND_API_KEY", "")
+    if not api_key:
+        print("Sin RESEND_API_KEY")
+        return False
+    data = json.dumps({
+        "from": "INFORBAXE <onboarding@resend.dev>",
+        "to": [email_destino],
+        "subject": f"Tu código INFORBAXE: {codigo}",
+        "text": f"Tu código de acceso es: {codigo}\n\nVálido 10 minutos.\n\nSi no has solicitado este código, ignóralo."
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=data,
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        method="POST"
+    )
+    try:
+        urllib.request.urlopen(req, timeout=10)
+        return True
+    except Exception as e:
+        print(f"Resend error: {e}")
+        return False
 
     html = f"""
     <div style="font-family:sans-serif;max-width:400px;margin:0 auto;padding:32px;background:#1B2340;border-radius:16px;">
