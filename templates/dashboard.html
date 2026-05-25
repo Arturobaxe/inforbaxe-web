@@ -75,7 +75,7 @@
   </div>
   <div class="stat-card cyan">
     <div class="stat-label">Beneficio del mes</div>
-    <div class="stat-value" style="color:var(--cyan)" data-count="{{ stats.ventas_mes.beneficio }}" data-decimals="2">{{ "%.2f"|format(stats.ventas_mes.beneficio) }}€</div>
+    <div class="stat-value" style="color:var(--cyan)" data-count="{{ stats.ventas_mes.beneficio }}" data-decimals="2">{{ "%.2f"|format(stats.ventas_mes.beneficio + stats.propinas_mes.total) }}€</div>
     <div class="stat-sub">Margen neto estimado</div>
     <div class="stat-icon">💰</div>
   </div>
