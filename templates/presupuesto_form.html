@@ -96,6 +96,7 @@
           <input type="hidden" name="productos_json" id="productos-json">
           <div style="margin-top:10px; padding:12px; background:var(--bg1); border-radius:8px; font-family:'JetBrains Mono',monospace; font-size:12.5px;">
             <div style="display:flex; justify-content:space-between; color:var(--t3);">Total PVP: <span id="total-pvp" style="color:var(--blue);font-weight:700;">0.00 €</span></div>
+            <div style="display:flex; justify-content:space-between; color:var(--t3); margin-top:4px;">Mi coste: <span id="total-coste" style="color:var(--t2);">0.00 €</span></div>
             <div style="display:flex; justify-content:space-between; color:var(--t3); margin-top:4px;">Beneficio: <span id="total-benef" style="color:var(--green);font-weight:700;">0.00 €</span></div>
           </div>
         </div>
@@ -112,30 +113,48 @@
 {% block scripts %}
 <script>
 let productos = {{ presupuesto.productos | tojson if presupuesto and presupuesto.productos else '[]' }};
+
 function calcPVP() {
   const c = parseFloat(document.getElementById('prod-coste').value)||0;
   const b = parseFloat(document.getElementById('prod-benef').value)||0;
   document.getElementById('pvp-display').textContent = (c+b).toFixed(2)+' €';
 }
+
 function renderProductos() {
   const list = document.getElementById('productos-list');
-  let pvpT=0, benT=0;
+  let pvpT=0, benT=0, costeT=0;
   list.innerHTML = productos.map((p,i)=>{
-    pvpT += p.pvp*p.cantidad; benT += p.beneficio*p.cantidad;
-    return `<div class="prod-row">
-      <div class="prod-row-name">${p.nombre}</div>
-      <div class="prod-row-nums">
-        <span style="color:var(--blue)">${parseFloat(p.pvp).toFixed(2)}€</span>
+    pvpT += p.pvp*p.cantidad; benT += p.beneficio*p.cantidad; costeT += (p.coste||0)*p.cantidad;
+    return `<div class="prod-row" style="flex-wrap:wrap;">
+      <div class="prod-row-name" style="width:100%;margin-bottom:4px;">${p.nombre}</div>
+      <div class="prod-row-nums" style="flex:1;">
+        <span style="color:var(--t3)">coste:${parseFloat(p.coste||0).toFixed(2)}€</span>
         <span style="color:var(--green)">+${parseFloat(p.beneficio).toFixed(2)}€</span>
+        <span style="color:var(--blue);font-weight:700;">PVP:${parseFloat(p.pvp).toFixed(2)}€</span>
         <span>×${p.cantidad}</span>
       </div>
+      <button type="button" onclick="editProducto(${i})" style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:14px;padding:0 4px;" title="Editar">✏️</button>
       <button type="button" class="prod-row-delete" onclick="removeProducto(${i})">✕</button>
     </div>`;
   }).join('');
   document.getElementById('total-pvp').textContent = pvpT.toFixed(2)+' €';
+  document.getElementById('total-coste').textContent = costeT.toFixed(2)+' €';
   document.getElementById('total-benef').textContent = benT.toFixed(2)+' €';
   document.getElementById('productos-json').value = JSON.stringify(productos);
 }
+
+function editProducto(i) {
+  const p = productos[i];
+  document.getElementById('prod-nombre').value = p.nombre;
+  document.getElementById('prod-coste').value  = (p.coste||0).toFixed(2);
+  document.getElementById('prod-benef').value  = p.beneficio.toFixed(2);
+  document.getElementById('prod-cant').value   = p.cantidad;
+  calcPVP();
+  productos.splice(i, 1);
+  renderProductos();
+  document.getElementById('prod-nombre').focus();
+}
+
 function addProducto() {
   const nombre = document.getElementById('prod-nombre').value.trim();
   const coste = parseFloat(document.getElementById('prod-coste').value)||0;
@@ -150,7 +169,9 @@ function addProducto() {
   document.getElementById('pvp-display').textContent='0.00 €';
   document.getElementById('prod-nombre').focus();
 }
+
 function removeProducto(i) { productos.splice(i,1); renderProductos(); }
+
 document.getElementById('presup-form').addEventListener('submit',()=>{
   document.getElementById('productos-json').value=JSON.stringify(productos);
 });
