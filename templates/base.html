@@ -866,7 +866,8 @@ document.querySelectorAll('.stat-value').forEach(el => {
 });
 </script>
 {% block scripts %}{% endblock %}
-<button class="fab" id="fab-btn" onclick="toggleFab()">＋</button>
+<button class="fab" id="fab-btn" onclick="toggleFab()" style="bottom:80px;right:16px;">＋</button>
+<div class="fab-menu" id="fab-menu" style="bottom:144px;">
 <div class="fab-menu" id="fab-menu">
   <a href="/ventas/nueva" class="fab-menu-item">🛒 Nueva venta</a>
   <a href="/citas/nueva" class="fab-menu-item">🗓️ Nueva cita</a>

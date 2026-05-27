@@ -13,35 +13,20 @@
 {% endblock %}
 {% block extra_head %}
 <style>
-.prod-row {
-  display:flex; gap:8px; align-items:center;
-  padding:9px 12px; background:var(--bg3); border-radius:8px; margin-bottom:6px;
-}
-.prod-row-name { flex:2; font-weight:600; font-size:13px; color:var(--t1); }
-.prod-row-nums { display:flex; gap:8px; font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--t2); flex-wrap:wrap; }
+.prod-row { display:flex; gap:8px; align-items:center; padding:9px 12px; background:var(--bg3); border-radius:8px; margin-bottom:6px; flex-wrap:wrap; }
+.prod-row-name { flex:2; font-weight:600; font-size:13px; color:var(--t1); width:100%; margin-bottom:4px; }
+.prod-row-nums { display:flex; gap:8px; font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--t2); flex-wrap:wrap; flex:1; }
 .prod-row-delete { background:none; border:none; cursor:pointer; color:var(--t4); font-size:15px; padding:0 4px; transition:color 0.15s; }
 .prod-row-delete:hover { color:var(--red); }
-.pvp-display {
-  background: var(--blue-dim);
-  border: 1px solid rgba(59,139,255,0.25);
-  border-radius: 7px;
-  padding: 9px 12px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--blue);
-  text-align: center;
-  letter-spacing: -0.5px;
-}
+.pvp-display { background:var(--accent-dim); border:1px solid rgba(232,130,12,0.25); border-radius:7px; padding:9px 12px; font-family:'JetBrains Mono',monospace; font-size:18px; font-weight:700; color:var(--accent); text-align:center; }
 </style>
 {% endblock %}
 {% block content %}
-
 <div style="max-width:860px; margin:0 auto;">
   <form method="POST" id="venta-form">
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
 
-      <!-- Left: datos -->
+      <!-- Left -->
       <div>
         <div class="card mb-4">
           <div class="card-title" style="margin-bottom:16px;">📋 Datos de la venta</div>
@@ -53,6 +38,15 @@
               <option value="{{ c.id }}" {% if venta and venta.id_cliente == c.id %}selected{% endif %}>{{ c.nombre }}</option>
               {% endfor %}
             </select>
+          </div>
+          <div class="form-group">
+            <button type="button" onclick="toggleNuevoCliente()" class="btn btn-secondary" style="width:100%;">➕ Crear cliente nuevo</button>
+            <div id="nuevo-cliente-form" style="display:none;margin-top:10px;padding:10px;background:var(--bg3);border-radius:8px;">
+              <input type="text" id="nc-nombre" class="form-control" placeholder="Nombre *" style="margin-bottom:8px;">
+              <input type="text" id="nc-tel" class="form-control" placeholder="Teléfono" style="margin-bottom:8px;">
+              <input type="text" id="nc-email" class="form-control" placeholder="Email" style="margin-bottom:8px;">
+              <button type="button" onclick="crearCliente()" class="btn btn-primary" style="width:100%;">✓ Crear y seleccionar</button>
+            </div>
           </div>
           <div class="form-grid form-grid-2">
             <div class="form-group">
@@ -82,65 +76,44 @@
         </div>
       </div>
 
-      <!-- Right: productos -->
+      <!-- Right -->
       <div>
         <div class="card">
           <div class="card-title" style="margin-bottom:12px;">📦 Añadir producto</div>
-
           <div style="padding:12px; background:var(--bg3); border-radius:9px; margin-bottom:14px;">
             <div class="form-group" style="margin-bottom:8px;">
               <label class="form-label">Nombre del producto</label>
-              <input type="text" id="prod-nombre" class="form-control" list="prod-list"
-                     placeholder="Selecciona o escribe libremente...">
+              <input type="text" id="prod-nombre" class="form-control" list="prod-list" placeholder="Selecciona o escribe libremente...">
               <datalist id="prod-list">
-                {% for p in productos_nombres %}
-                <option value="{{ p.nombre }}">
-                {% endfor %}
+                {% for p in productos_nombres %}<option value="{{ p.nombre }}">{% endfor %}
               </datalist>
             </div>
-
             <div class="form-grid form-grid-3" style="margin-bottom:8px;">
               <div class="form-group" style="margin:0;">
                 <label class="form-label">Mi coste (€)</label>
-                <input type="number" id="prod-coste" class="form-control" step="0.01" min="0" placeholder="0.00"
-                       oninput="calcPVP()">
+                <input type="number" id="prod-coste" class="form-control" step="0.01" min="0" placeholder="0.00" oninput="calcPVP()">
               </div>
               <div class="form-group" style="margin:0;">
                 <label class="form-label">Beneficio (€)</label>
-                <input type="number" id="prod-benef" class="form-control" step="0.01" min="0" placeholder="0.00"
-                       oninput="calcPVP()">
+                <input type="number" id="prod-benef" class="form-control" step="0.01" min="0" placeholder="0.00" oninput="calcPVP()">
               </div>
               <div class="form-group" style="margin:0;">
                 <label class="form-label">Cantidad</label>
                 <input type="number" id="prod-cant" class="form-control" min="1" value="1">
               </div>
             </div>
-
             <div style="margin-bottom:10px;">
               <label class="form-label">PVP al cliente</label>
               <div class="pvp-display" id="pvp-display">0.00 €</div>
             </div>
-
-            <button type="button" onclick="addProducto()" class="btn btn-primary" style="width:100%;">
-              ➕ Añadir producto
-            </button>
+            <button type="button" onclick="addProducto()" class="btn btn-primary" style="width:100%;">➕ Añadir producto</button>
           </div>
-
-          <!-- Lista productos añadidos -->
           <div id="productos-list"></div>
           <input type="hidden" name="productos_json" id="productos-json">
-
-          <!-- Totales -->
           <div style="margin-top:10px; padding:12px; background:var(--bg1); border-radius:8px; font-family:'JetBrains Mono',monospace; font-size:12.5px;">
-            <div style="display:flex; justify-content:space-between; color:var(--t3);">
-              Total PVP cliente: <span id="total-pvp" style="color:var(--blue); font-weight:700;">0.00 €</span>
-            </div>
-            <div style="display:flex; justify-content:space-between; color:var(--t3); margin-top:4px;">
-              Mi coste total: <span id="total-coste" style="color:var(--t2);">0.00 €</span>
-            </div>
-            <div style="display:flex; justify-content:space-between; color:var(--t3); margin-top:4px;">
-              Beneficio neto: <span id="total-benef" style="color:var(--green); font-weight:700;">0.00 €</span>
-            </div>
+            <div style="display:flex; justify-content:space-between; color:var(--t3);">Total PVP cliente: <span id="total-pvp" style="color:var(--accent);font-weight:700;">0.00 €</span></div>
+            <div style="display:flex; justify-content:space-between; color:var(--t3); margin-top:4px;">Mi coste total: <span id="total-coste" style="color:var(--t2);">0.00 €</span></div>
+            <div style="display:flex; justify-content:space-between; color:var(--t3); margin-top:4px;">Beneficio neto: <span id="total-benef" style="color:var(--green);font-weight:700;">0.00 €</span></div>
           </div>
         </div>
       </div>
@@ -148,48 +121,44 @@
 
     <div style="display:flex; gap:12px; justify-content:flex-end; margin-top:20px;">
       <a href="{{ url_for('ventas') }}" class="btn btn-secondary">Cancelar</a>
-      <button type="submit" class="btn btn-primary">
-        💾 {{ 'Guardar cambios' if venta else 'Crear venta' }}
-      </button>
+      <button type="submit" class="btn btn-primary">💾 {{ 'Guardar cambios' if venta else 'Crear venta' }}</button>
     </div>
   </form>
 </div>
-
 {% endblock %}
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
 <script>
-// Productos guardados. Cada uno: {nombre, coste, pvp, beneficio, cantidad}
 let productos = {{ venta.productos | tojson if venta and venta.productos else '[]' }};
 
 function calcPVP() {
-  const coste = parseFloat(document.getElementById('prod-coste').value.replace(',','.')) || 0;
-  const benef = parseFloat(document.getElementById('prod-benef').value.replace(',','.')) || 0;
-  const pvp = coste + benef;
-  document.getElementById('pvp-display').textContent = pvp.toFixed(2) + ' €';
+  const c = parseFloat(document.getElementById('prod-coste').value.replace(',','.')) || 0;
+  const b = parseFloat(document.getElementById('prod-benef').value.replace(',','.')) || 0;
+  document.getElementById('pvp-display').textContent = (c+b).toFixed(2) + ' €';
 }
 
 function renderProductos() {
   const list = document.getElementById('productos-list');
-  let pvpTotal = 0, benefTotal = 0, costeTotal = 0;
-  list.innerHTML = productos.map((p, i) => {
+  let pvpTotal=0, benefTotal=0, costeTotal=0;
+  list.innerHTML = productos.map((p,i) => {
     const linea = p.pvp * p.cantidad;
     pvpTotal   += linea;
     benefTotal += p.beneficio * p.cantidad;
-    costeTotal += (p.coste || 0) * p.cantidad;
-    return `<div class="prod-row" style="flex-wrap:wrap;">
-      <div class="prod-row-name" style="width:100%;margin-bottom:4px;">${p.nombre}</div>
-      <div class="prod-row-nums" style="flex:1;">
-        <span title="Mi coste" style="color:var(--t3)">coste:${parseFloat(p.coste||0).toFixed(2)}€</span>
-        <span title="Beneficio" style="color:var(--green)">+${parseFloat(p.beneficio).toFixed(2)}€</span>
-        <span title="PVP" style="color:var(--blue);font-weight:700;">PVP:${parseFloat(p.pvp).toFixed(2)}€</span>
+    costeTotal += (p.coste||0) * p.cantidad;
+    return `<div class="prod-row">
+      <div class="prod-row-name">${p.nombre}</div>
+      <div class="prod-row-nums">
+        <span style="color:var(--t3)">coste:${parseFloat(p.coste||0).toFixed(2)}€</span>
+        <span style="color:var(--green)">+${parseFloat(p.beneficio).toFixed(2)}€</span>
+        <span style="color:var(--accent);font-weight:700">PVP:${parseFloat(p.pvp).toFixed(2)}€</span>
         <span>×${p.cantidad}</span>
-        <span style="color:var(--t1);font-weight:700;">${linea.toFixed(2)}€</span>
+        <span style="color:var(--t1);font-weight:700">${linea.toFixed(2)}€</span>
       </div>
-      <button type="button" onclick="editProducto(${i})" style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:14px;padding:0 4px;" title="Editar">✏️</button>
+      <button type="button" onclick="editProducto(${i})" style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:14px;padding:0 4px;">✏️</button>
       <button type="button" class="prod-row-delete" onclick="removeProducto(${i})">✕</button>
     </div>`;
   }).join('');
-  document.getElementById('total-pvp').textContent   = pvpTotal.toFixed(2) + ' €';
+  document.getElementById('total-pvp').textContent   = pvpTotal.toFixed(2)   + ' €';
   document.getElementById('total-benef').textContent = benefTotal.toFixed(2) + ' €';
   document.getElementById('total-coste').textContent = costeTotal.toFixed(2) + ' €';
   document.getElementById('productos-json').value = JSON.stringify(productos);
@@ -198,11 +167,11 @@ function renderProductos() {
 function editProducto(i) {
   const p = productos[i];
   document.getElementById('prod-nombre').value = p.nombre;
-  document.getElementById('prod-coste').value  = (p.coste || 0).toFixed(2);
+  document.getElementById('prod-coste').value  = (p.coste||0).toFixed(2);
   document.getElementById('prod-benef').value  = p.beneficio.toFixed(2);
   document.getElementById('prod-cant').value   = p.cantidad;
   calcPVP();
-  productos.splice(i, 1);
+  productos.splice(i,1);
   renderProductos();
   document.getElementById('prod-nombre').focus();
 }
@@ -211,10 +180,9 @@ function addProducto() {
   const nombre = document.getElementById('prod-nombre').value.trim();
   const coste  = parseFloat(document.getElementById('prod-coste').value.replace(',','.')) || 0;
   const benef  = parseFloat(document.getElementById('prod-benef').value.replace(',','.')) || 0;
-  const pvp    = coste + benef;
   const cant   = parseInt(document.getElementById('prod-cant').value) || 1;
   if (!nombre) { alert('Introduce el nombre del producto'); return; }
-  productos.push({nombre, coste, pvp, beneficio: benef, cantidad: cant});
+  productos.push({nombre, coste, pvp: coste+benef, beneficio: benef, cantidad: cant});
   renderProductos();
   document.getElementById('prod-nombre').value = '';
   document.getElementById('prod-coste').value  = '';
@@ -224,18 +192,36 @@ function addProducto() {
   document.getElementById('prod-nombre').focus();
 }
 
-function removeProducto(i) {
-  productos.splice(i, 1);
-  renderProductos();
+function removeProducto(i) { productos.splice(i,1); renderProductos(); }
+
+function toggleNuevoCliente() {
+  const f = document.getElementById('nuevo-cliente-form');
+  f.style.display = f.style.display==='none' ? 'block' : 'none';
 }
+
+function crearCliente() {
+  const nombre = document.getElementById('nc-nombre').value.trim();
+  if (!nombre) { alert('El nombre es obligatorio'); return; }
+  fetch('/api/clientes/nuevo', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({nombre, telefono: document.getElementById('nc-tel').value, email: document.getElementById('nc-email').value})
+  }).then(r=>r.json()).then(d=>{
+    const sel = document.querySelector('select[name="id_cliente"]');
+    const opt = document.createElement('option');
+    opt.value=d.id; opt.text=d.nombre; opt.selected=true;
+    sel.appendChild(opt);
+    document.getElementById('nuevo-cliente-form').style.display='none';
+    document.getElementById('nc-nombre').value='';
+  }).catch(()=>alert('Error al crear cliente'));
+}
+
+document.getElementById('prod-nombre').addEventListener('keydown', e => {
+  if (e.key==='Enter') { e.preventDefault(); addProducto(); }
+});
 
 document.getElementById('venta-form').addEventListener('submit', () => {
   document.getElementById('productos-json').value = JSON.stringify(productos);
-});
-
-// Enter en nombre añade
-document.getElementById('prod-nombre').addEventListener('keydown', e => {
-  if (e.key === 'Enter') { e.preventDefault(); addProducto(); }
+  confetti({ particleCount:120, spread:70, origin:{y:0.6} });
 });
 
 renderProductos();
