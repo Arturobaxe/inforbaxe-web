@@ -866,14 +866,29 @@ document.querySelectorAll('.stat-value').forEach(el => {
 });
 </script>
 {% block scripts %}{% endblock %}
-<button class="fab" id="fab-btn" onclick="toggleFab()" style="bottom:80px;right:16px;">＋</button>
-<div class="fab-menu" id="fab-menu" style="bottom:144px;">
+<button class="fab" id="fab-btn" onclick="toggleFab()">＋</button>
 <div class="fab-menu" id="fab-menu">
   <a href="/ventas/nueva" class="fab-menu-item">🛒 Nueva venta</a>
   <a href="/citas/nueva" class="fab-menu-item">🗓️ Nueva cita</a>
   <a href="/clientes/nuevo" class="fab-menu-item">👤 Nuevo cliente</a>
 </div>
 <script>
+function toggleFab() {
+  const m = document.getElementById('fab-menu');
+  const b = document.getElementById('fab-btn');
+  const isOpen = m.classList.toggle('open');
+  m.style.display = isOpen ? 'flex' : 'none';
+  b.textContent = isOpen ? '✕' : '＋';
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('#fab-btn') && !e.target.closest('#fab-menu')) {
+    const m = document.getElementById('fab-menu');
+    m.classList.remove('open');
+    m.style.display = 'none';
+    document.getElementById('fab-btn').textContent = '＋';
+  }
+});
+</script>
 function toggleFab() {
   const m = document.getElementById('fab-menu');
   const b = document.getElementById('fab-btn');
