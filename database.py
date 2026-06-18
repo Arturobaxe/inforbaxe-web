@@ -458,9 +458,11 @@ def get_dashboard_stats():
     mes_start = f"{mes_actual}-01"
     mes_end   = f"{mes_actual}-{last_day:02d}"
 
+    # Clientes
     clientes_data    = db.table("clientes").select("id").eq("activo", True).execute()
     clientes_activos = len(clientes_data.data or [])
 
+    # Citas Hoy
     citas_hoy_data = (db.table("citas")
         .select("id, hora, observaciones, id_cliente, clientes(nombre)")
         .eq("fecha", today.isoformat())
@@ -471,6 +473,7 @@ def get_dashboard_stats():
     for c in citas_hoy:
         c["nombre_cliente"] = (c.pop("clientes", None) or {}).get("nombre", "—")
 
+    # Próximas Citas
     from datetime import timedelta
     manana        = (today + timedelta(days=2)).isoformat()
     proximas_data = (db.table("citas")
@@ -484,10 +487,14 @@ def get_dashboard_stats():
     for c in proximas_citas:
         c["nombre_cliente"] = (c.pop("clientes", None) or {}).get("nombre", "—")
 
-    mens_pend        = (db.table("mensualidades").select("id")
-                        .like("mes", f"{mes_actual}%").eq("pagado", "No").execute())
+    # Mensualidades
+    mens_pend        = db.table("mensualidades").select("id").like("mes", f"{mes_actual}%").eq("pagado", "No").execute()
     mens_pendientes  = len(mens_pend.data or [])
+    
+    mens_pagadas     = db.table("mensualidades").select("importe").eq("mes", mes_actual).eq("pagado", "Sí").execute()
+    total_mens_pagadas = sum(_flt(m.get("importe", 0)) for m in (mens_pagadas.data or []))
 
+    # Ventas
     ventas_mes  = (db.table("ventas")
                    .select("total_pvp, total_benef, pagado")
                    .gte("fecha", mes_start).lte("fecha", mes_end)
@@ -497,7 +504,12 @@ def get_dashboard_stats():
     total_benef_mes  = sum(_flt(v.get("total_benef", 0)) for v in ventas_data)
     num_ventas_mes   = len(ventas_data)
 
+    # Propinas
     total_propinas = get_total_propinas_mes(mes_actual)
+
+    # SUMATORIA FINAL (Ventas + Mensualidades + Propinas)
+    total_facturado_real = total_ventas_mes + total_mens_pagadas + total_propinas
+    total_beneficio_real = total_benef_mes + total_mens_pagadas + total_propinas
 
     return {
         "clientes_activos":         clientes_activos,
@@ -505,8 +517,8 @@ def get_dashboard_stats():
         "proximas_citas":           proximas_citas,
         "mensualidades_pendientes": mens_pendientes,
         "ventas_mes": {
-            "total":     round(total_ventas_mes, 2),
-            "beneficio": round(total_benef_mes, 2),
+            "total":     round(total_facturado_real, 2),
+            "beneficio": round(total_beneficio_real, 2),
             "num":       num_ventas_mes,
             "mes":       mes_actual,
         },
@@ -540,9 +552,20 @@ def get_ventas_chart_data():
             start = f"{mes_str}-01"
             end = f"{mes_str}-{last_day:02d}"
             
+            # 1. Ventas
             ventas_mes = db.table("ventas").select("total_pvp").gte("fecha", start).lte("fecha", end).execute()
-            data = ventas_mes.data or []
-            total_mes = sum(_flt(v.get("total_pvp", 0)) for v in data)
+            total_v = sum(_flt(v.get("total_pvp", 0)) for v in (ventas_mes.data or []))
+            
+            # 2. Propinas
+            propinas_mes = db.table("propinas").select("importe").gte("fecha", start).lte("fecha", end).execute()
+            total_p = sum(_flt(p.get("importe", 0)) for p in (propinas_mes.data or []))
+            
+            # 3. Mensualidades
+            mens_mes = db.table("mensualidades").select("importe").eq("mes", mes_str).eq("pagado", "Sí").execute()
+            total_m = sum(_flt(m.get("importe", 0)) for m in (mens_mes.data or []))
+            
+            # Total sumado
+            total_mes = total_v + total_p + total_m
             
             labels.append(f"{meses_nombres[m-1]} {y}")
             values.append(round(total_mes, 2))
