@@ -272,10 +272,12 @@ def api_delete_venta(id_venta):
     db.delete_venta(id_venta)
     return jsonify({"ok": True})
 
+
 @app.route("/api/ventas-chart")
 @login_required
 def api_ventas_chart():
     return jsonify(db.get_ventas_chart_data())
+
 
 @app.route("/api/ventas/<int:id_venta>/cobrar", methods=["POST"])
 @login_required
