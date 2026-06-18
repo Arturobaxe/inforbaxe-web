@@ -100,6 +100,7 @@
 {% endblock %}
 {% block content %}
 
+<!-- Stat cards -->
 <div class="stat-grid">
   <div class="stat-card green">
     <div class="stat-label">Clientes activos</div>
@@ -122,12 +123,12 @@
   <div class="stat-card green">
     <div class="stat-label">Facturación del mes</div>
     <div class="stat-value green" data-count="{{ stats.ventas_mes.total }}" data-decimals="2">{{ "%.2f"|format(stats.ventas_mes.total) }}€</div>
-    <div class="stat-sub">{{ stats.ventas_mes.num }} ventas · {{ stats.ventas_mes.mes }}</div>
+    <div class="stat-sub">{{ stats.ventas_mes.num }} ventas + cuotas + propinas</div>
     <div class="stat-icon">🛒</div>
   </div>
   <div class="stat-card cyan">
     <div class="stat-label">Beneficio del mes</div>
-    <div class="stat-value" style="color:var(--cyan)" data-count="{{ stats.ventas_mes.beneficio }}" data-decimals="2">{{ "%.2f"|format(stats.ventas_mes.beneficio + stats.propinas_mes.total) }}€</div>
+    <div class="stat-value" style="color:var(--cyan)" data-count="{{ stats.ventas_mes.beneficio }}" data-decimals="2">{{ "%.2f"|format(stats.ventas_mes.beneficio) }}€</div>
     <div class="stat-sub">Margen neto estimado</div>
     <div class="stat-icon">💰</div>
   </div>
@@ -138,8 +139,10 @@
   </div>
 </div>
 
+<!-- Main grid -->
 <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
 
+  <!-- Citas hoy -->
   <div class="card">
     <div class="card-header">
       <div>
@@ -169,6 +172,7 @@
     {% endif %}
   </div>
 
+  <!-- Próximas 48h con contador días -->
   <div class="card">
     <div class="card-header">
       <div>
@@ -200,11 +204,13 @@
 
 </div>
 
+<!-- Fila inferior: Gráfico + Notas -->
 <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:20px;">
 
+  <!-- Gráfico ventas mensual -->
   <div class="card">
     <div class="card-header">
-      <div class="card-title">📈 Ventas últimos 6 meses</div>
+      <div class="card-title">📈 Facturación últimos 6 meses</div>
     </div>
     <div class="chart-wrap" id="chart-container">
       <div class="chart-fallback" id="chart-status">Cargando datos del gráfico...</div>
@@ -212,6 +218,7 @@
     </div>
   </div>
 
+  <!-- Notas sticky -->
   <div class="card">
     <div class="card-header">
       <div class="card-title">📝 Notas rápidas</div>
@@ -225,6 +232,7 @@
 
 </div>
 
+<!-- Accesos rápidos -->
 <div class="card mt-4">
   <div class="card-title" style="margin-bottom:14px;">⚡ Accesos rápidos</div>
   <div style="display:flex; gap:12px; flex-wrap:wrap;">
