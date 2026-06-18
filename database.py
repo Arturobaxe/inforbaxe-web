@@ -515,3 +515,36 @@ def get_dashboard_stats():
             "mes":   mes_actual,
         },
     }
+    
+    def get_ventas_chart_data():
+    db = get_db()
+    from datetime import date
+    import calendar
+    
+    today = date.today()
+    labels = []
+    values = []
+    meses_nombres = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+    
+    # Recorrer los últimos 6 meses (incluyendo el actual)
+    for i in range(5, -1, -1):
+        m = today.month - i
+        y = today.year
+        if m <= 0:
+            m += 12
+            y -= 1
+            
+        mes_str = f"{y}-{m:02d}"
+        last_day = calendar.monthrange(y, m)[1]
+        start = f"{mes_str}-01"
+        end = f"{mes_str}-{last_day:02d}"
+        
+        # Sumar el total de ventas (total_pvp) de ese mes
+        ventas_mes = db.table("ventas").select("total_pvp").gte("fecha", start).lte("fecha", end).execute()
+        data = ventas_mes.data or []
+        total_mes = sum(_flt(v.get("total_pvp", 0)) for v in data)
+        
+        labels.append(f"{meses_nombres[m-1]} {y}")
+        values.append(round(total_mes, 2))
+        
+    return {"labels": labels, "values": values}
