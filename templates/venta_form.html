@@ -207,9 +207,14 @@ function crearCliente() {
     body: JSON.stringify({nombre, telefono: document.getElementById('nc-tel').value, email: document.getElementById('nc-email').value})
   }).then(r=>r.json()).then(d=>{
     const sel = document.querySelector('select[name="id_cliente"]');
-    const opt = document.createElement('option');
-    opt.value=d.id; opt.text=d.nombre; opt.selected=true;
-    sel.appendChild(opt);
+    if (sel.tomselect) {
+      sel.tomselect.addOption({value: d.id, text: d.nombre});
+      sel.tomselect.setValue(d.id);
+    } else {
+      const opt = document.createElement('option');
+      opt.value=d.id; opt.text=d.nombre; opt.selected=true;
+      sel.appendChild(opt);
+    }
     document.getElementById('nuevo-cliente-form').style.display='none';
     document.getElementById('nc-nombre').value='';
   }).catch(()=>alert('Error al crear cliente'));

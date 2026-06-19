@@ -6,6 +6,7 @@
   <title>{% block title %}INFORBAXE{% endblock %}</title>
 <link rel="icon" type="image/jpeg" href="{{ url_for('static', filename='logo.jpg') }}">
 <link rel="apple-touch-icon" href="{{ url_for('static', filename='logo.jpg') }}">
+
 <link rel="manifest" href="/static/manifest.json">
 <meta name="theme-color" content="#00d4aa">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -641,6 +642,13 @@ tbody tr:nth-child(7){animation-delay:0.28s} tbody tr:nth-child(8){animation-del
       .stat-grid { grid-template-columns: 1fr; }
     }
   </style>
+  <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
+<style>
+  .ts-control { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--t1); font-family: inherit; padding: 9px 12px; font-size: 13.5px; box-shadow: none; }
+  .ts-control.focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+  .ts-dropdown { font-family: inherit; font-size: 13.5px; color: var(--t1); border-radius: var(--radius-sm); border: 1px solid var(--border); box-shadow: var(--shadow); }
+  .ts-dropdown .active { background: rgba(232,130,12,0.1); color: var(--accent); }
+</style>
   {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -892,6 +900,18 @@ document.addEventListener('click', e => {
       document.getElementById('fab-btn').textContent = '＋';
     }
   }
+});
+</script>
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('select[name="id_cliente"]').forEach(el => {
+    new TomSelect(el, {
+      create: false,
+      sortField: { field: "text", direction: "asc" },
+      placeholder: "Escribe para buscar..."
+    });
+  });
 });
 </script>
 </body>
