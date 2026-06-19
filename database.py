@@ -407,17 +407,22 @@ def busqueda_global(texto):
     if not texto or len(texto) < 2:
         return {"clientes": [], "ventas": [], "citas": []}
     db = get_db()
-    t = texto.strip()
+    t = texto.strip().lower()
 
     clientes = db.table("clientes").select("id, nombre, email, telefono").or_(
         f"nombre.ilike.%{t}%,email.ilike.%{t}%,telefono.ilike.%{t}%"
     ).limit(10).execute().data or []
 
-    ventas = db.table("ventas").select("id, fecha, total_pvp, comentarios, clientes(nombre)").or_(
-        f"comentarios.ilike.%{t}%"
-    ).limit(10).execute().data or []
-    for v in ventas:
+    # Búsqueda profunda en los productos y comentarios
+    ventas_all = db.table("ventas").select("id, fecha, total_pvp, comentarios, productos, clientes(nombre)").order("fecha", desc=True).limit(200).execute().data or []
+    ventas = []
+    for v in ventas_all:
         v["nombre_cliente"] = (v.pop("clientes", None) or {}).get("nombre", "—")
+        prod_str = str(v.get("productos", "")).lower()
+        com_str = str(v.get("comentarios", "")).lower()
+        if t in prod_str or t in com_str or t in v["nombre_cliente"].lower():
+            ventas.append(v)
+            if len(ventas) >= 10: break
 
     citas = db.table("citas").select("id, fecha, hora, observaciones, clientes(nombre)").or_(
         f"observaciones.ilike.%{t}%"
@@ -527,7 +532,6 @@ def get_dashboard_stats():
             "mes":   mes_actual,
         },
     }
-
 
 def get_ventas_chart_data():
     try:
