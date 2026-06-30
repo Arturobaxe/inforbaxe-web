@@ -70,8 +70,8 @@
             </select>
           </div>
           <div class="form-group">
-            <label class="form-label">Comentarios</label>
-            <textarea name="comentarios" class="form-control" rows="3" placeholder="Notas opcionales...">{{ venta.comentarios if venta else '' }}</textarea>
+            <label class="form-label" style="font-weight: 600; color: var(--t2);">🛠️ Comentarios / Estado de la reparación</label>
+            <textarea name="comentarios" class="form-control" rows="3" placeholder="Ej: Móvil mojado, revisar placa base, falta cambiar pantalla..." style="resize: vertical;">{{ venta.comentarios if venta else '' }}</textarea>
           </div>
         </div>
       </div>

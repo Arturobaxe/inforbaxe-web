@@ -72,9 +72,9 @@
       </div>
 
       <div class="form-group">
-        <label class="form-label">Notas internas</label>
+        <label class="form-label" style="font-weight: 600; color: var(--t2);">📝 Notas del cliente</label>
         <textarea name="notas" id="campo-notas" class="form-control" rows="3"
-                  placeholder="Observaciones sobre el cliente...">{{ cliente.notas if cliente else '' }}</textarea>
+                  placeholder="Ej: Cliente VIP, avisar siempre por WhatsApp..." style="resize: vertical;">{{ cliente.notas if cliente else '' }}</textarea>
       </div>
 
       <div style="display:flex; gap:12px; justify-content:flex-end; margin-top:8px;">
