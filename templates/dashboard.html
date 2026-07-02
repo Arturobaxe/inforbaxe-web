@@ -250,11 +250,12 @@ function buscarProv(proveedor) {
   }
   
   const q = encodeURIComponent(query);
+// URLs corregidas con los controladores de búsqueda de Prestashop
   const urls = {
-    'klicfon': `https://klicfon.com/es/buscar?s=${q}`,
-    'preciosadictos': `https://www.preciosadictos.com/buscar?s=${q}`,
-    'spainsellers': `https://www.spainsellers.com/buscar?s=${q}`,
-    'repuestos': `https://www.repuestosdigital.com/es/buscar?s=${q}`
+    'klicfon': `https://klicfon.com/es/busqueda?controller=search&s=${q}`,
+    'preciosadictos': `https://www.preciosadictos.com/buscar?controller=search&search_query=${q}`,
+    'spainsellers': `https://www.spainsellers.com/busqueda?controller=search&s=${q}`,
+    'repuestos': `https://www.repuestosdigital.com/es/busqueda?controller=search&s=${q}`
   };
 
   if (proveedor === 'todos') {
