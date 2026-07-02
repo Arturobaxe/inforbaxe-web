@@ -29,7 +29,6 @@ _login_attempts = {}
 MAX_ATTEMPTS    = 5
 BLOCK_SECONDS   = 300
 
-
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -37,7 +36,6 @@ def login_required(f):
             return redirect(url_for("login"))
         return f(*args, **kwargs)
     return decorated
-
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -67,7 +65,6 @@ def login():
             error=f"Credenciales incorrectas. Intentos restantes: {max(rem, 0)}")
     return render_template("login.html", step=1, error=None)
 
-
 @app.route("/login/verificar", methods=["POST"])
 def login_verificar():
     if not session.get("2fa_pending"):
@@ -82,7 +79,6 @@ def login_verificar():
         return redirect(url_for("dashboard"))
     return render_template("login.html", step=2, error=msg)
 
-
 @app.route("/login/reenviar", methods=["POST"])
 def login_reenviar():
     if not session.get("2fa_pending"):
@@ -92,24 +88,20 @@ def login_reenviar():
     auth_module.enviar_codigo_2fa(ADMIN_EMAIL, codigo)
     return render_template("login.html", step=2, msg="Nuevo código enviado.")
 
-
 @app.route("/sw.js")
 def sw():
     return app.send_static_file("sw.js")
-
 
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect(url_for("login"))
 
-
 @app.route("/")
 @login_required
 def dashboard():
     stats = db.get_dashboard_stats()
     return render_template("dashboard.html", stats=stats, today=date.today())
-
 
 @app.route("/buscar")
 @login_required
@@ -118,19 +110,16 @@ def buscar():
     resultados = db.busqueda_global(q) if q else {"clientes": [], "ventas": [], "citas": []}
     return render_template("buscar.html", q=q, resultados=resultados)
 
-
 @app.route("/api/buscar")
 @login_required
 def api_buscar():
     q = request.args.get("q", "").strip()
     return jsonify(db.busqueda_global(q))
 
-
 @app.route("/clientes")
 @login_required
 def clientes():
     return render_template("clientes.html", clientes=db.get_clientes())
-
 
 @app.route("/clientes/nuevo", methods=["GET", "POST"])
 @login_required
@@ -145,7 +134,6 @@ def cliente_nuevo():
         flash(f"Cliente '{nombre}' añadido", "success")
         return redirect(url_for("clientes"))
     return render_template("cliente_form.html", cliente=None)
-
 
 @app.route("/clientes/<int:id_cliente>/editar", methods=["GET", "POST"])
 @login_required
@@ -163,12 +151,10 @@ def cliente_editar(id_cliente):
         return redirect(url_for("clientes"))
     return render_template("cliente_form.html", cliente=cliente)
 
-
 @app.route("/clientes/<int:id_cliente>/historial")
 @login_required
 def cliente_historial(id_cliente):
     return render_template("cliente_historial.html", h=db.get_historial_cliente(id_cliente))
-
 
 @app.route("/api/clientes/nuevo", methods=["POST"])
 @login_required
@@ -178,13 +164,11 @@ def api_nuevo_cliente():
     if not nombre: return jsonify({"error": "Nombre requerido"}), 400
     return jsonify(db.add_cliente(nombre, data.get("email", ""), data.get("telefono", "")))
 
-
 @app.route("/api/clientes/<int:id_cliente>", methods=["DELETE"])
 @login_required
 def api_delete_cliente(id_cliente):
     db.delete_cliente(id_cliente)
     return jsonify({"ok": True})
-
 
 @app.route("/api/clientes/<int:id_cliente>/toggle-activo", methods=["POST"])
 @login_required
@@ -192,7 +176,6 @@ def api_toggle_activo(id_cliente):
     data = request.get_json() or {}
     db.cancelar_cliente(id_cliente, data.get("activo", True))
     return jsonify({"ok": True})
-
 
 @app.route("/ventas")
 @login_required
@@ -218,7 +201,6 @@ def ventas():
         total_pvp=round(total_pvp, 2), total_benef=round(total_benef, 2),
         total_pendiente=round(total_pendiente, 2), num_pendiente=num_pendiente)
 
-
 @app.route("/ventas/nueva", methods=["GET", "POST"])
 @login_required
 def venta_nueva():
@@ -235,13 +217,14 @@ def venta_nueva():
         except: productos = []
         db.add_venta(id_cliente, request.form.get("fecha", date.today().isoformat()),
                      productos, request.form.get("metodo_pago", "Efectivo"),
-                     request.form.get("pagado", "Sí"), request.form.get("comentarios", ""))
+                     request.form.get("pagado", "Sí"), request.form.get("comentarios", ""),
+                     request.form.get("equipo_modelo", ""), request.form.get("equipo_imei", ""), 
+                     request.form.get("equipo_contrasena", ""), request.form.get("equipo_patron", ""))
         flash("Venta añadida", "success")
         return redirect(url_for("ventas"))
     return render_template("venta_form.html", clientes=clientes_lista,
         productos_nombres=productos_lista, metodos=METODOS_PAGO,
         venta=None, today=date.today().isoformat())
-
 
 @app.route("/ventas/<int:id_venta>/editar", methods=["GET", "POST"])
 @login_required
@@ -258,13 +241,14 @@ def venta_editar(id_venta):
                         request.form.get("fecha"), productos,
                         request.form.get("metodo_pago", "Efectivo"),
                         request.form.get("pagado", "Sí"),
-                        request.form.get("comentarios", ""))
+                        request.form.get("comentarios", ""),
+                        request.form.get("equipo_modelo", ""), request.form.get("equipo_imei", ""), 
+                        request.form.get("equipo_contrasena", ""), request.form.get("equipo_patron", ""))
         flash("Venta actualizada", "success")
         return redirect(url_for("ventas"))
     return render_template("venta_form.html", clientes=clientes_lista,
         productos_nombres=productos_lista, metodos=METODOS_PAGO,
         venta=venta, today=date.today().isoformat())
-
 
 @app.route("/api/ventas/<int:id_venta>", methods=["DELETE"])
 @login_required
@@ -272,12 +256,10 @@ def api_delete_venta(id_venta):
     db.delete_venta(id_venta)
     return jsonify({"ok": True})
 
-
 @app.route("/api/ventas-chart")
 @login_required
 def api_ventas_chart():
     return jsonify(db.get_ventas_chart_data())
-
 
 @app.route("/api/ventas/<int:id_venta>/cobrar", methods=["POST"])
 @login_required
@@ -288,7 +270,6 @@ def api_cobrar_venta(id_venta):
     ).eq("id", id_venta).execute()
     return jsonify({"ok": True})
 
-
 @app.route("/api/ventas/<int:id_venta>/duplicar", methods=["POST"])
 @login_required
 def api_duplicar_venta(id_venta):
@@ -296,9 +277,10 @@ def api_duplicar_venta(id_venta):
     v = next((x for x in ventas_lista if x["id"] == id_venta), None)
     if not v: return jsonify({"ok": False})
     db.add_venta(v["id_cliente"], date.today().isoformat(),
-                 v["productos"], v["metodo_pago"], "No", v["comentarios"])
+                 v["productos"], v["metodo_pago"], "No", v["comentarios"],
+                 v.get("equipo_modelo", ""), v.get("equipo_imei", ""), 
+                 v.get("equipo_contrasena", ""), v.get("equipo_patron", ""))
     return jsonify({"ok": True})
-
 
 @app.route("/ventas/<int:id_venta>/albaran")
 @login_required
@@ -312,7 +294,6 @@ def albaran_pdf(id_venta):
     response.headers["Content-Type"]        = "application/pdf"
     response.headers["Content-Disposition"] = f'inline; filename="albaran_{id_venta}.pdf"'
     return response
-
 
 def _generar_pdf_albaran(doc, cliente, tipo="Albarán"):
     try:
@@ -381,6 +362,14 @@ def _generar_pdf_albaran(doc, cliente, tipo="Albarán"):
         if comentarios:
             story += [Spacer(1,0.4*cm), HRFlowable(width="100%",thickness=0.5,color=LGRAY,spaceAfter=8),
                       Paragraph("Notas", s_h2), Paragraph(comentarios, s_n)]
+        
+        if doc.get("equipo_modelo") or doc.get("equipo_imei"):
+            story.append(Spacer(1,0.4*cm))
+            eq_text = ""
+            if doc.get("equipo_modelo"): eq_text += f"Modelo: {doc['equipo_modelo']} "
+            if doc.get("equipo_imei"): eq_text += f"| IMEI: {doc['equipo_imei']}"
+            story.append(Paragraph(eq_text, s_n))
+
         if doc.get("validez_dias"):
             story.append(Paragraph(f"Presupuesto válido por {doc['validez_dias']} días.", s_n))
 
@@ -390,7 +379,6 @@ def _generar_pdf_albaran(doc, cliente, tipo="Albarán"):
         return buffer.getvalue()
     except ImportError:
         return b"%PDF-1.4\n% reportlab no instalado"
-
 
 @app.route("/mensualidades")
 @login_required
@@ -443,7 +431,6 @@ def mensualidades():
     return render_template("mensualidades.html", año=año, meses=meses_año, clientes=clientes_lista,
         totales_mes=totales_mes, filtro=filtro, buscar=buscar_str, today_mes=mes_actual)
 
-
 @app.route("/mensualidades/nueva", methods=["GET", "POST"])
 @login_required
 def mensualidad_nueva():
@@ -465,14 +452,12 @@ def mensualidad_nueva():
         return redirect(url_for("mensualidades"))
     return render_template("mensualidad_form.html", clientes=clientes_lista)
 
-
 @app.route("/api/mensualidades/<int:id_mens>/toggle", methods=["POST"])
 @login_required
 def api_toggle_mensualidad(id_mens):
     data = request.get_json() or {}
     db.toggle_mensualidad_pago(id_mens, data.get("pagado", "No"))
     return jsonify({"ok": True})
-
 
 @app.route("/api/mensualidades/<int:id_mens>/editar", methods=["PATCH"])
 @login_required
@@ -487,13 +472,11 @@ def api_editar_mensualidad(id_mens):
     db.update_mensualidad(id_mens, concepto, importe, mes, pagado)
     return jsonify({"ok": True})
 
-
 @app.route("/api/mensualidades/<int:id_mens>", methods=["DELETE"])
 @login_required
 def api_delete_mensualidad(id_mens):
     db.delete_mensualidad(id_mens)
     return jsonify({"ok": True})
-
 
 @app.route("/citas")
 @login_required
@@ -508,7 +491,6 @@ def citas():
                             or buscar_str in c.get("observaciones","").lower()]
     return render_template("citas.html", citas=lista, clientes=db.get_clientes(),
         hoy=hoy.isoformat(), filtros={"desde": fecha_desde, "buscar": buscar_str, "estado": estado})
-
 
 @app.route("/citas/nueva", methods=["GET", "POST"])
 @login_required
@@ -527,7 +509,6 @@ def cita_nueva():
     return render_template("cita_form.html", clientes=clientes_lista, cita=None,
         fecha_defecto=request.args.get("fecha", date.today().isoformat()))
 
-
 @app.route("/citas/<int:id_cita>/editar", methods=["GET", "POST"])
 @login_required
 def cita_editar(id_cita):
@@ -544,13 +525,11 @@ def cita_editar(id_cita):
     return render_template("cita_form.html", clientes=clientes_lista,
         cita=cita, fecha_defecto=cita.get("fecha",""))
 
-
 @app.route("/api/citas/<int:id_cita>", methods=["DELETE"])
 @login_required
 def api_delete_cita(id_cita):
     db.delete_cita(id_cita)
     return jsonify({"ok": True})
-
 
 @app.route("/api/citas/<int:id_cita>/completar", methods=["POST"])
 @login_required
@@ -558,12 +537,10 @@ def api_completar_cita(id_cita):
     db.get_db().table("citas").update({"estado":"completada"}).eq("id",id_cita).execute()
     return jsonify({"ok": True})
 
-
 @app.route("/productos")
 @login_required
 def productos():
     return render_template("productos.html", productos=db.get_productos())
-
 
 @app.route("/api/productos", methods=["POST"])
 @login_required
@@ -572,7 +549,6 @@ def api_add_producto():
     nombre = data.get("nombre","").strip()
     if not nombre: return jsonify({"error":"Nombre requerido"}), 400
     return jsonify(db.add_producto(nombre))
-
 
 @app.route("/api/productos/<int:id_prod>", methods=["DELETE","PATCH"])
 @login_required
@@ -585,12 +561,10 @@ def api_producto(id_prod):
     if nombre: db.rename_producto(id_prod, nombre)
     return jsonify({"ok": True})
 
-
 @app.route("/presupuestos")
 @login_required
 def presupuestos():
     return render_template("presupuestos.html", presupuestos=db.get_presupuestos())
-
 
 @app.route("/presupuestos/nuevo", methods=["GET","POST"])
 @login_required
@@ -613,7 +587,6 @@ def presupuesto_nuevo():
     return render_template("presupuesto_form.html", clientes=clientes_lista,
         productos_nombres=productos_lista, presupuesto=None, today=date.today().isoformat())
 
-
 @app.route("/presupuestos/<int:id_presupuesto>/editar", methods=["GET","POST"])
 @login_required
 def presupuesto_editar(id_presupuesto):
@@ -633,7 +606,6 @@ def presupuesto_editar(id_presupuesto):
     return render_template("presupuesto_form.html", clientes=clientes_lista,
         productos_nombres=productos_lista, presupuesto=presupuesto, today=date.today().isoformat())
 
-
 @app.route("/presupuestos/<int:id_presupuesto>/pdf")
 @login_required
 def presupuesto_pdf(id_presupuesto):
@@ -645,7 +617,6 @@ def presupuesto_pdf(id_presupuesto):
     response.headers["Content-Type"]        = "application/pdf"
     response.headers["Content-Disposition"] = f'inline; filename="presupuesto_{id_presupuesto}.pdf"'
     return response
-
 
 @app.route("/presupuestos/<int:id_presupuesto>/convertir")
 @login_required
@@ -666,13 +637,11 @@ def presupuesto_convertir(id_presupuesto):
         return redirect(url_for("venta_editar", id_venta=nueva_venta["id"]))
     return redirect(url_for("ventas"))
 
-
 @app.route("/api/presupuestos/<int:id_presupuesto>", methods=["DELETE"])
 @login_required
 def api_delete_presupuesto(id_presupuesto):
     db.delete_presupuesto(id_presupuesto)
     return jsonify({"ok": True})
-
 
 @app.route("/propinas")
 @login_required
@@ -682,7 +651,6 @@ def propinas():
     total = round(sum(float(p.get("importe", 0)) for p in lista), 2)
     return render_template("propinas.html", propinas=lista, total=total,
         mes=mes, today=date.today().isoformat())
-
 
 @app.route("/api/propinas", methods=["POST"])
 @login_required
@@ -695,13 +663,11 @@ def api_add_propina():
     if importe <= 0: return jsonify({"error": "Importe debe ser mayor que 0"}), 400
     return jsonify(db.add_propina(fecha, importe, comentario))
 
-
 @app.route("/api/propinas/<int:id_propina>", methods=["DELETE"])
 @login_required
 def api_delete_propina(id_propina):
     db.delete_propina(id_propina)
     return jsonify({"ok": True})
-
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)

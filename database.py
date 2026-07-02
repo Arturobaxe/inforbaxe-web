@@ -9,7 +9,6 @@ from supabase import create_client, Client
 
 _sb: Optional[Client] = None
 
-
 def get_db() -> Client:
     global _sb
     if _sb is None:
@@ -20,13 +19,11 @@ def get_db() -> Client:
         _sb = create_client(url, key)
     return _sb
 
-
 def _flt(v, default=0.0):
     try:
         return float(str(v).replace(",", "."))
     except Exception:
         return default
-
 
 # ── CLIENTES ────────────────────────────────────────────────────────────────
 
@@ -37,12 +34,10 @@ def get_clientes(solo_activos=False):
         q = q.eq("activo", True)
     return q.execute().data or []
 
-
 def get_cliente(id_cliente):
     db = get_db()
     r = db.table("clientes").select("*").eq("id", id_cliente).single().execute()
     return r.data
-
 
 def add_cliente(nombre, email, telefono, notas=""):
     db = get_db()
@@ -54,7 +49,6 @@ def add_cliente(nombre, email, telefono, notas=""):
     }).execute()
     return r.data[0] if r.data else None
 
-
 def update_cliente(id_cliente, nombre, email, telefono, notas=""):
     db = get_db()
     db.table("clientes").update({
@@ -64,16 +58,13 @@ def update_cliente(id_cliente, nombre, email, telefono, notas=""):
         "notas":    notas.strip(),
     }).eq("id", id_cliente).execute()
 
-
 def delete_cliente(id_cliente):
     db = get_db()
     db.table("clientes").delete().eq("id", id_cliente).execute()
 
-
 def cancelar_cliente(id_cliente, activo=False):
     db = get_db()
     db.table("clientes").update({"activo": activo}).eq("id", id_cliente).execute()
-
 
 # ── PRODUCTOS ────────────────────────────────────────────────────────────────
 
@@ -81,22 +72,18 @@ def get_productos():
     db = get_db()
     return db.table("productos").select("*").order("nombre").execute().data or []
 
-
 def add_producto(nombre):
     db = get_db()
     r = db.table("productos").insert({"nombre": nombre.strip()}).execute()
     return r.data[0] if r.data else None
 
-
 def delete_producto(id_producto):
     db = get_db()
     db.table("productos").delete().eq("id", id_producto).execute()
 
-
 def rename_producto(id_producto, nuevo_nombre):
     db = get_db()
     db.table("productos").update({"nombre": nuevo_nombre.strip()}).eq("id", id_producto).execute()
-
 
 # ── VENTAS ───────────────────────────────────────────────────────────────────
 
@@ -111,7 +98,6 @@ def _calc_totales(productos):
         total_benef += q * benef
         total_coste += q * coste
     return total_pvp, total_benef, total_coste
-
 
 def get_ventas(id_cliente=None, mes=None, limit=500):
     db = get_db()
@@ -139,8 +125,7 @@ def get_ventas(id_cliente=None, mes=None, limit=500):
                 v["productos"] = []
     return data
 
-
-def add_venta(id_cliente, fecha, productos, metodo, pagado, comentarios):
+def add_venta(id_cliente, fecha, productos, metodo, pagado, comentarios, equipo_modelo="", equipo_imei="", equipo_contrasena="", equipo_patron=""):
     db = get_db()
     total_pvp, total_benef, total_coste = _calc_totales(productos)
     r = db.table("ventas").insert({
@@ -153,11 +138,14 @@ def add_venta(id_cliente, fecha, productos, metodo, pagado, comentarios):
         "metodo_pago": metodo,
         "pagado":      pagado,
         "comentarios": comentarios,
+        "equipo_modelo": equipo_modelo.strip(),
+        "equipo_imei": equipo_imei.strip(),
+        "equipo_contrasena": equipo_contrasena.strip(),
+        "equipo_patron": equipo_patron.strip()
     }).execute()
     return r.data[0] if r.data else None
 
-
-def update_venta(id_venta, id_cliente, fecha, productos, metodo, pagado, comentarios):
+def update_venta(id_venta, id_cliente, fecha, productos, metodo, pagado, comentarios, equipo_modelo="", equipo_imei="", equipo_contrasena="", equipo_patron=""):
     db = get_db()
     total_pvp, total_benef, total_coste = _calc_totales(productos)
     db.table("ventas").update({
@@ -170,13 +158,15 @@ def update_venta(id_venta, id_cliente, fecha, productos, metodo, pagado, comenta
         "metodo_pago": metodo,
         "pagado":      pagado,
         "comentarios": comentarios,
+        "equipo_modelo": equipo_modelo.strip(),
+        "equipo_imei": equipo_imei.strip(),
+        "equipo_contrasena": equipo_contrasena.strip(),
+        "equipo_patron": equipo_patron.strip()
     }).eq("id", id_venta).execute()
-
 
 def delete_venta(id_venta):
     db = get_db()
     db.table("ventas").delete().eq("id", id_venta).execute()
-
 
 # ── MENSUALIDADES ─────────────────────────────────────────────────────────────
 
@@ -196,7 +186,6 @@ def get_mensualidades(año=None, id_cliente=None):
         m["cliente_activo"] = cli.get("activo", True)
     return data
 
-
 def add_mensualidad(id_cliente, concepto, importe, mes, pagado="No"):
     db = get_db()
     r = db.table("mensualidades").upsert({
@@ -208,7 +197,6 @@ def add_mensualidad(id_cliente, concepto, importe, mes, pagado="No"):
     }, on_conflict="id_cliente,concepto,mes").execute()
     return r.data[0] if r.data else None
 
-
 def toggle_mensualidad_pago(id_mensualidad, pagado):
     db = get_db()
     update_data = {"pagado": pagado}
@@ -217,7 +205,6 @@ def toggle_mensualidad_pago(id_mensualidad, pagado):
     else:
         update_data["fecha_pago"] = None
     db.table("mensualidades").update(update_data).eq("id", id_mensualidad).execute()
-
 
 def update_mensualidad(id_mensualidad, concepto, importe, mes, pagado):
     db = get_db()
@@ -228,11 +215,9 @@ def update_mensualidad(id_mensualidad, concepto, importe, mes, pagado):
         "pagado":   pagado,
     }).eq("id", id_mensualidad).execute()
 
-
 def delete_mensualidad(id_mensualidad):
     db = get_db()
     db.table("mensualidades").delete().eq("id", id_mensualidad).execute()
-
 
 # ── CITAS ────────────────────────────────────────────────────────────────────
 
@@ -252,7 +237,6 @@ def get_citas(fecha_desde=None, fecha_hasta=None, id_cliente=None):
         c["nombre_cliente"] = (c.pop("clientes", None) or {}).get("nombre", "—")
     return data
 
-
 def add_cita(id_cliente, fecha, hora, observaciones, estado="pendiente"):
     db = get_db()
     r = db.table("citas").insert({
@@ -264,7 +248,6 @@ def add_cita(id_cliente, fecha, hora, observaciones, estado="pendiente"):
     }).execute()
     return r.data[0] if r.data else None
 
-
 def update_cita(id_cita, id_cliente, fecha, hora, observaciones, estado):
     db = get_db()
     db.table("citas").update({
@@ -275,11 +258,9 @@ def update_cita(id_cita, id_cliente, fecha, hora, observaciones, estado):
         "estado":       estado,
     }).eq("id", id_cita).execute()
 
-
 def delete_cita(id_cita):
     db = get_db()
     db.table("citas").delete().eq("id", id_cita).execute()
-
 
 # ── PRESUPUESTOS ──────────────────────────────────────────────────────────────
 
@@ -302,7 +283,6 @@ def get_presupuestos(id_cliente=None):
                 p["productos"] = []
     return data
 
-
 def get_presupuesto(id_presupuesto):
     db = get_db()
     try:
@@ -320,7 +300,6 @@ def get_presupuesto(id_presupuesto):
     except Exception:
         return None
 
-
 def _calc_totales_presup(productos):
     total_pvp = total_benef = 0.0
     for p in productos:
@@ -330,7 +309,6 @@ def _calc_totales_presup(productos):
         total_pvp   += q * pvp
         total_benef += q * benef
     return total_pvp, total_benef
-
 
 def add_presupuesto(id_cliente, fecha, productos, estado, notas, validez_dias=30):
     db = get_db()
@@ -347,7 +325,6 @@ def add_presupuesto(id_cliente, fecha, productos, estado, notas, validez_dias=30
     }).execute()
     return r.data[0] if r.data else None
 
-
 def update_presupuesto(id_presupuesto, id_cliente, fecha, productos, estado, notas, validez_dias=30):
     db = get_db()
     total_pvp, total_benef = _calc_totales_presup(productos)
@@ -362,11 +339,9 @@ def update_presupuesto(id_presupuesto, id_cliente, fecha, productos, estado, not
         "validez_dias": validez_dias,
     }).eq("id", id_presupuesto).execute()
 
-
 def delete_presupuesto(id_presupuesto):
     db = get_db()
     db.table("presupuestos").delete().eq("id", id_presupuesto).execute()
-
 
 # ── PROPINAS ──────────────────────────────────────────────────────────────────
 
@@ -380,7 +355,6 @@ def get_propinas(mes=None):
         q = q.gte("fecha", f"{mes}-01").lte("fecha", f"{mes}-{last_day:02d}")
     return q.execute().data or []
 
-
 def add_propina(fecha, importe, comentario):
     db = get_db()
     r = db.table("propinas").insert({
@@ -390,16 +364,13 @@ def add_propina(fecha, importe, comentario):
     }).execute()
     return r.data[0] if r.data else None
 
-
 def delete_propina(id_propina):
     db = get_db()
     db.table("propinas").delete().eq("id", id_propina).execute()
 
-
 def get_total_propinas_mes(mes):
     propinas = get_propinas(mes=mes)
     return round(sum(_flt(p.get("importe", 0)) for p in propinas), 2)
-
 
 # ── BÚSQUEDA GLOBAL ───────────────────────────────────────────────────────────
 
@@ -413,14 +384,17 @@ def busqueda_global(texto):
         f"nombre.ilike.%{t}%,email.ilike.%{t}%,telefono.ilike.%{t}%"
     ).limit(10).execute().data or []
 
-    # Búsqueda profunda en los productos y comentarios
-    ventas_all = db.table("ventas").select("id, fecha, total_pvp, comentarios, productos, clientes(nombre)").order("fecha", desc=True).limit(200).execute().data or []
+    # Búsqueda profunda en los productos, comentarios, modelos e imeis
+    ventas_all = db.table("ventas").select("id, fecha, total_pvp, comentarios, productos, equipo_modelo, equipo_imei, clientes(nombre)").order("fecha", desc=True).limit(200).execute().data or []
     ventas = []
     for v in ventas_all:
         v["nombre_cliente"] = (v.pop("clientes", None) or {}).get("nombre", "—")
         prod_str = str(v.get("productos", "")).lower()
-        com_str = str(v.get("comentarios", "")).lower()
-        if t in prod_str or t in com_str or t in v["nombre_cliente"].lower():
+        com_str  = str(v.get("comentarios", "")).lower()
+        mod_str  = str(v.get("equipo_modelo", "")).lower()
+        imei_str = str(v.get("equipo_imei", "")).lower()
+        
+        if t in prod_str or t in com_str or t in v["nombre_cliente"].lower() or t in mod_str or t in imei_str:
             ventas.append(v)
             if len(ventas) >= 10: break
 
@@ -431,7 +405,6 @@ def busqueda_global(texto):
         c["nombre_cliente"] = (c.pop("clientes", None) or {}).get("nombre", "—")
 
     return {"clientes": clientes, "ventas": ventas, "citas": citas}
-
 
 # ── HISTORIAL CLIENTE ─────────────────────────────────────────────────────────
 
@@ -451,7 +424,6 @@ def get_historial_cliente(id_cliente):
         ),
     }
 
-
 # ── DASHBOARD ─────────────────────────────────────────────────────────────────
 
 def get_dashboard_stats():
@@ -463,11 +435,9 @@ def get_dashboard_stats():
     mes_start = f"{mes_actual}-01"
     mes_end   = f"{mes_actual}-{last_day:02d}"
 
-    # Clientes
     clientes_data    = db.table("clientes").select("id").eq("activo", True).execute()
     clientes_activos = len(clientes_data.data or [])
 
-    # Citas Hoy
     citas_hoy_data = (db.table("citas")
         .select("id, hora, observaciones, id_cliente, clientes(nombre)")
         .eq("fecha", today.isoformat())
@@ -478,7 +448,6 @@ def get_dashboard_stats():
     for c in citas_hoy:
         c["nombre_cliente"] = (c.pop("clientes", None) or {}).get("nombre", "—")
 
-    # Próximas Citas
     from datetime import timedelta
     manana        = (today + timedelta(days=2)).isoformat()
     proximas_data = (db.table("citas")
@@ -492,14 +461,12 @@ def get_dashboard_stats():
     for c in proximas_citas:
         c["nombre_cliente"] = (c.pop("clientes", None) or {}).get("nombre", "—")
 
-    # Mensualidades
     mens_pend        = db.table("mensualidades").select("id").like("mes", f"{mes_actual}%").eq("pagado", "No").execute()
     mens_pendientes  = len(mens_pend.data or [])
     
     mens_pagadas     = db.table("mensualidades").select("importe").eq("mes", mes_actual).eq("pagado", "Sí").execute()
     total_mens_pagadas = sum(_flt(m.get("importe", 0)) for m in (mens_pagadas.data or []))
 
-    # Ventas
     ventas_mes  = (db.table("ventas")
                    .select("total_pvp, total_benef, pagado")
                    .gte("fecha", mes_start).lte("fecha", mes_end)
@@ -509,10 +476,8 @@ def get_dashboard_stats():
     total_benef_mes  = sum(_flt(v.get("total_benef", 0)) for v in ventas_data)
     num_ventas_mes   = len(ventas_data)
 
-    # Propinas
     total_propinas = get_total_propinas_mes(mes_actual)
 
-    # SUMATORIA FINAL (Ventas + Mensualidades + Propinas)
     total_facturado_real = total_ventas_mes + total_mens_pagadas + total_propinas
     total_beneficio_real = total_benef_mes + total_mens_pagadas + total_propinas
 
