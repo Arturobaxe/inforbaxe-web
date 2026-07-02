@@ -19,6 +19,15 @@
 .prod-row-delete { background:none; border:none; cursor:pointer; color:var(--t4); font-size:15px; padding:0 4px; transition:color 0.15s; }
 .prod-row-delete:hover { color:var(--red); }
 .pvp-display { background:var(--accent-dim); border:1px solid rgba(232,130,12,0.25); border-radius:7px; padding:9px 12px; font-family:'JetBrains Mono',monospace; font-size:18px; font-weight:700; color:var(--accent); text-align:center; }
+
+/* Patrón de desbloqueo CSS */
+.pattern-container { width: 180px; height: 180px; background: var(--bg1); border: 1px solid var(--border); border-radius: 8px; position: relative; margin: 0 auto; touch-action: none; user-select: none; overflow: hidden; }
+.pattern-grid { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); height: 100%; width: 100%; position: relative; z-index: 2; }
+.pattern-dot-wrapper { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; cursor: crosshair; }
+.pattern-dot { width: 12px; height: 12px; background: var(--t4); border-radius: 50%; transition: 0.2s all; pointer-events: none; }
+.pattern-dot.active { background: var(--accent); transform: scale(1.6); box-shadow: 0 0 0 4px rgba(232,130,12,0.2); }
+.pattern-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
+.pattern-line { stroke: var(--accent); stroke-width: 3; stroke-linecap: round; }
 </style>
 {% endblock %}
 {% block content %}
@@ -69,7 +78,52 @@
               {% endfor %}
             </select>
           </div>
-          <div class="form-group">
+
+          <!-- LO NUEVO: Caja para el IMEI, PIN y Patrón -->
+          <div style="margin-top:16px; padding:12px; background:var(--bg2); border:1px solid var(--border); border-radius:8px;">
+            <div style="font-size:12px; font-weight:700; color:var(--t2); margin-bottom:10px; text-transform:uppercase; letter-spacing:0.5px;">📱 Datos del dispositivo (Opcional)</div>
+            
+            <div class="form-grid form-grid-2">
+              <div class="form-group" style="margin:0;">
+                <input type="text" name="equipo_modelo" class="form-control" placeholder="Modelo (Ej: Xiaomi 15 C)" value="{{ venta.equipo_modelo if venta else '' }}">
+              </div>
+              <div class="form-group" style="margin:0;">
+                <input type="text" name="equipo_imei" class="form-control" placeholder="IMEI / Nº Serie" value="{{ venta.equipo_imei if venta else '' }}">
+              </div>
+            </div>
+
+            <div class="form-grid form-grid-2" style="margin-top:10px; align-items:start;">
+              <div class="form-group" style="margin:0;">
+                <div style="font-size:12px; font-weight:600; color:var(--t2); margin-bottom:6px;">PIN numérico / Contraseña</div>
+                <input type="text" name="equipo_contrasena" class="form-control" placeholder="Ej: 1234" value="{{ venta.equipo_contrasena if venta else '' }}">
+              </div>
+              
+              <div class="form-group" style="margin:0;">
+                <div style="font-size:12px; font-weight:600; color:var(--t2); margin-bottom:6px; text-align:center;">Patrón (Dibuja aquí)</div>
+                <div class="pattern-container" id="pattern-container">
+                    <svg class="pattern-svg" id="pattern-svg"></svg>
+                    <div class="pattern-grid">
+                        <div class="pattern-dot-wrapper" data-val="1"><div class="pattern-dot"></div></div>
+                        <div class="pattern-dot-wrapper" data-val="2"><div class="pattern-dot"></div></div>
+                        <div class="pattern-dot-wrapper" data-val="3"><div class="pattern-dot"></div></div>
+                        <div class="pattern-dot-wrapper" data-val="4"><div class="pattern-dot"></div></div>
+                        <div class="pattern-dot-wrapper" data-val="5"><div class="pattern-dot"></div></div>
+                        <div class="pattern-dot-wrapper" data-val="6"><div class="pattern-dot"></div></div>
+                        <div class="pattern-dot-wrapper" data-val="7"><div class="pattern-dot"></div></div>
+                        <div class="pattern-dot-wrapper" data-val="8"><div class="pattern-dot"></div></div>
+                        <div class="pattern-dot-wrapper" data-val="9"><div class="pattern-dot"></div></div>
+                    </div>
+                </div>
+                <div style="text-align:center; margin-top:8px;">
+                    <button type="button" onclick="clearPattern()" class="btn btn-secondary btn-sm" style="font-size:11px; padding:4px 8px;">Limpiar patrón</button>
+                </div>
+                <input type="hidden" name="equipo_patron" id="equipo-patron" value="{{ venta.equipo_patron if venta else '' }}">
+              </div>
+            </div>
+          </div>
+          <!-- FIN DE LO NUEVO -->
+
+          <div class="form-group" style="margin-top: 15px;">
             <label class="form-label" style="font-weight: 600; color: var(--t2);">🛠️ Comentarios / Estado de la reparación</label>
             <textarea name="comentarios" class="form-control" rows="3" placeholder="Ej: Móvil mojado, revisar placa base, falta cambiar pantalla..." style="resize: vertical;">{{ venta.comentarios if venta else '' }}</textarea>
           </div>
@@ -129,6 +183,92 @@
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
 <script>
+// --- CÓDIGO DEL PATRÓN DE DESBLOQUEO ---
+const pContainer = document.getElementById('pattern-container');
+const pSvg = document.getElementById('pattern-svg');
+const pInput = document.getElementById('equipo-patron');
+const pDots = Array.from(document.querySelectorAll('.pattern-dot-wrapper'));
+let pSequence = [];
+let pIsDrawing = false;
+
+function getDotCenter(wrapper) {
+    const rect = wrapper.getBoundingClientRect();
+    const contRect = pContainer.getBoundingClientRect();
+    return { x: rect.left - contRect.left + rect.width / 2, y: rect.top - contRect.top + rect.height / 2 };
+}
+
+function drawLines(currentX, currentY) {
+    pSvg.innerHTML = '';
+    if (pSequence.length === 0) return;
+    let d = '';
+    for (let i = 0; i < pSequence.length; i++) {
+        const center = getDotCenter(pSequence[i]);
+        if (i === 0) d += `M ${center.x} ${center.y} `;
+        else d += `L ${center.x} ${center.y} `;
+    }
+    if (currentX !== undefined && currentY !== undefined) {
+        const contRect = pContainer.getBoundingClientRect();
+        d += `L ${currentX - contRect.left} ${currentY - contRect.top}`;
+    }
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', d); path.setAttribute('class', 'pattern-line'); path.setAttribute('fill', 'none');
+    pSvg.appendChild(path);
+}
+
+function handlePointerDown(e) {
+    pIsDrawing = true; pSequence = [];
+    pDots.forEach(d => d.querySelector('.pattern-dot').classList.remove('active'));
+    handlePointerMove(e);
+}
+
+function handlePointerMove(e) {
+    if (!pIsDrawing) return;
+    e.preventDefault();
+    const clientX = e.touches ? (e.touches[0] ? e.touches[0].clientX : null) : e.clientX;
+    const clientY = e.touches ? (e.touches[0] ? e.touches[0].clientY : null) : e.clientY;
+    if (clientX === null) return;
+    const el = document.elementFromPoint(clientX, clientY);
+    const wrapper = el ? el.closest('.pattern-dot-wrapper') : null;
+    if (wrapper && !pSequence.includes(wrapper)) {
+        pSequence.push(wrapper);
+        wrapper.querySelector('.pattern-dot').classList.add('active');
+    }
+    drawLines(clientX, clientY);
+}
+
+function handlePointerUp() {
+    if (!pIsDrawing) return;
+    pIsDrawing = false;
+    drawLines();
+    pInput.value = pSequence.map(w => w.dataset.val).join('-');
+}
+
+function clearPattern() {
+    pSequence = []; pInput.value = '';
+    pDots.forEach(d => d.querySelector('.pattern-dot').classList.remove('active'));
+    drawLines();
+}
+
+function initPattern() {
+    const val = pInput.value;
+    if (val) {
+        val.split('-').forEach(v => {
+            const wrapper = pDots.find(d => d.dataset.val === v);
+            if (wrapper) { pSequence.push(wrapper); wrapper.querySelector('.pattern-dot').classList.add('active'); }
+        });
+        setTimeout(drawLines, 100); // Dar tiempo a que el DOM posicione las celdas
+    }
+}
+
+pContainer.addEventListener('mousedown', handlePointerDown);
+document.addEventListener('mousemove', handlePointerMove, {passive: false});
+document.addEventListener('mouseup', handlePointerUp);
+pContainer.addEventListener('touchstart', handlePointerDown, {passive: false});
+document.addEventListener('touchmove', handlePointerMove, {passive: false});
+document.addEventListener('touchend', handlePointerUp);
+initPattern();
+// --- FIN CÓDIGO PATRÓN ---
+
 let productos = {{ venta.productos | tojson if venta and venta.productos else '[]' }};
 
 function calcPVP() {
