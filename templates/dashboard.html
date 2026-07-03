@@ -81,7 +81,6 @@
 {% endblock %}
 {% block content %}
 
-<!-- Stat cards -->
 <div class="stat-grid">
   <div class="stat-card green">
     <div class="stat-label">Clientes activos</div>
@@ -120,10 +119,8 @@
   </div>
 </div>
 
-<!-- Main grid -->
 <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
 
-  <!-- Citas hoy -->
   <div class="card">
     <div class="card-header">
       <div>
@@ -153,7 +150,6 @@
     {% endif %}
   </div>
 
-  <!-- Próximas 48h con contador días -->
   <div class="card">
     <div class="card-header">
       <div>
@@ -185,7 +181,6 @@
 
 </div>
 
-<!-- Buscador de Proveedores -->
 <div class="card mt-4" style="border-color: rgba(232, 130, 12, 0.3); background: linear-gradient(to right, #ffffff, rgba(232, 130, 12, 0.02));">
   <div class="card-header" style="margin-bottom: 12px;">
     <div>
@@ -205,10 +200,8 @@
   </div>
 </div>
 
-<!-- Fila inferior: Gráfico + Notas -->
 <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:20px;">
 
-  <!-- Gráfico ventas mensual -->
   <div class="card">
     <div class="card-header">
       <div class="card-title">📈 Facturación últimos 6 meses</div>
@@ -219,7 +212,6 @@
     </div>
   </div>
 
-  <!-- Notas sticky -->
   <div class="card">
     <div class="card-header">
       <div class="card-title">📝 Notas rápidas</div>
@@ -233,7 +225,6 @@
 
 </div>
 
-<!-- Accesos rápidos -->
 <div class="card mt-4">
   <div class="card-title" style="margin-bottom:14px;">⚡ Accesos rápidos</div>
   <div style="display:flex; gap:12px; flex-wrap:wrap;">
@@ -254,34 +245,31 @@ function buscarProv(proveedor) {
   const query = document.getElementById('prov-query').value.trim();
   if (!query) {
     document.getElementById('prov-query').focus();
-    alert('Por favor, escribe algo para buscar.');
+    alert('Por favor, escribe el repuesto o modelo que quieres buscar.');
     return;
   }
   
-  // 1. Reemplazar espacios por '+' (formato estándar para el 99% de tiendas)
-  const qPlus = query.split(' ').join('+');
-  // 2. Formato codificado para el 'ecommfinder' de SpainSellers
   const qEnc = encodeURIComponent(query);
+  const qPlus = query.split(' ').join('+');
   
-  if (proveedor === 'spainsellers') {
-    // 100% idéntico a tu captura
-    window.open(`https://www.spainsellers.com/buscar?s=${qPlus}&search_query=${qPlus}#ecommfinder/${qEnc}`, '_blank');
-  } 
-  else if (proveedor === 'klicfon') {
-    window.open(`https://klicfon.com/es/busqueda?s=${qPlus}`, '_blank');
-  } 
-  else if (proveedor === 'repuestos') {
-    window.open(`https://www.repuestosdigital.com/es/busqueda?s=${qPlus}`, '_blank');
-  } 
-  else if (proveedor === 'preciosadictos') {
-    // Evitamos el '/?controller=search' que rompe su web, saltando a /busqueda directo
-    window.open(`https://www.preciosadictos.com/busqueda?s=${qPlus}&search_query=${qPlus}`, '_blank');
-  } 
-  else if (proveedor === 'todos') {
-    window.open(`https://www.spainsellers.com/buscar?s=${qPlus}&search_query=${qPlus}#ecommfinder/${qEnc}`, '_blank');
-    window.open(`https://klicfon.com/es/busqueda?s=${qPlus}`, '_blank');
-    window.open(`https://www.repuestosdigital.com/es/busqueda?s=${qPlus}`, '_blank');
-    window.open(`https://www.preciosadictos.com/busqueda?s=${qPlus}&search_query=${qPlus}`, '_blank');
+  const urls = {
+    // Restauradas exactamente a la versión que funcionaba (controller=search)
+    'klicfon': `https://klicfon.com/es/busqueda?controller=search&s=${qEnc}`,
+    'preciosadictos': `https://www.preciosadictos.com/?controller=search&s=${qEnc}&search_query=${qEnc}`,
+    'repuestos': `https://www.repuestosdigital.com/es/busqueda?controller=search&s=${qEnc}`,
+    // SpainSellers con el arreglo que te ha funcionado
+    'spainsellers': `https://www.spainsellers.com/buscar?s=${qPlus}&search_query=${qPlus}#ecommfinder/${qEnc}`
+  };
+
+  if (proveedor === 'todos') {
+    let bloqueado = false;
+    for (const key in urls) {
+      const nuevaPestana = window.open(urls[key], '_blank');
+      if (!nuevaPestana) bloqueado = true;
+    }
+    if (bloqueado) alert("⚠️ Tu navegador ha bloqueado algunas ventanas emergentes. Permite los 'Pop-ups' para abrirlas todas a la vez.");
+  } else {
+    window.open(urls[proveedor], '_blank');
   }
 }
 
