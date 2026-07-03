@@ -185,7 +185,7 @@
   <div class="card-header" style="margin-bottom: 12px;">
     <div>
       <div class="card-title">🔎 Lanzadera de Proveedores</div>
-      <div class="card-sub">Busca piezas en tus distribuidores de confianza (Se abrirán usando tu sesión actual)</div>
+      <div class="card-sub">Busca piezas en tus distribuidores de confianza</div>
     </div>
   </div>
   <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
@@ -249,23 +249,27 @@ function buscarProv(proveedor) {
     return;
   }
   
-  const q = encodeURIComponent(query);
-// URLs "rompe-muros" atacando directamente al motor interno para evitar el 404
+  // 1. Sustituimos espacios por "+" para cumplir con la ruta /buscar exacta
+  const qPlus = query.split(' ').join('+');
+  
+  // 2. Codificamos estándar (%20) SOLO para el hashtag de ecommfinder
+  const qEnc = encodeURIComponent(query);
+  
+  // URLs calcadas sin parámetros extraños
   const urls = {
-    'klicfon': `https://klicfon.com/es/busqueda?controller=search&s=${q}`,
-    'preciosadictos': `https://www.preciosadictos.com/?controller=search&s=${q}&search_query=${q}`,
-    'spainsellers': `https://www.spainsellers.com/?controller=search&s=${q}&search_query=${q}`,
-    'repuestos': `https://www.repuestosdigital.com/es/busqueda?controller=search&s=${q}`
+    'klicfon': `https://klicfon.com/es/busqueda?s=${qPlus}`,
+    'preciosadictos': `https://www.preciosadictos.com/buscar?s=${qPlus}`,
+    'spainsellers': `https://www.spainsellers.com/buscar?s=${qPlus}&search_query=${qPlus}#ecommfinder/${qEnc}`,
+    'repuestos': `https://www.repuestosdigital.com/es/busqueda?s=${qPlus}`
   };
 
   if (proveedor === 'todos') {
-    // Si el navegador bloquea pestañas múltiples, avisamos al usuario
     let bloqueado = false;
     for (const key in urls) {
       const nuevaPestana = window.open(urls[key], '_blank');
       if (!nuevaPestana) bloqueado = true;
     }
-    if (bloqueado) alert("⚠️ Tu navegador ha bloqueado algunas ventanas emergentes. Permite los 'Pop-ups' para esta página para abrir las 4 a la vez.");
+    if (bloqueado) alert("⚠️ Tu navegador ha bloqueado algunas ventanas emergentes. Permite los 'Pop-ups'.");
   } else {
     window.open(urls[proveedor], '_blank');
   }
