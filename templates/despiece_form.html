@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}{% if repuesto %}Editar pieza{% else %}Nueva pieza{% endif %} — INFORBAXE{% endblock %}
+{% block page_title %}{% if repuesto %}✏️ Editar pieza{% else %}＋ Nueva pieza{% endif %}{% endblock %}
+{% block page_sub %}Ficha del repuesto · sin control de unidades{% endblock %}
+{% block content %}
+<div style="max-width:760px;">
+  <form method="post" class="card">
+    {% if not familias %}
+      <div class="flash flash-error">Antes de añadir piezas necesitas crear al menos una familia.</div>
+      <a href="{{ url_for('despiece') }}" class="btn btn-primary">Volver al despiece y crear familia</a>
+    {% else %}
+      <div class="form-grid form-grid-2">
+        <div>
+          <label class="form-label" for="familia_id">Familia *</label>
+          <select class="form-control" id="familia_id" name="familia_id" required>
+            {% for familia in familias %}
+            <option value="{{ familia.id }}" {% if repuesto and repuesto.familia_id == familia.id %}selected{% endif %}>{{ familia.nombre }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="form-label" for="marca">Marca</label>
+          <input class="form-control" id="marca" name="marca" maxlength="80" value="{{ repuesto.marca if repuesto else '' }}" placeholder="Apple, Xiaomi, Samsung...">
+        </div>
+        <div>
+          <label class="form-label" for="modelo">Modelo *</label>
+          <input class="form-control" id="modelo" name="modelo" maxlength="120" required value="{{ repuesto.modelo if repuesto else '' }}" placeholder="iPhone 13, Redmi Note 12...">
+        </div>
+        <div>
+          <label class="form-label" for="pieza">Pieza *</label>
+          <input class="form-control" id="pieza" name="pieza" maxlength="120" required value="{{ repuesto.pieza if repuesto else '' }}" placeholder="Pantalla OLED, auricular izquierdo...">
+        </div>
+        <div style="grid-column:1/-1;">
+          <label class="form-label" for="referencia">Referencia</label>
+          <input class="form-control" id="referencia" name="referencia" maxlength="120" value="{{ repuesto.referencia if repuesto else '' }}" placeholder="Código del fabricante o referencia interna">
+        </div>
+        <div style="grid-column:1/-1;">
+          <label class="form-label" for="descripcion">Descripción / notas</label>
+          <textarea class="form-control" id="descripcion" name="descripcion" maxlength="1000" rows="4" placeholder="Compatibilidades, versión, observaciones...">{{ repuesto.descripcion if repuesto else '' }}</textarea>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px;">
+        <a href="{{ url_for('despiece') }}" class="btn btn-secondary">Cancelar</a>
+        <button type="submit" class="btn btn-primary">{% if repuesto %}Guardar cambios{% else %}Añadir pieza{% endif %}</button>
+      </div>
+    {% endif %}
+  </form>
+</div>
+{% endblock %}
