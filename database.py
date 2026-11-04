@@ -85,6 +85,117 @@ def rename_producto(id_producto, nuevo_nombre):
     db = get_db()
     db.table("productos").update({"nombre": nuevo_nombre.strip()}).eq("id", id_producto).execute()
 
+# ── DESPIECE Y REPUESTOS ────────────────────────────────────────────────────
+# Catálogo independiente: no modifica ventas, clientes ni reparaciones.
+DESPIECE_PAGE_SIZE = 100
+
+
+def get_despiece_familias():
+    db = get_db()
+    return (db.table("despiece_familias")
+            .select("id,nombre")
+            .order("nombre")
+            .execute().data or [])
+
+
+def get_despiece_repuestos(familia_id=None, busqueda="", page=1, familias=None):
+    db = get_db()
+    page = max(int(page or 1), 1)
+    inicio = (page - 1) * DESPIECE_PAGE_SIZE
+    q = (db.table("despiece_repuestos")
+         .select("id,familia_id,marca,modelo,pieza,referencia,descripcion,created_at")
+         .order("marca")
+         .order("modelo")
+         .range(inicio, inicio + DESPIECE_PAGE_SIZE))  # 101 filas: la última solo indica si hay página siguiente.
+
+    if familia_id:
+        q = q.eq("familia_id", int(familia_id))
+
+    # Sanitizar caracteres reservados de la sintaxis OR de PostgREST.
+    termino = (busqueda or "").strip()[:80]
+    for char in ',()%_*\\"':
+        termino = termino.replace(char, " ")
+    termino = " ".join(termino.split())
+
+    if termino:
+        lista_familias = familias if familias is not None else get_despiece_familias()
+        familias_coincidentes = [
+            str(f["id"]) for f in lista_familias
+            if termino.casefold() in (f.get("nombre") or "").casefold()
+        ]
+        filtros = [
+            f"marca.ilike.*{termino}*",
+            f"modelo.ilike.*{termino}*",
+            f"pieza.ilike.*{termino}*",
+            f"referencia.ilike.*{termino}*",
+            f"descripcion.ilike.*{termino}*",
+        ]
+        if familias_coincidentes:
+            filtros.append(f"familia_id.in.({','.join(familias_coincidentes)})")
+        q = q.or_(",".join(filtros))
+
+    return q.execute().data or []
+
+
+def get_despiece_repuesto(id_repuesto):
+    db = get_db()
+    return (db.table("despiece_repuestos")
+            .select("id,familia_id,marca,modelo,pieza,referencia,descripcion")
+            .eq("id", int(id_repuesto))
+            .single().execute().data)
+
+
+def add_despiece_familia(nombre):
+    db = get_db()
+    r = db.table("despiece_familias").insert({"nombre": nombre.strip()}).execute()
+    return r.data[0] if r.data else None
+
+
+def update_despiece_familia(id_familia, nombre):
+    db = get_db()
+    db.table("despiece_familias").update({"nombre": nombre.strip()}).eq("id", int(id_familia)).execute()
+
+
+def delete_despiece_familia(id_familia):
+    db = get_db()
+    existente = (db.table("despiece_repuestos").select("id")
+                 .eq("familia_id", int(id_familia)).limit(1).execute().data or [])
+    if existente:
+        raise ValueError("No puedes eliminar una familia que todavía contiene piezas.")
+    db.table("despiece_familias").delete().eq("id", int(id_familia)).execute()
+
+
+def add_despiece_repuesto(familia_id, marca, modelo, pieza, referencia="", descripcion=""):
+    db = get_db()
+    payload = {
+        "familia_id": int(familia_id),
+        "marca": (marca or "").strip(),
+        "modelo": modelo.strip(),
+        "pieza": pieza.strip(),
+        "referencia": (referencia or "").strip(),
+        "descripcion": (descripcion or "").strip(),
+    }
+    r = db.table("despiece_repuestos").insert(payload).execute()
+    return r.data[0] if r.data else None
+
+
+def update_despiece_repuesto(id_repuesto, familia_id, marca, modelo, pieza, referencia="", descripcion=""):
+    db = get_db()
+    payload = {
+        "familia_id": int(familia_id),
+        "marca": (marca or "").strip(),
+        "modelo": modelo.strip(),
+        "pieza": pieza.strip(),
+        "referencia": (referencia or "").strip(),
+        "descripcion": (descripcion or "").strip(),
+    }
+    db.table("despiece_repuestos").update(payload).eq("id", int(id_repuesto)).execute()
+
+
+def delete_despiece_repuesto(id_repuesto):
+    db = get_db()
+    db.table("despiece_repuestos").delete().eq("id", int(id_repuesto)).execute()
+
 # ── VENTAS ───────────────────────────────────────────────────────────────────
 
 def _calc_totales(productos):

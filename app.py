@@ -561,6 +561,166 @@ def api_producto(id_prod):
     if nombre: db.rename_producto(id_prod, nombre)
     return jsonify({"ok": True})
 
+# ── DESPIECE Y REPUESTOS ────────────────────────────────────────────────────
+@app.route("/despiece")
+@login_required
+def despiece():
+    familias = db.get_despiece_familias()
+    q = request.args.get("q", "").strip()[:80]
+    familia_raw = request.args.get("familia", "").strip()
+    try:
+        familia_id = int(familia_raw) if familia_raw else None
+    except ValueError:
+        familia_id = None
+
+    # Evitar filtrar por una familia que ya no exista.
+    ids_familias = {int(f["id"]) for f in familias}
+    if familia_id not in ids_familias:
+        familia_id = None
+
+    try:
+        pagina = max(int(request.args.get("pagina", "1")), 1)
+    except ValueError:
+        pagina = 1
+    repuestos_pagina = db.get_despiece_repuestos(
+        familia_id=familia_id, busqueda=q, page=pagina, familias=familias
+    )
+    hay_siguiente = len(repuestos_pagina) > db.DESPIECE_PAGE_SIZE
+    repuestos = repuestos_pagina[:db.DESPIECE_PAGE_SIZE]
+    nombres_familias = {int(f["id"]): f["nombre"] for f in familias}
+    for repuesto in repuestos:
+        repuesto["familia_nombre"] = nombres_familias.get(int(repuesto["familia_id"]), "Sin familia")
+
+    return render_template(
+        "despiece.html",
+        familias=familias,
+        repuestos=repuestos,
+        familia_id=familia_id,
+        q=q,
+        pagina=pagina,
+        hay_siguiente=hay_siguiente,
+    )
+
+
+@app.route("/despiece/familias/nueva", methods=["POST"])
+@login_required
+def despiece_familia_nueva():
+    nombre = request.form.get("nombre", "").strip()[:80]
+    if not nombre:
+        flash("Escribe un nombre para la familia.", "error")
+    else:
+        try:
+            db.add_despiece_familia(nombre)
+            flash("Familia creada.", "success")
+        except Exception:
+            flash("No se ha podido crear la familia. Comprueba que no exista ya.", "error")
+    return redirect(url_for("despiece"))
+
+
+@app.route("/despiece/familias/<int:id_familia>/editar", methods=["POST"])
+@login_required
+def despiece_familia_editar(id_familia):
+    nombre = request.form.get("nombre", "").strip()[:80]
+    if not nombre:
+        flash("El nombre de la familia no puede estar vacío.", "error")
+    else:
+        try:
+            db.update_despiece_familia(id_familia, nombre)
+            flash("Familia actualizada.", "success")
+        except Exception:
+            flash("No se ha podido actualizar la familia.", "error")
+    return redirect(url_for("despiece"))
+
+
+@app.route("/despiece/familias/<int:id_familia>/eliminar", methods=["POST"])
+@login_required
+def despiece_familia_eliminar(id_familia):
+    try:
+        db.delete_despiece_familia(id_familia)
+        flash("Familia eliminada.", "success")
+    except ValueError as exc:
+        flash(str(exc), "error")
+    except Exception:
+        flash("No se ha podido eliminar la familia.", "error")
+    return redirect(url_for("despiece"))
+
+
+@app.route("/despiece/repuestos/nuevo", methods=["GET", "POST"])
+@login_required
+def despiece_repuesto_nuevo():
+    familias = db.get_despiece_familias()
+    if request.method == "POST":
+        familia_id = request.form.get("familia_id", "").strip()
+        marca = request.form.get("marca", "").strip()[:80]
+        modelo = request.form.get("modelo", "").strip()[:120]
+        pieza = request.form.get("pieza", "").strip()[:120]
+        referencia = request.form.get("referencia", "").strip()[:120]
+        descripcion = request.form.get("descripcion", "").strip()[:1000]
+        try:
+            familia_id_int = int(familia_id)
+        except ValueError:
+            familia_id_int = None
+        if not familias:
+            flash("Primero crea una familia.", "error")
+        elif familia_id_int not in {int(f["id"]) for f in familias}:
+            flash("Selecciona una familia válida.", "error")
+        elif not modelo or not pieza:
+            flash("El modelo y la pieza son obligatorios.", "error")
+        else:
+            try:
+                db.add_despiece_repuesto(familia_id_int, marca, modelo, pieza, referencia, descripcion)
+                flash("Pieza añadida al despiece.", "success")
+                return redirect(url_for("despiece", familia=familia_id_int))
+            except Exception:
+                flash("No se ha podido guardar la pieza. Revisa la conexión y la tabla de despiece.", "error")
+    return render_template("despiece_form.html", familias=familias, repuesto=None)
+
+
+@app.route("/despiece/repuestos/<int:id_repuesto>/editar", methods=["GET", "POST"])
+@login_required
+def despiece_repuesto_editar(id_repuesto):
+    familias = db.get_despiece_familias()
+    try:
+        repuesto = db.get_despiece_repuesto(id_repuesto)
+    except Exception:
+        abort(404)
+    if not repuesto:
+        abort(404)
+    if request.method == "POST":
+        familia_id = request.form.get("familia_id", "").strip()
+        marca = request.form.get("marca", "").strip()[:80]
+        modelo = request.form.get("modelo", "").strip()[:120]
+        pieza = request.form.get("pieza", "").strip()[:120]
+        referencia = request.form.get("referencia", "").strip()[:120]
+        descripcion = request.form.get("descripcion", "").strip()[:1000]
+        try:
+            familia_id_int = int(familia_id)
+        except ValueError:
+            familia_id_int = None
+        if familia_id_int not in {int(f["id"]) for f in familias}:
+            flash("Selecciona una familia válida.", "error")
+        elif not modelo or not pieza:
+            flash("El modelo y la pieza son obligatorios.", "error")
+        else:
+            try:
+                db.update_despiece_repuesto(id_repuesto, familia_id_int, marca, modelo, pieza, referencia, descripcion)
+                flash("Pieza actualizada.", "success")
+                return redirect(url_for("despiece", familia=familia_id_int))
+            except Exception:
+                flash("No se ha podido actualizar la pieza.", "error")
+    return render_template("despiece_form.html", familias=familias, repuesto=repuesto)
+
+
+@app.route("/despiece/repuestos/<int:id_repuesto>/eliminar", methods=["POST"])
+@login_required
+def despiece_repuesto_eliminar(id_repuesto):
+    try:
+        db.delete_despiece_repuesto(id_repuesto)
+        flash("Pieza eliminada del catálogo.", "success")
+    except Exception:
+        flash("No se ha podido eliminar la pieza.", "error")
+    return redirect(url_for("despiece"))
+
 @app.route("/presupuestos")
 @login_required
 def presupuestos():
