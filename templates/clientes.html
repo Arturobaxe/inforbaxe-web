@@ -10,10 +10,10 @@
 {% endblock %}
 {% block content %}
 <div class="card">
-  <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
-    <input type="text" id="table-search" placeholder="🔍  Filtrar por nombre, email o teléfono..." class="form-control" style="max-width:380px;">
+  <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px; flex-wrap:wrap;">
+    <input type="search" id="clients-table-search" placeholder="🔍  Buscar por código, nombre, email, teléfono o notas..." class="form-control" style="max-width:440px;">
     <label class="toggle-switch" style="margin-left:auto; gap:8px;">
-      <input type="checkbox" id="filter-activos" checked>
+      <input type="checkbox" id="clients-filter-activos" checked>
       <div class="toggle-track"></div>
       <span style="font-size:13px; color:var(--t2);">Solo activos</span>
     </label>
@@ -22,32 +22,35 @@
     <table id="clientes-table">
       <thead>
         <tr>
-          <th>#</th><th>Nombre</th><th>Email</th><th>Teléfono</th><th>Estado</th><th>Alta</th><th></th>
+          <th>Código</th><th>Nombre</th><th>Email</th><th>Teléfono</th><th>Estado</th><th>Alta</th><th></th>
         </tr>
       </thead>
       <tbody>
         {% for c in clientes %}
-        <tr class="client-row" data-activo="{{ 'true' if c.activo else 'false' }}" data-search="{{ c.nombre }} {{ c.email }} {{ c.telefono }}">
-          <td class="td-mono td-muted">{{ c.id }}</td>
+        <tr class="client-row"
+            data-cliente-id="{{ c.id }}"
+            data-activo="{{ 'true' if c.activo else 'false' }}"
+            data-search="{{ [c.codigo_cliente, c.nombre, c.email, c.telefono, c.notas]|select|join(' ') }}">
+          <td class="td-mono" style="font-weight:700; color:var(--corp); white-space:nowrap;">{{ c.codigo_cliente or 'Código pendiente' }}</td>
           <td>
             <a href="{{ url_for('cliente_historial', id_cliente=c.id) }}" style="font-weight:600; color:var(--t1);">{{ c.nombre }}</a>
-            {% if c.notas %}<div style="font-size:11px; color:var(--t3);">{{ c.notas[:50] }}</div>{% endif %}
+            {% if c.notas %}<div style="font-size:11px; color:var(--t3);">{{ c.notas[:70] }}</div>{% endif %}
           </td>
           <td class="td-muted">{{ c.email or '—' }}</td>
           <td class="td-mono td-muted">{{ c.telefono or '—' }}</td>
           <td>
-            {% if c.activo %}<span class="badge badge-green">Activo</span>
-            {% else %}<span class="badge badge-gray">Inactivo</span>{% endif %}
+            {% if c.activo %}<span class="badge badge-green client-status">Activo</span>
+            {% else %}<span class="badge badge-gray client-status">Inactivo</span>{% endif %}
           </td>
           <td class="td-muted td-mono" style="font-size:12px;">{{ c.fecha_alta or '—' }}</td>
           <td>
-            <div style="display:flex; gap:6px; justify-content:flex-end;">
-              <a href="{{ url_for('cliente_historial', id_cliente=c.id) }}" class="btn btn-secondary btn-sm" title="Ver historial">📋</a>
-              <a href="{{ url_for('cliente_editar', id_cliente=c.id) }}" class="btn btn-blue btn-sm" title="Editar">✏️</a>
+            <div style="display:flex; gap:6px; justify-content:flex-end; align-items:center;">
+              <a href="{{ url_for('cliente_historial', id_cliente=c.id) }}" class="btn btn-secondary btn-sm" title="Ver historial" aria-label="Ver historial">📋</a>
+              <a href="{{ url_for('cliente_editar', id_cliente=c.id) }}" class="btn btn-blue btn-sm" title="Editar" aria-label="Editar">✏️</a>
               {% if c.activo %}
-              <button onclick="cambiarEstadoCliente({{ c.id }}, false, this.dataset.nombre)" data-nombre="{{ c.nombre|e }}" class="btn btn-danger btn-sm" title="Desactivar cliente">Desactivar</button>
+              <button type="button" data-toggle-cliente data-cliente-id="{{ c.id }}" data-activo-next="false" data-nombre="{{ c.nombre }}" class="btn btn-danger btn-sm">Desactivar</button>
               {% else %}
-              <button onclick="cambiarEstadoCliente({{ c.id }}, true, this.dataset.nombre)" data-nombre="{{ c.nombre|e }}" class="btn btn-green btn-sm" title="Reactivar cliente">Reactivar</button>
+              <button type="button" data-toggle-cliente data-cliente-id="{{ c.id }}" data-activo-next="true" data-nombre="{{ c.nombre }}" class="btn btn-green btn-sm">Reactivar</button>
               {% endif %}
             </div>
           </td>
@@ -55,38 +58,94 @@
         {% else %}
         <tr><td colspan="7" class="empty-state">Sin clientes registrados</td></tr>
         {% endfor %}
+        {% if clientes %}
+        <tr id="clients-no-results" style="display:none;"><td colspan="7" class="empty-state">No hay clientes que coincidan con la búsqueda.</td></tr>
+        {% endif %}
       </tbody>
     </table>
   </div>
+  <div id="clients-filter-count" style="font-size:11px; color:var(--t3); margin-top:10px;"></div>
 </div>
 {% endblock %}
 {% block scripts %}
 <script>
-const searchInput = document.getElementById('table-search');
-const filterActivos = document.getElementById('filter-activos');
-function filterTable() {
-  const q = searchInput.value.toLowerCase();
-  const soloActivos = filterActivos.checked;
-  document.querySelectorAll('.client-row').forEach(row => {
-    const matchSearch = !q || row.dataset.search.toLowerCase().includes(q);
-    const matchActivo = !soloActivos || row.dataset.activo === 'true';
-    row.style.display = (matchSearch && matchActivo) ? '' : 'none';
-  });
-}
-searchInput.addEventListener('input', filterTable);
-filterActivos.addEventListener('change', filterTable);
+(() => {
+  'use strict';
+  const searchField = document.getElementById('clients-table-search');
+  const activeFilter = document.getElementById('clients-filter-activos');
+  const clientRows = Array.from(document.querySelectorAll('#clientes-table .client-row'));
+  const noResults = document.getElementById('clients-no-results');
+  const countLabel = document.getElementById('clients-filter-count');
 
-async function cambiarEstadoCliente(id, activo, nombre) {
-  const accion = activo ? 'reactivar' : 'desactivar';
-  if (!confirm(`¿Quieres ${accion} a ${nombre}? El histórico se conservará.`)) return;
-  try {
-    const response = await fetch(`/api/clientes/${id}/toggle-activo`, {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({activo})
+  const normalize = value => String(value || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es');
+
+  function filterClients() {
+    if (!searchField || !activeFilter) return;
+    const query = normalize(searchField.value.trim());
+    const onlyActive = activeFilter.checked;
+    let visible = 0;
+
+    clientRows.forEach(row => {
+      const haystack = normalize(row.dataset.search || row.textContent);
+      const isActive = row.dataset.activo === 'true';
+      const matches = (!query || haystack.includes(query)) && (!onlyActive || isActive);
+      row.hidden = !matches;
+      if (matches) visible += 1;
     });
-    if (!response.ok) throw new Error('No se pudo actualizar el cliente');
-    location.reload();
-  } catch (error) { alert(error.message || 'Error'); }
-}
+
+    if (noResults) noResults.style.display = clientRows.length && visible === 0 ? '' : 'none';
+    if (countLabel) countLabel.textContent = `${visible} de ${clientRows.length} clientes visibles`;
+  }
+
+  async function toggleClient(button) {
+    const id = button.dataset.clienteId;
+    const nextActive = button.dataset.activoNext === 'true';
+    const name = button.dataset.nombre || 'este cliente';
+    const action = nextActive ? 'reactivar' : 'desactivar';
+    if (!confirm(`¿Quieres ${action} a ${name}? Su historial y sus ventas se conservarán.`)) return;
+
+    button.disabled = true;
+    try {
+      const response = await fetch(`/api/clientes/${encodeURIComponent(id)}/toggle-activo`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: JSON.stringify({activo: nextActive})
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.ok !== true) {
+        throw new Error(result.error || `No se pudo ${action} el cliente (HTTP ${response.status}).`);
+      }
+
+      const row = button.closest('.client-row');
+      if (!row) return;
+      const isActive = result.activo === true;
+      row.dataset.activo = isActive ? 'true' : 'false';
+      const badge = row.querySelector('.client-status');
+      if (badge) {
+        badge.textContent = isActive ? 'Activo' : 'Inactivo';
+        badge.classList.toggle('badge-green', isActive);
+        badge.classList.toggle('badge-gray', !isActive);
+      }
+      button.dataset.activoNext = isActive ? 'false' : 'true';
+      button.textContent = isActive ? 'Desactivar' : 'Reactivar';
+      button.classList.toggle('btn-danger', isActive);
+      button.classList.toggle('btn-green', !isActive);
+      filterClients();
+    } catch (error) {
+      alert(error.message || 'No se pudo actualizar el estado del cliente.');
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  if (searchField) searchField.addEventListener('input', filterClients);
+  if (activeFilter) activeFilter.addEventListener('change', filterClients);
+  document.querySelectorAll('[data-toggle-cliente]').forEach(button => {
+    button.addEventListener('click', () => toggleClient(button));
+  });
+  filterClients();
+})();
 </script>
 {% endblock %}

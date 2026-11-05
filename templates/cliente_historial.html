@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Historial {{ h.cliente.nombre }} — INFORBAXE{% endblock %}
 {% block page_title %}📋 Historial de cliente{% endblock %}
-{% block page_sub %}{{ h.cliente.nombre }}{% endblock %}
+{% block page_sub %}{{ h.cliente.nombre }} · {{ h.cliente.codigo_cliente or "Sin código" }}{% endblock %}
 {% block topbar_actions %}
   <a href="{{ url_for('clientes') }}" class="btn btn-secondary">← Volver</a>
   <a href="{{ url_for('cliente_editar', id_cliente=h.cliente.id) }}" class="btn btn-blue">✏️ Editar</a>
@@ -17,7 +17,7 @@
   </div>
   <div class="stat-card blue">
     <div class="stat-label">Ventas</div>
-    <div class="stat-value" style="font-size:22px; color:var(--blue);">{{ h.ventas_total }}</div>
+    <div class="stat-value" style="font-size:22px; color:var(--blue);">{{ h.ventas|length }}</div>
   </div>
   <div class="stat-card cyan">
     <div class="stat-label">Citas</div>
@@ -36,7 +36,8 @@
     {% if h.cliente.activo %}<span class="badge badge-green">Activo</span>
     {% else %}<span class="badge badge-gray">Inactivo</span>{% endif %}
   </div>
-  <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; font-size:13px;">
+  <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:16px; font-size:13px;">
+    <div><span style="color:var(--t3);">Código:</span><br><strong style="color:var(--corp);">{{ h.cliente.codigo_cliente or '—' }}</strong></div>
     <div><span style="color:var(--t3);">Email:</span><br><strong>{{ h.cliente.email or '—' }}</strong></div>
     <div><span style="color:var(--t3);">Teléfono:</span><br><strong>{{ h.cliente.telefono or '—' }}</strong></div>
     <div><span style="color:var(--t3);">Alta:</span><br><strong>{{ h.cliente.fecha_alta or '—' }}</strong></div>
@@ -91,13 +92,6 @@
     {% else %}
     <div class="empty-state" style="padding:24px;"><div class="empty-state-text">Sin ventas</div></div>
     {% endif %}
-    {% if h.ventas_paginas > 1 %}
-    <div style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:12px;">
-      {% if h.ventas_pagina > 1 %}<a class="btn btn-secondary btn-sm" href="{{ url_for('cliente_historial', id_cliente=h.cliente.id, pagina=h.ventas_pagina-1) }}">← Anterior</a>{% endif %}
-      <small style="color:var(--t3);">{{ h.ventas_pagina }} / {{ h.ventas_paginas }}</small>
-      {% if h.ventas_pagina < h.ventas_paginas %}<a class="btn btn-secondary btn-sm" href="{{ url_for('cliente_historial', id_cliente=h.cliente.id, pagina=h.ventas_pagina+1) }}">Siguiente →</a>{% endif %}
-    </div>
-    {% endif %}
   </div>
 
   <!-- Citas + Mensualidades -->
@@ -117,7 +111,6 @@
             <span style="font-size:12px; font-family:'DM Mono',monospace; color:var(--t3);">{{ c.fecha }} {{ c.hora[:5] if c.hora else '' }}</span>
             {% if c.estado == 'pendiente' %}<span class="badge badge-amber">⏳</span>
             {% elif c.estado == 'completada' %}<span class="badge badge-green">✓</span>
-            {% elif c.estado == 'no_asistio' %}<span class="badge badge-red">No asistió</span>
             {% else %}<span class="badge badge-gray">✗</span>{% endif %}
             {% if c.observaciones %}<span style="font-size:11px; color:var(--t3);">{{ c.observaciones[:40] }}</span>{% endif %}
           </div>

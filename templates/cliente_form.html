@@ -10,17 +10,16 @@
 <div style="max-width:560px; margin:0 auto;">
 
   {% if not cliente %}
-  <!-- Buscar cliente por ID -->
   <div class="card mb-4">
     <div class="card-header">
       <div>
-        <div class="card-title">🔍 Buscar cliente existente por ID</div>
-        <div class="card-sub">Introduce el ID para cargar sus datos</div>
+        <div class="card-title">🔍 Buscar cliente existente por código</div>
+        <div class="card-sub">Introduce el código IBX, por ejemplo IBX-000123</div>
       </div>
     </div>
     <div style="display:flex; gap:10px;">
-      <input type="number" id="buscar-id-input" class="form-control" placeholder="Ej: 42" style="max-width:160px;">
-      <button class="btn btn-secondary" onclick="buscarPorId()">Buscar</button>
+      <input type="text" id="buscar-codigo-input" class="form-control" placeholder="IBX-000123" style="max-width:220px;" autocomplete="off">
+      <button type="button" class="btn btn-secondary" id="buscar-codigo-btn">Buscar</button>
     </div>
     <div id="buscar-resultado" style="margin-top:10px; font-size:13px; color:var(--t3);"></div>
   </div>
@@ -29,24 +28,15 @@
   <div class="card">
     <form method="POST" id="cliente-form">
 
-      <!-- ID del cliente (readonly si editar, generado si nuevo) -->
       <div class="form-group">
-        <label class="form-label">ID de cliente</label>
-        <div style="display:flex; gap:8px; align-items:center;">
-          <input type="text" id="campo-id" name="cliente_id" class="form-control"
-                 value="{{ cliente.id if cliente else '' }}"
-                 placeholder="Auto-generado"
-                 {% if cliente %}readonly style="background:var(--bg3); color:var(--t3); cursor:not-allowed;"{% else %}readonly style="background:var(--bg3); color:var(--t2);"{% endif %}>
-          {% if not cliente %}
-          <button type="button" class="btn btn-secondary" onclick="generarId()" title="Generar ID único" style="white-space:nowrap; flex-shrink:0;">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14" height="14"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-            Generar
-          </button>
-          {% endif %}
-        </div>
-        <div style="font-size:11px; color:var(--t3); margin-top:4px;">
-          {% if cliente %}ID asignado al crear el cliente{% else %}Se auto-genera o puedes generar uno personalizado{% endif %}
-        </div>
+        <label class="form-label">Código de cliente</label>
+        {% if cliente %}
+          <input type="text" class="form-control" value="{{ cliente.codigo_cliente or 'Código pendiente' }}" readonly style="background:var(--bg3); color:var(--corp); font-weight:700; cursor:not-allowed;">
+          <div style="font-size:11px; color:var(--t3); margin-top:4px;">Código único y permanente de INFORBAXE.</div>
+        {% else %}
+          <input type="text" class="form-control" value="Se asignará automáticamente al guardar" readonly style="background:var(--bg3); color:var(--t2); cursor:not-allowed;">
+          <div style="font-size:11px; color:var(--t3); margin-top:4px;">No tienes que generar ningún número. INFORBAXE asignará el código IBX al crear el cliente.</div>
+        {% endif %}
       </div>
 
       <div class="form-group">
@@ -90,60 +80,44 @@
 {% endblock %}
 {% block scripts %}
 <script>
-// Generar ID único tipo IBX-XXXX
-function generarId() {
-  const ts = Date.now().toString(36).toUpperCase().slice(-4);
-  const rand = Math.random().toString(36).toUpperCase().slice(2, 5);
-  const id = 'IBX-' + ts + rand;
-  document.getElementById('campo-id').value = id;
-  document.getElementById('campo-id').style.color = 'var(--accent)';
-  document.getElementById('campo-id').style.fontWeight = '700';
-}
+(() => {
+  const codeInput = document.getElementById('buscar-codigo-input');
+  const searchButton = document.getElementById('buscar-codigo-btn');
+  const result = document.getElementById('buscar-resultado');
 
-// Buscar cliente por ID (solo para nuevo, carga datos)
-function buscarPorId() {
-  const id = document.getElementById('buscar-id-input').value.trim();
-  const res = document.getElementById('buscar-resultado');
-  if (!id) { res.textContent = 'Introduce un ID'; return; }
-  res.textContent = 'Buscando...';
-  res.style.color = 'var(--t3)';
+  async function buscarPorCodigo() {
+    if (!codeInput || !result) return;
+    const codigo = codeInput.value.trim().toUpperCase();
+    if (!codigo) {
+      result.textContent = 'Introduce un código IBX.';
+      result.style.color = 'var(--red)';
+      return;
+    }
+    result.textContent = 'Buscando cliente...';
+    result.style.color = 'var(--t3)';
+    if (searchButton) searchButton.disabled = true;
+    try {
+      const response = await fetch(`/api/clientes/buscar?codigo=${encodeURIComponent(codigo)}`, {
+        credentials: 'same-origin',
+        headers: {'Accept': 'application/json'}
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.id) throw new Error(data.error || 'No se ha encontrado el cliente.');
+      result.textContent = `Cliente encontrado: ${data.codigo_cliente} · ${data.nombre}. Abriendo ficha...`;
+      result.style.color = 'var(--green)';
+      window.location.href = `/clientes/${encodeURIComponent(data.id)}/editar`;
+    } catch (error) {
+      result.textContent = '❌ ' + (error.message || 'Error al buscar el cliente.');
+      result.style.color = 'var(--red)';
+    } finally {
+      if (searchButton) searchButton.disabled = false;
+    }
+  }
 
-  fetch(`/api/clientes/buscar?id=${encodeURIComponent(id)}`)
-    .then(r => r.json())
-    .then(data => {
-      if (data.error) {
-        res.textContent = '❌ ' + data.error;
-        res.style.color = 'var(--red)';
-        return;
-      }
-      // Rellenar formulario
-      document.getElementById('campo-id').value       = data.id || '';
-      document.getElementById('campo-nombre').value   = data.nombre || '';
-      document.getElementById('campo-email').value    = data.email || '';
-      document.getElementById('campo-telefono').value = data.telefono || '';
-      document.getElementById('campo-notas').value    = data.notas || '';
-      res.textContent = '✅ Cliente encontrado: ' + data.nombre;
-      res.style.color = 'var(--green)';
-      // Redirigir a editar si tiene id numérico
-      if (data.id && !isNaN(data.id)) {
-        setTimeout(() => { window.location.href = `/clientes/${data.id}/editar`; }, 800);
-      }
-    })
-    .catch(() => {
-      res.textContent = '❌ Error en la búsqueda';
-      res.style.color = 'var(--red)';
-    });
-}
-
-// Enter en el input de búsqueda
-const buscarInput = document.getElementById('buscar-id-input');
-if (buscarInput) {
-  buscarInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); buscarPorId(); } });
-}
-
-// Auto-generar ID al cargar si es nuevo cliente
-{% if not cliente %}
-window.addEventListener('DOMContentLoaded', generarId);
-{% endif %}
+  if (searchButton) searchButton.addEventListener('click', buscarPorCodigo);
+  if (codeInput) codeInput.addEventListener('keydown', event => {
+    if (event.key === 'Enter') { event.preventDefault(); buscarPorCodigo(); }
+  });
+})();
 </script>
 {% endblock %}
