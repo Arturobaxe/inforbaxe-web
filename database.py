@@ -39,6 +39,17 @@ def get_cliente(id_cliente):
     r = db.table("clientes").select("*").eq("id", id_cliente).single().execute()
     return r.data
 
+
+def get_cliente_por_codigo(codigo_cliente):
+    """Busca un cliente por su código visible IBX, sin exponer el ID interno."""
+    codigo = (codigo_cliente or "").strip().upper()
+    if not codigo:
+        return None
+    db = get_db()
+    r = (db.table("clientes").select("*")
+         .eq("codigo_cliente", codigo).limit(1).execute())
+    return r.data[0] if r.data else None
+
 def add_cliente(nombre, email, telefono, notas=""):
     db = get_db()
     r = db.table("clientes").insert({
@@ -63,8 +74,13 @@ def delete_cliente(id_cliente):
     db.table("clientes").delete().eq("id", id_cliente).execute()
 
 def cancelar_cliente(id_cliente, activo=False):
+    """Activa/desactiva sin borrar; devuelve el estado persistido o None."""
     db = get_db()
-    db.table("clientes").update({"activo": activo}).eq("id", id_cliente).execute()
+    db.table("clientes").update({"activo": bool(activo)}).eq("id", int(id_cliente)).execute()
+    r = (db.table("clientes")
+         .select("id,activo,codigo_cliente")
+         .eq("id", int(id_cliente)).limit(1).execute())
+    return r.data[0] if r.data else None
 
 # ── PRODUCTOS ────────────────────────────────────────────────────────────────
 

@@ -167,24 +167,58 @@ def cliente_historial(id_cliente):
 @app.route("/api/clientes/nuevo", methods=["POST"])
 @login_required
 def api_nuevo_cliente():
-    data = request.get_json() or {}
-    nombre = data.get("nombre", "").strip()
-    if not nombre: return jsonify({"error": "Nombre requerido"}), 400
-    return jsonify(db.add_cliente(nombre, data.get("email", ""), data.get("telefono", ""), data.get("notas", "")))
+    data = request.get_json(silent=True) or {}
+    nombre = (data.get("nombre") or "").strip()
+    if not nombre:
+        return jsonify({"error": "Nombre requerido"}), 400
+    cliente = db.add_cliente(
+        nombre, data.get("email", ""), data.get("telefono", ""), data.get("notas", "")
+    )
+    if not cliente:
+        return jsonify({"error": "No se pudo crear el cliente"}), 500
+    return jsonify(cliente)
+
+@app.route("/api/clientes/buscar", methods=["GET"])
+@login_required
+def api_buscar_cliente_por_codigo():
+    codigo = (request.args.get("codigo") or "").strip().upper()
+    if not codigo:
+        return jsonify({"error": "Introduce un código de cliente"}), 400
+    cliente = db.get_cliente_por_codigo(codigo)
+    if not cliente:
+        return jsonify({"error": "No se ha encontrado ningún cliente con ese código"}), 404
+    # El ID numérico solo se usa internamente para abrir su ficha.
+    return jsonify({
+        "id": cliente.get("id"),
+        "codigo_cliente": cliente.get("codigo_cliente"),
+        "nombre": cliente.get("nombre", ""),
+    })
 
 @app.route("/api/clientes/<int:id_cliente>", methods=["DELETE"])
 @login_required
 def api_delete_cliente(id_cliente):
-    # Mantiene el histórico: el borrado desde la interfaz desactiva el cliente.
-    db.cancelar_cliente(id_cliente, False)
-    return jsonify({"ok": True, "activo": False})
+    # Compatibilidad con enlaces antiguos: eliminar desde API significa desactivar.
+    cliente = db.cancelar_cliente(id_cliente, False)
+    if not cliente:
+        return jsonify({"ok": False, "error": "Cliente no encontrado"}), 404
+    return jsonify({"ok": True, "activo": False, "codigo_cliente": cliente.get("codigo_cliente")})
 
 @app.route("/api/clientes/<int:id_cliente>/toggle-activo", methods=["POST"])
 @login_required
 def api_toggle_activo(id_cliente):
-    data = request.get_json() or {}
-    db.cancelar_cliente(id_cliente, data.get("activo", True))
-    return jsonify({"ok": True})
+    data = request.get_json(silent=True) or {}
+    activo = data.get("activo")
+    if not isinstance(activo, bool):
+        return jsonify({"ok": False, "error": "El estado activo debe ser true o false"}), 400
+    cliente = db.cancelar_cliente(id_cliente, activo)
+    if not cliente:
+        return jsonify({"ok": False, "error": "Cliente no encontrado"}), 404
+    return jsonify({
+        "ok": True,
+        "id": cliente.get("id"),
+        "activo": bool(cliente.get("activo")),
+        "codigo_cliente": cliente.get("codigo_cliente"),
+    })
 
 @app.route("/ventas")
 @login_required
