@@ -6,6 +6,7 @@ import json
 import io
 import time
 import re
+import uuid
 import auth as auth_module
 from datetime import date
 from functools import wraps
@@ -154,7 +155,14 @@ def cliente_editar(id_cliente):
 @app.route("/clientes/<int:id_cliente>/historial")
 @login_required
 def cliente_historial(id_cliente):
-    return render_template("cliente_historial.html", h=db.get_historial_cliente(id_cliente))
+    try:
+        page = max(int(request.args.get("pagina", 1)), 1)
+    except ValueError:
+        page = 1
+    historial = db.get_historial_cliente(id_cliente, page=page)
+    if not historial.get("cliente"):
+        abort(404)
+    return render_template("cliente_historial.html", h=historial)
 
 @app.route("/api/clientes/nuevo", methods=["POST"])
 @login_required
@@ -162,13 +170,14 @@ def api_nuevo_cliente():
     data = request.get_json() or {}
     nombre = data.get("nombre", "").strip()
     if not nombre: return jsonify({"error": "Nombre requerido"}), 400
-    return jsonify(db.add_cliente(nombre, data.get("email", ""), data.get("telefono", "")))
+    return jsonify(db.add_cliente(nombre, data.get("email", ""), data.get("telefono", ""), data.get("notas", "")))
 
 @app.route("/api/clientes/<int:id_cliente>", methods=["DELETE"])
 @login_required
 def api_delete_cliente(id_cliente):
-    db.delete_cliente(id_cliente)
-    return jsonify({"ok": True})
+    # Mantiene el histórico: el borrado desde la interfaz desactiva el cliente.
+    db.cancelar_cliente(id_cliente, False)
+    return jsonify({"ok": True, "activo": False})
 
 @app.route("/api/clientes/<int:id_cliente>/toggle-activo", methods=["POST"])
 @login_required
@@ -185,21 +194,37 @@ def ventas():
     id_cliente = request.args.get("id_cliente", "")
     metodo     = request.args.get("metodo", "")
     pagado     = request.args.get("pagado", "")
-    lista      = db.get_ventas(id_cliente=int(id_cliente) if id_cliente else None)
-    if desde:  lista = [v for v in lista if v.get("fecha", "") >= desde]
-    if hasta:  lista = [v for v in lista if v.get("fecha", "") <= hasta]
-    if metodo: lista = [v for v in lista if v.get("metodo_pago") == metodo]
-    if pagado: lista = [v for v in lista if v.get("pagado") == pagado]
-    total_pvp       = sum(float(v.get("total_pvp",  0)) for v in lista)
-    total_benef     = sum(float(v.get("total_benef", 0)) for v in lista)
-    total_pendiente = sum(float(v.get("total_pvp",  0)) for v in lista if v.get("pagado") == "No")
-    num_pendiente   = sum(1 for v in lista if v.get("pagado") == "No")
+    try:
+        page = max(int(request.args.get("pagina", 1)), 1)
+        id_cliente_num = int(id_cliente) if id_cliente else None
+    except ValueError:
+        page, id_cliente_num = 1, None
+
+    resultado = db.get_ventas_pagina(
+        page=page, page_size=25, desde=desde or None, hasta=hasta or None,
+        id_cliente=id_cliente_num, metodo=metodo or None, pagado=pagado or None,
+    )
+    resumen = db.get_ventas_resumen(
+        desde=desde or None, hasta=hasta or None, id_cliente=id_cliente_num,
+        metodo=metodo or None, pagado=pagado or None,
+    )
+    total = int(resultado["total"] or 0)
+    paginas = max((total + resultado["page_size"] - 1) // resultado["page_size"], 1)
+    if page > paginas:
+        page = paginas
+        resultado = db.get_ventas_pagina(
+            page=page, page_size=25, desde=desde or None, hasta=hasta or None,
+            id_cliente=id_cliente_num, metodo=metodo or None, pagado=pagado or None,
+        )
     return render_template("ventas.html",
-        ventas=lista, clientes=db.get_clientes(), metodos=METODOS_PAGO,
+        ventas=resultado["items"], clientes=db.get_clientes(), metodos=METODOS_PAGO,
         filtros={"desde": desde, "hasta": hasta, "id_cliente": id_cliente,
                  "metodo": metodo, "pagado": pagado},
-        total_pvp=round(total_pvp, 2), total_benef=round(total_benef, 2),
-        total_pendiente=round(total_pendiente, 2), num_pendiente=num_pendiente)
+        total_pvp=round(float(resumen.get("total_pvp", 0) or 0), 2),
+        total_benef=round(float(resumen.get("total_benef", 0) or 0), 2),
+        total_pendiente=round(float(resumen.get("total_pendiente", 0) or 0), 2),
+        num_pendiente=int(resumen.get("num_pendiente", 0) or 0),
+        total_registros=total, pagina=page, paginas=paginas)
 
 @app.route("/ventas/nueva", methods=["GET", "POST"])
 @login_required
@@ -208,29 +233,37 @@ def venta_nueva():
     productos_lista = db.get_productos()
     if request.method == "POST":
         id_cliente = request.form.get("id_cliente")
+        try:
+            creation_token = str(uuid.UUID(request.form.get("creation_token", "")))
+        except (ValueError, AttributeError):
+            creation_token = str(uuid.uuid4())
         if not id_cliente:
             flash("Selecciona un cliente", "error")
             return render_template("venta_form.html", clientes=clientes_lista,
                 productos_nombres=productos_lista, metodos=METODOS_PAGO,
-                venta=None, today=date.today().isoformat())
-        try: productos = json.loads(request.form.get("productos_json", "[]"))
-        except: productos = []
+                venta=None, today=date.today().isoformat(), creation_token=creation_token)
+        try:
+            productos = json.loads(request.form.get("productos_json", "[]"))
+            if not isinstance(productos, list):
+                productos = []
+        except (ValueError, TypeError):
+            productos = []
         db.add_venta(id_cliente, request.form.get("fecha", date.today().isoformat()),
                      productos, request.form.get("metodo_pago", "Efectivo"),
                      request.form.get("pagado", "Sí"), request.form.get("comentarios", ""),
-                     request.form.get("equipo_modelo", ""), request.form.get("equipo_imei", ""), 
-                     request.form.get("equipo_contrasena", ""), request.form.get("equipo_patron", ""))
+                     request.form.get("equipo_modelo", ""), request.form.get("equipo_imei", ""),
+                     request.form.get("equipo_contrasena", ""), request.form.get("equipo_patron", ""),
+                     creation_token=creation_token)
         flash("Venta añadida", "success")
-        return redirect(url_for("ventas"))
+        return redirect(url_for("ventas", venta_guardada=1))
     return render_template("venta_form.html", clientes=clientes_lista,
         productos_nombres=productos_lista, metodos=METODOS_PAGO,
-        venta=None, today=date.today().isoformat())
+        venta=None, today=date.today().isoformat(), creation_token=str(uuid.uuid4()))
 
 @app.route("/ventas/<int:id_venta>/editar", methods=["GET", "POST"])
 @login_required
 def venta_editar(id_venta):
-    ventas_lista = db.get_ventas()
-    venta = next((v for v in ventas_lista if v["id"] == id_venta), None)
+    venta = db.get_venta(id_venta)
     if not venta: abort(404)
     clientes_lista  = db.get_clientes()
     productos_lista = db.get_productos()
@@ -273,8 +306,7 @@ def api_cobrar_venta(id_venta):
 @app.route("/api/ventas/<int:id_venta>/duplicar", methods=["POST"])
 @login_required
 def api_duplicar_venta(id_venta):
-    ventas_lista = db.get_ventas()
-    v = next((x for x in ventas_lista if x["id"] == id_venta), None)
+    v = db.get_venta(id_venta)
     if not v: return jsonify({"ok": False})
     db.add_venta(v["id_cliente"], date.today().isoformat(),
                  v["productos"], v["metodo_pago"], "No", v["comentarios"],
@@ -285,8 +317,7 @@ def api_duplicar_venta(id_venta):
 @app.route("/ventas/<int:id_venta>/albaran")
 @login_required
 def albaran_pdf(id_venta):
-    ventas_lista = db.get_ventas()
-    venta = next((v for v in ventas_lista if v["id"] == id_venta), None)
+    venta = db.get_venta(id_venta)
     if not venta: abort(404)
     cliente   = db.get_cliente(venta["id_cliente"])
     pdf_bytes = _generar_pdf_albaran(venta, cliente, tipo="Albarán")
@@ -485,7 +516,8 @@ def citas():
     fecha_desde = request.args.get("desde", hoy.isoformat())
     buscar_str  = request.args.get("buscar", "").strip().lower()
     estado      = request.args.get("estado", "")
-    lista       = db.get_citas(fecha_desde=fecha_desde or None)
+    # Al filtrar por un estado resuelto, incluir también el histórico.
+    lista       = db.get_citas(fecha_desde=None if estado else (fecha_desde or None))
     if estado:     lista = [c for c in lista if c.get("estado") == estado]
     if buscar_str: lista = [c for c in lista if buscar_str in c.get("nombre_cliente","").lower()
                             or buscar_str in c.get("observaciones","").lower()]
@@ -536,6 +568,13 @@ def api_delete_cita(id_cita):
 def api_completar_cita(id_cita):
     db.get_db().table("citas").update({"estado":"completada"}).eq("id",id_cita).execute()
     return jsonify({"ok": True})
+
+
+@app.route("/api/citas/<int:id_cita>/no-asistio", methods=["POST"])
+@login_required
+def api_no_asistio_cita(id_cita):
+    db.get_db().table("citas").update({"estado": "no_asistio"}).eq("id", id_cita).execute()
+    return jsonify({"ok": True, "estado": "no_asistio"})
 
 @app.route("/productos")
 @login_required
@@ -755,6 +794,9 @@ def presupuesto_editar(id_presupuesto):
     clientes_lista  = db.get_clientes()
     productos_lista = db.get_productos()
     if request.method == "POST":
+        if presupuesto.get("venta_generada_id"):
+            flash("Este presupuesto ya se convirtió en venta y su contenido queda bloqueado.", "error")
+            return redirect(url_for("presupuestos"))
         try: prods = json.loads(request.form.get("productos_json","[]"))
         except: prods = []
         db.update_presupuesto(id_presupuesto, request.form.get("id_cliente"),
@@ -778,24 +820,21 @@ def presupuesto_pdf(id_presupuesto):
     response.headers["Content-Disposition"] = f'inline; filename="presupuesto_{id_presupuesto}.pdf"'
     return response
 
-@app.route("/presupuestos/<int:id_presupuesto>/convertir")
+@app.route("/presupuestos/<int:id_presupuesto>/convertir", methods=["POST"])
 @login_required
 def presupuesto_convertir(id_presupuesto):
     presupuesto = db.get_presupuesto(id_presupuesto)
     if not presupuesto: abort(404)
-    db.update_presupuesto(id_presupuesto, presupuesto["id_cliente"], presupuesto["fecha"],
-                          presupuesto["productos"], "aceptado",
-                          presupuesto.get("notas",""), presupuesto.get("validez_dias",30))
-    prods = presupuesto.get("productos",[])
-    if isinstance(prods, str):
-        try: prods = json.loads(prods)
-        except: prods = []
-    nueva_venta = db.add_venta(presupuesto["id_cliente"], date.today().isoformat(),
-                               prods, "Efectivo", "No", f"Desde presupuesto #{id_presupuesto}")
-    flash(f"Presupuesto #{id_presupuesto} convertido a venta.","success")
-    if nueva_venta:
-        return redirect(url_for("venta_editar", id_venta=nueva_venta["id"]))
-    return redirect(url_for("ventas"))
+    if presupuesto.get("venta_generada_id"):
+        venta_id = int(presupuesto["venta_generada_id"])
+        flash(f"Este presupuesto ya estaba convertido en la venta #{venta_id}.", "success")
+        return redirect(url_for("venta_editar", id_venta=venta_id))
+    venta_id = db.convertir_presupuesto_a_venta(id_presupuesto)
+    if not venta_id:
+        flash("No se pudo convertir el presupuesto. No se ha creado una venta nueva.", "error")
+        return redirect(url_for("presupuestos"))
+    flash(f"Presupuesto #{id_presupuesto} convertido a venta #{venta_id}.", "success")
+    return redirect(url_for("venta_editar", id_venta=venta_id))
 
 @app.route("/api/presupuestos/<int:id_presupuesto>", methods=["DELETE"])
 @login_required
