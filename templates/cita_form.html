@@ -41,6 +41,7 @@
           <option value="pendiente"  {% if not cita or cita.estado=='pendiente'  %}selected{% endif %}>⏳ Pendiente</option>
           <option value="completada" {% if cita and cita.estado=='completada' %}selected{% endif %}>✓ Completada</option>
           <option value="cancelada"  {% if cita and cita.estado=='cancelada'  %}selected{% endif %}>✗ Cancelada</option>
+          <option value="no_asistio" {% if cita and cita.estado=='no_asistio' %}selected{% endif %}>✗ No asistió</option>
         </select>
       </div>
 

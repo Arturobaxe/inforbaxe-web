@@ -49,9 +49,15 @@
           <td>
             <div style="display:flex; gap:5px; justify-content:flex-end;">
               <a href="{{ url_for('presupuesto_pdf', id_presupuesto=p.id) }}" target="_blank" class="btn btn-secondary btn-sm" title="Ver PDF">📄</a>
+              {% if p.venta_generada_id %}
+              <a href="{{ url_for('venta_editar', id_venta=p.venta_generada_id) }}" class="btn btn-green btn-sm" title="Abrir venta generada">Venta #{{ p.venta_generada_id }}</a>
+              {% else %}
               <a href="{{ url_for('presupuesto_editar', id_presupuesto=p.id) }}" class="btn btn-blue btn-sm">✏️</a>
-              {% if p.estado == 'pendiente' %}
-              <a href="{{ url_for('presupuesto_convertir', id_presupuesto=p.id) }}" class="btn btn-green btn-sm" title="Convertir a venta">🛒</a>
+              {% endif %}
+              {% if not p.venta_generada_id and p.estado == 'pendiente' %}
+              <form method="POST" action="{{ url_for('presupuesto_convertir', id_presupuesto=p.id) }}" style="display:inline;">
+                <button type="submit" class="btn btn-green btn-sm" title="Convertir a venta">🛒</button>
+              </form>
               {% endif %}
               <button onclick="confirmDelete('/api/presupuestos/{{ p.id }}', '¿Eliminar presupuesto #{{ p.id }}?')" class="btn btn-danger btn-sm">🗑️</button>
             </div>

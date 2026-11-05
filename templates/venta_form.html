@@ -33,6 +33,7 @@
 {% block content %}
 <div style="max-width:860px; margin:0 auto;">
   <form method="POST" id="venta-form">
+    {% if not venta %}<input type="hidden" name="creation_token" id="creation-token" value="{{ creation_token }}">{% endif %}
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
 
       <!-- Left -->
@@ -54,6 +55,7 @@
               <input type="text" id="nc-nombre" class="form-control" placeholder="Nombre *" style="margin-bottom:8px;">
               <input type="text" id="nc-tel" class="form-control" placeholder="Teléfono" style="margin-bottom:8px;">
               <input type="text" id="nc-email" class="form-control" placeholder="Email" style="margin-bottom:8px;">
+              <textarea id="nc-notas" class="form-control" rows="2" placeholder="Comentarios / notas del cliente" style="margin-bottom:8px;"></textarea>
               <button type="button" onclick="crearCliente()" class="btn btn-primary" style="width:100%;">✓ Crear y seleccionar</button>
             </div>
           </div>
@@ -173,9 +175,12 @@
       </div>
     </div>
 
-    <div style="display:flex; gap:12px; justify-content:flex-end; margin-top:20px;">
-      <a href="{{ url_for('ventas') }}" class="btn btn-secondary">Cancelar</a>
-      <button type="submit" class="btn btn-primary">💾 {{ 'Guardar cambios' if venta else 'Crear venta' }}</button>
+    <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; margin-top:20px;">
+      {% if not venta %}<small id="draft-status" style="color:var(--t3);">El borrador se guarda automáticamente en esta pestaña.</small>{% else %}<span></span>{% endif %}
+      <div style="display:flex; gap:12px; justify-content:flex-end;">
+        <a href="{{ url_for('ventas') }}" class="btn btn-secondary">Cancelar</a>
+        <button type="submit" id="venta-submit" class="btn btn-primary">💾 {{ 'Guardar cambios' if venta else 'Crear venta' }}</button>
+      </div>
     </div>
   </form>
 </div>
@@ -241,12 +246,14 @@ function handlePointerUp() {
     pIsDrawing = false;
     drawLines();
     pInput.value = pSequence.map(w => w.dataset.val).join('-');
+    if (typeof scheduleDraftSave === 'function') scheduleDraftSave();
 }
 
 function clearPattern() {
     pSequence = []; pInput.value = '';
     pDots.forEach(d => d.querySelector('.pattern-dot').classList.remove('active'));
     drawLines();
+    if (typeof scheduleDraftSave === 'function') scheduleDraftSave();
 }
 
 function initPattern() {
@@ -314,6 +321,7 @@ function editProducto(i) {
   productos.splice(i,1);
   renderProductos();
   document.getElementById('prod-nombre').focus();
+  scheduleDraftSave();
 }
 
 function addProducto() {
@@ -330,9 +338,10 @@ function addProducto() {
   document.getElementById('prod-cant').value   = '1';
   document.getElementById('pvp-display').textContent = '0.00 €';
   document.getElementById('prod-nombre').focus();
+  scheduleDraftSave();
 }
 
-function removeProducto(i) { productos.splice(i,1); renderProductos(); }
+function removeProducto(i) { productos.splice(i,1); renderProductos(); scheduleDraftSave(); }
 
 function toggleNuevoCliente() {
   const f = document.getElementById('nuevo-cliente-form');
@@ -344,8 +353,8 @@ function crearCliente() {
   if (!nombre) { alert('El nombre es obligatorio'); return; }
   fetch('/api/clientes/nuevo', {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({nombre, telefono: document.getElementById('nc-tel').value, email: document.getElementById('nc-email').value})
-  }).then(r=>r.json()).then(d=>{
+    body: JSON.stringify({nombre, telefono: document.getElementById('nc-tel').value, email: document.getElementById('nc-email').value, notas: document.getElementById('nc-notas').value})
+  }).then(async r=>{ const d=await r.json(); if(!r.ok) throw new Error(d.error || 'No se pudo crear el cliente'); return d; }).then(d=>{
     const sel = document.querySelector('select[name="id_cliente"]');
     if (sel.tomselect) {
       sel.tomselect.addOption({value: d.id, text: d.nombre});
@@ -356,17 +365,118 @@ function crearCliente() {
       sel.appendChild(opt);
     }
     document.getElementById('nuevo-cliente-form').style.display='none';
-    document.getElementById('nc-nombre').value='';
-  }).catch(()=>alert('Error al crear cliente'));
+    ['nc-nombre','nc-tel','nc-email','nc-notas'].forEach(id=>document.getElementById(id).value='');
+    scheduleDraftSave();
+  }).catch(err=>alert(err.message || 'Error al crear cliente'));
 }
 
 document.getElementById('prod-nombre').addEventListener('keydown', e => {
   if (e.key==='Enter') { e.preventDefault(); addProducto(); }
 });
 
+const ventaForm = document.getElementById('venta-form');
+const draftKey = 'inforbaxe:venta:nueva:v2';
+const draftStatus = document.getElementById('draft-status');
+let draftTimer = null;
+let enviandoVenta = false;
+let draftDirty = false;
+
+function setDraftStatus(text, color) {
+  if (!draftStatus) return;
+  draftStatus.textContent = text;
+  draftStatus.style.color = color || 'var(--t3)';
+}
+
+function guardarBorrador() {
+  if (!draftStatus || enviandoVenta || !draftDirty) return;
+  try {
+    const fields = {};
+    ventaForm.querySelectorAll('[name]').forEach(el => {
+      if (el.name !== 'productos_json') fields[el.name] = el.value;
+    });
+    const draft = {
+      savedAt: new Date().toISOString(),
+      fields,
+      productos,
+      scratch: {
+        nombre: document.getElementById('prod-nombre').value,
+        coste: document.getElementById('prod-coste').value,
+        beneficio: document.getElementById('prod-benef').value,
+        cantidad: document.getElementById('prod-cant').value
+      }
+    };
+    sessionStorage.setItem(draftKey, JSON.stringify(draft));
+    const hora = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+    setDraftStatus('✓ Borrador guardado en esta pestaña · ' + hora, 'var(--green)');
+  } catch (err) {
+    setDraftStatus('No se pudo guardar el borrador en este navegador', 'var(--red)');
+  }
+}
+
+function scheduleDraftSave() {
+  if (!draftStatus || enviandoVenta) return;
+  draftDirty = true;
+  setDraftStatus('Guardando borrador…', 'var(--amber)');
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(guardarBorrador, 250);
+}
+
+function restaurarBorrador() {
+  if (!draftStatus) return;
+  let draft;
+  try { draft = JSON.parse(sessionStorage.getItem(draftKey) || 'null'); }
+  catch (_) { sessionStorage.removeItem(draftKey); return; }
+  if (!draft || !draft.fields) return;
+  const guardado = draft.savedAt ? new Date(draft.savedAt).toLocaleString() : 'anteriormente';
+  if (!confirm('He encontrado un borrador de venta guardado el ' + guardado + '. ¿Quieres recuperarlo?')) {
+    sessionStorage.removeItem(draftKey);
+    return;
+  }
+  Object.entries(draft.fields).forEach(([name, value]) => {
+    const el = ventaForm.elements.namedItem(name);
+    if (el && typeof value === 'string') el.value = value;
+  });
+  if (Array.isArray(draft.productos)) productos = draft.productos;
+  const scratch = draft.scratch || {};
+  document.getElementById('prod-nombre').value = scratch.nombre || '';
+  document.getElementById('prod-coste').value = scratch.coste || '';
+  document.getElementById('prod-benef').value = scratch.beneficio || '';
+  document.getElementById('prod-cant').value = scratch.cantidad || '1';
+  // Redibuja el patrón si formaba parte del borrador recuperado.
+  const patronGuardado = document.getElementById('equipo-patron').value;
+  clearPattern();
+  if (patronGuardado) {
+    patronGuardado.split('-').forEach(v => {
+      const wrapper = pDots.find(d => d.dataset.val === v);
+      if (wrapper && !pSequence.includes(wrapper)) {
+        pSequence.push(wrapper);
+        wrapper.querySelector('.pattern-dot').classList.add('active');
+      }
+    });
+    drawLines();
+  }
+  renderProductos();
+  calcPVP();
+  setDraftStatus('✓ Borrador anterior recuperado. Se seguirá guardando automáticamente.', 'var(--green)');
+}
+
+if (draftStatus) {
+  restaurarBorrador();
+  ventaForm.addEventListener('input', scheduleDraftSave);
+  ventaForm.addEventListener('change', scheduleDraftSave);
+  window.addEventListener('pagehide', guardarBorrador);
+}
+
 document.getElementById('venta-form').addEventListener('submit', () => {
   document.getElementById('productos-json').value = JSON.stringify(productos);
-  confetti({ particleCount:120, spread:70, origin:{y:0.6} });
+  if (draftStatus) {
+    guardarBorrador();
+    enviandoVenta = true;
+    setDraftStatus('Enviando venta…', 'var(--amber)');
+    const submit = document.getElementById('venta-submit');
+    if (submit) { submit.disabled = true; submit.textContent = 'Guardando…'; }
+  }
+  if (typeof confetti === 'function') confetti({ particleCount:120, spread:70, origin:{y:0.6} });
 });
 
 renderProductos();

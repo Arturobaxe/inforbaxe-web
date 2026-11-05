@@ -153,20 +153,21 @@
   <div class="card">
     <div class="card-header">
       <div>
-        <div class="card-title">🔔 Próximas citas</div>
-        <div class="card-sub">Recordatorio de citas</div>
+        <div class="card-title">🔔 Citas sin resolver</div>
+        <div class="card-sub">Próximas y atrasadas que siguen pendientes</div>
       </div>
     </div>
     {% if stats.proximas_citas %}
       <div style="display:flex; flex-direction:column; gap:8px;">
         {% for c in stats.proximas_citas %}
         {% set dias = (c.fecha | string)[:10] %}
-        <div style="display:flex; align-items:center; gap:12px; padding:10px 12px; background:var(--bg3); border-radius:8px; border-left:3px solid var(--amber);">
+        {% set cita_atrasada = c.fecha < today.isoformat() %}
+        <div style="display:flex; align-items:center; gap:12px; padding:10px 12px; background:{% if cita_atrasada %}var(--red-dim){% else %}var(--bg3){% endif %}; border-radius:8px; border-left:3px solid {% if cita_atrasada %}var(--red){% else %}var(--amber){% endif %};">
           <div style="flex:1;">
             <div style="font-size:13px; font-weight:600;">{{ c.nombre_cliente }}</div>
             <div style="font-size:11px; color:var(--t3); margin-top:2px;">{{ c.fecha }} · {{ c.hora[:5] if c.hora else '' }}</div>
           </div>
-          <span class="dias-badge" data-fecha="{{ c.fecha }}">—</span>
+          <span class="dias-badge {% if cita_atrasada %}urgente{% endif %}" data-fecha="{{ c.fecha }}">{% if cita_atrasada %}ATRASADA{% else %}—{% endif %}</span>
           <a href="{{ url_for('cita_editar', id_cita=c.id) }}" class="btn btn-secondary btn-sm">Ver</a>
         </div>
         {% endfor %}
@@ -303,7 +304,8 @@ document.querySelectorAll('.dias-badge[data-fecha]').forEach(el => {
   const fecha = new Date(el.dataset.fecha);
   const hoy   = new Date(); hoy.setHours(0,0,0,0);
   const diff  = Math.round((fecha - hoy) / 86400000);
-  if (diff === 0)      { el.textContent = 'HOY';        el.classList.add('hoy'); }
+  if (diff < 0)       { el.textContent = 'ATRASADA';   el.classList.add('urgente'); }
+  else if (diff === 0){ el.textContent = 'HOY';        el.classList.add('hoy'); }
   else if (diff === 1) { el.textContent = 'Mañana';     el.classList.add('urgente'); }
   else if (diff <= 2)  { el.textContent = `En ${diff}d`; el.classList.add('urgente'); }
   else                 { el.textContent = `En ${diff}d`; }

@@ -26,6 +26,7 @@
         <option value="pendiente" {% if filtros.estado=='pendiente' %}selected{% endif %}>Pendiente</option>
         <option value="completada" {% if filtros.estado=='completada' %}selected{% endif %}>Completada</option>
         <option value="cancelada" {% if filtros.estado=='cancelada' %}selected{% endif %}>Cancelada</option>
+        <option value="no_asistio" {% if filtros.estado=='no_asistio' %}selected{% endif %}>No asistió</option>
       </select>
     </div>
     <button type="submit" class="btn btn-secondary" style="margin-top:auto;">Filtrar</button>
@@ -43,26 +44,29 @@
       <tbody>
         {% for c in citas %}
         {% set es_hoy = c.fecha == hoy %}
-        <tr id="cita-row-{{ c.id }}">
-          <td class="td-mono font-semibold {% if es_hoy %}text-green{% endif %}">
-            {{ c.fecha }}{% if es_hoy %} <span class="badge badge-green">HOY</span>{% endif %}
+        {% set es_atrasada = c.estado == 'pendiente' and c.fecha < hoy %}
+        <tr id="cita-row-{{ c.id }}" {% if es_atrasada %}style="background:var(--red-dim);border-left:3px solid var(--red);"{% endif %}>
+          <td class="td-mono font-semibold" style="color:{% if es_atrasada %}var(--red){% elif es_hoy %}var(--green){% else %}var(--t1){% endif %};">
+            {{ c.fecha }}{% if es_atrasada %} <span class="badge badge-red">ATRASADA</span>{% elif es_hoy %} <span class="badge badge-green">HOY</span>{% endif %}
           </td>
           <td class="td-mono">{{ c.hora[:5] if c.hora else '—' }}</td>
           <td><a href="{{ url_for('cliente_historial', id_cliente=c.id_cliente) }}" style="font-weight:600; color:var(--t1);">{{ c.nombre_cliente }}</a></td>
           <td style="max-width:220px; color:var(--t2); font-size:12px;">{{ c.observaciones[:80] if c.observaciones else '—' }}</td>
           <td>
-            {% if c.estado == 'pendiente' %}<span class="badge badge-amber">⏳ Pendiente</span>
-            {% elif c.estado == 'completada' %}<span class="badge badge-green">✓ Completada</span>
+            {% if c.estado == 'pendiente' %}<span class="badge {% if es_atrasada %}badge-red{% else %}badge-amber{% endif %}">⏳ Pendiente</span>
+            {% elif c.estado == 'completada' %}<span class="badge badge-green">✓ Ha asistido</span>
+            {% elif c.estado == 'no_asistio' %}<span class="badge badge-red">✗ No asistió</span>
             {% elif c.estado == 'cancelada' %}<span class="badge badge-gray">✗ Cancelada</span>
             {% else %}<span class="badge badge-gray">{{ c.estado }}</span>{% endif %}
           </td>
           <td>
             <div style="display:flex; gap:4px; justify-content:flex-end;">
               {% if c.estado == 'pendiente' %}
-              <button onclick="completarCita({{ c.id }})" class="btn btn-green btn-sm" title="Marcar completada">✓</button>
+              <button onclick="resolverCita({{ c.id }}, 'completada')" class="btn btn-green btn-sm" title="Ha asistido">✓ Ha asistido</button>
+              <button onclick="resolverCita({{ c.id }}, 'no_asistio')" class="btn btn-danger btn-sm" title="No ha asistido">✕ No</button>
               {% endif %}
               <a href="{{ url_for('cita_editar', id_cita=c.id) }}" class="btn btn-blue btn-sm">✏️</a>
-              <button onclick="confirmDelete('/api/citas/{{ c.id }}', '¿Eliminar cita de {{ c.nombre_cliente }}?')" class="btn btn-danger btn-sm">🗑️</button>
+              <button onclick="confirmDelete('/api/citas/{{ c.id }}', '¿Eliminar cita de {{ c.nombre_cliente }}?')" class="btn btn-danger btn-sm delete-cita">🗑️</button>
             </div>
           </td>
         </tr>
@@ -76,12 +80,15 @@
 {% endblock %}
 {% block scripts %}
 <script>
-function completarCita(id) {
-  if (!confirm('¿Marcar esta cita como completada?')) return;
-  fetch(`/api/citas/${id}/completar`, { method: 'POST' })
-    .then(r => r.json())
-    .then(() => location.reload())
-    .catch(() => alert('Error'));
+async function resolverCita(id, estado) {
+  const texto = estado === 'completada' ? '¿Confirmas que el cliente ha asistido?' : '¿Confirmas que el cliente no ha asistido?';
+  if (!confirm(texto)) return;
+  try {
+    const endpoint = estado === 'completada' ? 'completar' : 'no-asistio';
+    const response = await fetch(`/api/citas/${id}/${endpoint}`, { method: 'POST' });
+    if (!response.ok) throw new Error('No se pudo actualizar la cita');
+    location.reload();
+  } catch (error) { alert(error.message || 'Error al actualizar la cita'); }
 }
 
 // Swipe para borrar en móvil
@@ -92,7 +99,7 @@ if ('ontouchstart' in window) {
     row.addEventListener('touchend', e => {
       const diff = startX - e.changedTouches[0].clientX;
       if (diff > 80) {
-        const btn = row.querySelector('.btn-danger');
+        const btn = row.querySelector('.delete-cita');
         if (btn) btn.click();
       }
     }, {passive:true});

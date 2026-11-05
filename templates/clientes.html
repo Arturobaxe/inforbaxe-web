@@ -44,7 +44,11 @@
             <div style="display:flex; gap:6px; justify-content:flex-end;">
               <a href="{{ url_for('cliente_historial', id_cliente=c.id) }}" class="btn btn-secondary btn-sm" title="Ver historial">📋</a>
               <a href="{{ url_for('cliente_editar', id_cliente=c.id) }}" class="btn btn-blue btn-sm" title="Editar">✏️</a>
-              <button onclick="confirmDelete('/api/clientes/{{ c.id }}', '¿Eliminar a {{ c.nombre }}?')" class="btn btn-danger btn-sm">🗑️</button>
+              {% if c.activo %}
+              <button onclick="cambiarEstadoCliente({{ c.id }}, false, this.dataset.nombre)" data-nombre="{{ c.nombre|e }}" class="btn btn-danger btn-sm" title="Desactivar cliente">Desactivar</button>
+              {% else %}
+              <button onclick="cambiarEstadoCliente({{ c.id }}, true, this.dataset.nombre)" data-nombre="{{ c.nombre|e }}" class="btn btn-green btn-sm" title="Reactivar cliente">Reactivar</button>
+              {% endif %}
             </div>
           </td>
         </tr>
@@ -71,5 +75,18 @@ function filterTable() {
 }
 searchInput.addEventListener('input', filterTable);
 filterActivos.addEventListener('change', filterTable);
+
+async function cambiarEstadoCliente(id, activo, nombre) {
+  const accion = activo ? 'reactivar' : 'desactivar';
+  if (!confirm(`¿Quieres ${accion} a ${nombre}? El histórico se conservará.`)) return;
+  try {
+    const response = await fetch(`/api/clientes/${id}/toggle-activo`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({activo})
+    });
+    if (!response.ok) throw new Error('No se pudo actualizar el cliente');
+    location.reload();
+  } catch (error) { alert(error.message || 'Error'); }
+}
 </script>
 {% endblock %}

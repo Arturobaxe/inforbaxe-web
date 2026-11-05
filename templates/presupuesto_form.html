@@ -34,6 +34,16 @@
               {% endfor %}
             </select>
           </div>
+          <div class="form-group">
+            <button type="button" onclick="toggleNuevoClientePresupuesto()" class="btn btn-secondary" style="width:100%;">➕ Crear cliente nuevo</button>
+            <div id="nuevo-cliente-presupuesto" style="display:none;margin-top:10px;padding:10px;background:var(--bg3);border-radius:8px;">
+              <input type="text" id="ncp-nombre" class="form-control" placeholder="Nombre *" style="margin-bottom:8px;">
+              <input type="text" id="ncp-tel" class="form-control" placeholder="Teléfono" style="margin-bottom:8px;">
+              <input type="text" id="ncp-email" class="form-control" placeholder="Email" style="margin-bottom:8px;">
+              <textarea id="ncp-notas" class="form-control" rows="2" placeholder="Comentarios / notas del cliente" style="margin-bottom:8px;"></textarea>
+              <button type="button" onclick="crearClientePresupuesto()" class="btn btn-primary" style="width:100%;">✓ Crear y seleccionar</button>
+            </div>
+          </div>
           <div class="form-grid form-grid-2">
             <div class="form-group">
               <label class="form-label">Fecha *</label>
@@ -118,6 +128,42 @@ function calcPVP() {
   const c = parseFloat(document.getElementById('prod-coste').value)||0;
   const b = parseFloat(document.getElementById('prod-benef').value)||0;
   document.getElementById('pvp-display').textContent = (c+b).toFixed(2)+' €';
+}
+
+function toggleNuevoClientePresupuesto() {
+  const panel = document.getElementById('nuevo-cliente-presupuesto');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+async function crearClientePresupuesto() {
+  const nombre = document.getElementById('ncp-nombre').value.trim();
+  if (!nombre) { alert('El nombre es obligatorio'); return; }
+  try {
+    const response = await fetch('/api/clientes/nuevo', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        nombre,
+        telefono: document.getElementById('ncp-tel').value,
+        email: document.getElementById('ncp-email').value,
+        notas: document.getElementById('ncp-notas').value
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'No se pudo crear el cliente');
+    const select = document.querySelector('select[name="id_cliente"]');
+    if (select.tomselect) {
+      select.tomselect.addOption({value: String(data.id), text: data.nombre});
+      select.tomselect.setValue(String(data.id));
+    } else {
+      const option = document.createElement('option');
+      option.value = data.id; option.textContent = data.nombre; option.selected = true;
+      select.appendChild(option);
+    }
+    ['ncp-nombre','ncp-tel','ncp-email','ncp-notas'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('nuevo-cliente-presupuesto').style.display = 'none';
+  } catch (error) {
+    alert(error.message || 'Error al crear cliente');
+  }
 }
 
 function renderProductos() {
