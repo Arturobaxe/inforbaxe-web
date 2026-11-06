@@ -17,7 +17,8 @@
     </div>
     {% if not api_configurada %}
     <div class="flash" style="margin:10px 0;background:var(--bg3);color:var(--t2);border:1px solid var(--border);">
-      El catálogo local está disponible. Para activar la búsqueda externa y la detección automática de novedades, habrá que configurar <code>MOBILEAPI_API_KEY</code> en Render después de confirmar las condiciones de uso comercial del proveedor.
+      <strong>Catálogo local activo.</strong> La búsqueda automática por referencia (opción «Buscar ref.» dentro del Despiece) consulta fuentes públicas desde Render y no necesita claves API.
+      <br><span style="font-size:12px;">La sincronización periódica del catálogo general de dispositivos mediante MobileAPI es una función independiente y opcional; permanece desactivada porque requiere una cuenta y una clave de ese proveedor. No afecta a la búsqueda por referencia.</span>
     </div>
     {% else %}
     <div class="flash flash-success" id="sync-status" style="margin:10px 0;">Proveedor externo configurado.</div>
