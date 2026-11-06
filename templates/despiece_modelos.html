@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Catálogo inteligente de modelos — INFORBAXE{% endblock %}
+{% block page_title %}📱 Catálogo inteligente{% endblock %}
+{% block page_sub %}Modelos de dispositivos, novedades externas y aprobación manual{% endblock %}
+{% block topbar_actions %}
+<a href="{{ url_for('despiece') }}" class="btn btn-secondary">← Volver al despiece</a>
+{% endblock %}
+{% block content %}
+<div style="display:grid;gap:16px;">
+  <div class="card">
+    <div class="card-header" style="margin-bottom:10px;">
+      <div>
+        <div class="card-title">Catálogo de dispositivos</div>
+        <div class="card-sub">El autocompletado local funciona sin llamadas externas. Los modelos detectados fuera se quedan pendientes hasta que los apruebes.</div>
+      </div>
+      <span class="badge badge-orange">{{ pendientes|length }} pendientes</span>
+    </div>
+    {% if not api_configurada %}
+    <div class="flash" style="margin:10px 0;background:var(--bg3);color:var(--t2);border:1px solid var(--border);">
+      El catálogo local está disponible. Para activar la búsqueda externa y la detección automática de novedades, habrá que configurar <code>MOBILEAPI_API_KEY</code> en Render después de confirmar las condiciones de uso comercial del proveedor.
+    </div>
+    {% else %}
+    <div class="flash flash-success" id="sync-status" style="margin:10px 0;">Proveedor externo configurado.</div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px;">
+      <button class="btn btn-secondary btn-sm" type="button" id="sync-now">Comprobar novedades ahora</button>
+      <span class="text-muted" style="font-size:12px;">{% if sincronizacion_auto %}Comprobación automática como máximo una vez cada 7 días al abrir esta página.{% else %}La comprobación automática está desactivada; puedes lanzarla manualmente.{% endif %}</span>
+    </div>
+    {% endif %}
+    {% if sync_state and sync_state.ultima_sync_at %}
+    <div class="text-muted" style="font-size:12px;margin-top:10px;">Última comprobación: {{ sync_state.ultima_sync_at }}{% if sync_state.ultimo_resultado %} · {{ sync_state.ultimo_resultado }}{% endif %}</div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-title">＋ Añadir un modelo manualmente</div>
+    <div class="card-sub" style="margin-bottom:12px;">Los modelos que añadas tú pasan directamente al catálogo local.</div>
+    <form method="post" action="{{ url_for('despiece_inteligente.crear_modelo_manual') }}" class="form-grid form-grid-3">
+      <div><label class="form-label">Marca *</label><input class="form-control" name="marca" list="catalog-brand-options" maxlength="80" placeholder="Apple, Samsung…" required>
+        <datalist id="catalog-brand-options"><option value="Apple"><option value="Samsung"><option value="Xiaomi"><option value="Google"><option value="Motorola"><option value="OPPO"><option value="Huawei"><option value="OnePlus"><option value="Realme"><option value="Nokia"></datalist></div>
+      <div><label class="form-label">Modelo *</label><input class="form-control" name="modelo" maxlength="140" placeholder="iPhone 13 Pro Max" required></div>
+      <div><label class="form-label">Número de modelo (opcional)</label><input class="form-control" name="numero_modelo" maxlength="100" placeholder="A2643, SM-S918B…"></div>
+      <div style="grid-column:1/-1;display:flex;justify-content:flex-end;"><button type="submit" class="btn btn-primary">Añadir al catálogo</button></div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><div><div class="card-title">Novedades pendientes de aprobación</div><div class="card-sub">No se usarán en el autocompletado hasta que las apruebes.</div></div></div>
+    {% if pendientes %}
+    <div class="table-wrap"><table><thead><tr><th>Marca</th><th>Modelo</th><th>N.º modelo</th><th>Origen</th><th></th></tr></thead><tbody>
+      {% for m in pendientes %}
+      <tr>
+        <td>{{ m.marca }}</td><td style="font-weight:700;">{{ m.modelo }}</td><td class="td-mono">{{ m.numero_modelo or '—' }}</td><td><span class="badge badge-orange">{{ m.origen or 'externo' }}</span></td>
+        <td style="white-space:nowrap;">
+          <form method="post" action="{{ url_for('despiece_inteligente.aprobar_modelo', model_id=m.id) }}" style="display:inline;"><button class="btn btn-green btn-sm" type="submit">Aprobar</button></form>
+          <form method="post" action="{{ url_for('despiece_inteligente.ignorar_modelo', model_id=m.id) }}" style="display:inline;" onsubmit="return confirm('¿Descartar esta sugerencia?');"><button class="btn btn-danger btn-sm" type="submit">Ignorar</button></form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody></table></div>
+    {% else %}<div class="empty-state"><div class="empty-state-icon">✨</div><div class="empty-state-text">No hay modelos pendientes.</div><div class="text-muted" style="font-size:12px;margin-top:6px;">Los modelos externos nuevos aparecerán aquí para que los revises.</div></div>{% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-header"><div><div class="card-title">Modelos activos</div><div class="card-sub">Modelos disponibles en el autocompletado de piezas.</div></div><span class="badge badge-green">{{ activos|length }} mostrados</span></div>
+    <form method="get" action="{{ url_for('despiece_inteligente.modelos') }}" style="display:flex;gap:8px;margin-bottom:12px;">
+      <input class="form-control" name="q" value="{{ q }}" placeholder="Buscar marca, modelo o número de modelo…">
+      <button class="btn btn-primary" type="submit">Buscar</button>
+      <a href="{{ url_for('despiece_inteligente.modelos') }}" class="btn btn-secondary">Limpiar</a>
+    </form>
+    {% if activos %}<div class="table-wrap"><table><thead><tr><th>Marca</th><th>Modelo</th><th>Número de modelo</th><th>Origen</th><th></th></tr></thead><tbody>
+      {% for m in activos %}<tr><td>{{ m.marca }}</td><td style="font-weight:700;">{{ m.modelo }}</td><td class="td-mono">{{ m.numero_modelo or '—' }}</td><td><span class="badge badge-green">{{ m.origen or 'manual' }}</span></td><td><a class="btn btn-secondary btn-sm" href="{{ url_for('despiece_inteligente.piezas_por_modelo', model_id=m.id) }}">Ver piezas</a></td></tr>{% endfor %}
+    </tbody></table></div>{% else %}<div class="empty-state"><div class="empty-state-text">No hay modelos que coincidan.</div></div>{% endif %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+{% if api_configurada %}
+<script>
+(function () {
+  const status = document.getElementById('sync-status');
+  const syncButton = document.getElementById('sync-now');
+  let running = false;
+  async function runSync(force) {
+    if (running) return;
+    running = true;
+    if (status) status.textContent = 'Comprobando novedades del catálogo externo…';
+    if (syncButton) syncButton.disabled = true;
+    try {
+      const response = await fetch('{{ url_for("despiece_inteligente.api_sincronizar_modelos") }}', {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({force: !!force})
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.message || 'No se pudo comprobar el catálogo.');
+      if (status) status.textContent = data.message || 'Catálogo comprobado.';
+      if (data.added > 0) window.setTimeout(() => window.location.reload(), 700);
+    } catch (error) {
+      if (status) status.textContent = error.message || 'No se pudo comprobar el catálogo externo.';
+    } finally {
+      running = false;
+      if (syncButton) syncButton.disabled = false;
+    }
+  }
+  {% if sincronizacion_auto %}runSync(false);{% endif %}
+  if (syncButton) syncButton.addEventListener('click', () => runSync(true));
+})();
+</script>
+{% endif %}
+{% endblock %}

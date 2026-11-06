@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Piezas compatibles — INFORBAXE{% endblock %}
+{% block page_title %}🔎 Piezas compatibles{% endblock %}
+{% block page_sub %}Repuestos asociados al dispositivo seleccionado{% endblock %}
+{% block topbar_actions %}<a href="{{ url_for('despiece_inteligente.modelos') }}" class="btn btn-secondary">← Volver a modelos</a>{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-title">{{ modelo.marca }} {{ modelo.modelo }}</div>
+  <div class="card-sub">Número de modelo: {{ modelo.numero_modelo or 'No indicado' }} · {{ piezas|length }} piezas asociadas</div>
+  {% if piezas %}
+  <div class="table-wrap" style="margin-top:14px;"><table><thead><tr><th>Familia</th><th>Pieza</th><th>Marca/modelo original</th><th>Referencia</th><th>Estado de compatibilidad</th><th></th></tr></thead><tbody>
+    {% for p in piezas %}<tr>
+      <td><span class="badge badge-orange">{{ p.familia_nombre }}</span></td>
+      <td style="font-weight:700;">{{ p.pieza }}</td>
+      <td>{{ p.marca }} {{ p.modelo }}</td>
+      <td class="td-mono">{{ p.referencia or '—' }}</td>
+      <td>{% if p.estado_compatibilidad == 'verificada' %}<span class="badge badge-green">Verificada</span>{% else %}<span class="badge badge-amber">Pendiente de verificar</span>{% endif %}</td>
+      <td><a class="btn btn-secondary btn-sm" href="{{ url_for('despiece_inteligente.gestionar_compatibilidades', repuesto_id=p.id) }}">Gestionar</a></td>
+    </tr>{% endfor %}
+  </tbody></table></div>
+  {% else %}<div class="empty-state"><div class="empty-state-icon">📦</div><div class="empty-state-text">Todavía no hay piezas asociadas a este modelo.</div><div class="text-muted" style="font-size:12px;margin-top:6px;">Añade una pieza y selecciona este dispositivo en sus compatibilidades.</div></div>{% endif %}
+</div>
+{% endblock %}

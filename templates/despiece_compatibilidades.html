@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Compatibilidades — INFORBAXE{% endblock %}
+{% block page_title %}🔗 Compatibilidades{% endblock %}
+{% block page_sub %}Asocia uno o varios modelos a una pieza y verifica cada compatibilidad{% endblock %}
+{% block topbar_actions %}<a href="{{ url_for('despiece') }}" class="btn btn-secondary">← Volver al despiece</a>{% endblock %}
+{% block content %}
+<div style="max-width:900px;display:grid;gap:16px;">
+  <div class="card">
+    <div class="card-title">{{ repuesto.pieza }}</div>
+    <div class="card-sub">{{ repuesto.marca or 'Sin marca' }} {{ repuesto.modelo }} · Referencia: {{ repuesto.referencia or '—' }}</div>
+  </div>
+  <form method="post" class="card">
+    <div class="card-header"><div><div class="card-title">Modelos compatibles</div><div class="card-sub">Marca los modelos y confirma individualmente solo los que hayas comprobado con tu proveedor.</div></div></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;">
+      {% for m in modelos %}
+      {% set rel = relaciones.get(m.id) %}
+      <div style="border:1px solid var(--border);border-radius:10px;padding:10px;display:grid;gap:7px;">
+        <label style="display:flex;align-items:flex-start;gap:8px;font-weight:600;">
+          <input type="checkbox" name="modelo_id" value="{{ m.id }}" {% if rel %}checked{% endif %}>
+          <span>{{ m.marca }} {{ m.modelo }}{% if m.numero_modelo %}<small class="text-muted" style="display:block;font-weight:400;">{{ m.numero_modelo }}</small>{% endif %}</span>
+        </label>
+        <label class="text-muted" style="font-size:12px;display:flex;align-items:center;gap:7px;">
+          <input type="checkbox" name="verificado_id" value="{{ m.id }}" {% if rel and rel.estado_compatibilidad == 'verificada' %}checked{% endif %} {% if not rel %}disabled{% endif %}>
+          Compatibilidad verificada
+        </label>
+      </div>
+      {% endfor %}
+    </div>
+    {% if not modelos %}<div class="empty-state"><div class="empty-state-text">Todavía no hay modelos activos.</div><a href="{{ url_for('despiece_inteligente.modelos') }}" class="btn btn-primary">Gestionar catálogo</a></div>{% endif %}
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;">
+      <a href="{{ url_for('despiece') }}" class="btn btn-secondary">Cancelar</a>
+      <button type="submit" class="btn btn-primary">Guardar compatibilidades</button>
+    </div>
+  </form>
+</div>
+<script>
+(function(){
+  document.querySelectorAll('input[name="modelo_id"]').forEach(input => {
+    const card = input.closest('div');
+    const verified = card ? card.querySelector('input[name="verificado_id"]') : null;
+    if (!verified) return;
+    input.addEventListener('change', () => { verified.disabled = !input.checked; if (!input.checked) verified.checked = false; });
+  });
+})();
+</script>
+{% endblock %}

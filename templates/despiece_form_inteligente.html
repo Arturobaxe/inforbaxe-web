@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}Nueva pieza — Despiece inteligente{% endblock %}
+{% block page_title %}＋ Nueva pieza{% endblock %}
+{% block page_sub %}Selecciona uno o varios modelos compatibles del catálogo local{% endblock %}
+{% block topbar_actions %}<a href="{{ url_for('despiece_inteligente.modelos') }}" class="btn btn-secondary">📱 Gestionar modelos</a>{% endblock %}
+{% block content %}
+<div style="max-width:900px;">
+  <form method="post" class="card" id="smart-part-form">
+    <div class="form-grid form-grid-2">
+      <div>
+        <label class="form-label" for="familia_id">Familia *</label>
+        <select class="form-control" id="familia_id" name="familia_id" required>
+          {% for familia in familias %}<option value="{{ familia.id }}">{{ familia.nombre }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="form-label" for="pieza">Pieza *</label>
+        <input class="form-control" id="pieza" name="pieza" maxlength="120" required placeholder="Pantalla OLED, batería, conector de carga…">
+      </div>
+      <div>
+        <label class="form-label" for="marca">Marca *</label>
+        <input class="form-control" id="marca" name="marca" list="brand-options" maxlength="80" required autocomplete="off" placeholder="Empieza a escribir: Apple, Samsung…">
+        <datalist id="brand-options">{% for brand in marcas %}<option value="{{ brand }}">{% endfor %}</datalist>
+      </div>
+      <div style="position:relative;">
+        <label class="form-label" for="modelo">Modelo principal *</label>
+        <input class="form-control" id="modelo" name="modelo" maxlength="120" required autocomplete="off" placeholder="Escribe: 13 pr…">
+        <div id="model-suggestions" class="card" style="display:none;position:absolute;z-index:30;top:100%;left:0;right:0;padding:6px;max-height:260px;overflow:auto;box-shadow:var(--shadow-lg);"></div>
+      </div>
+      <div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-secondary btn-sm" id="external-search" type="button">Buscar en catálogo externo</button>
+        <a href="{{ url_for('despiece_inteligente.modelos') }}" class="text-muted" style="font-size:12px;">¿No aparece? Revisar o añadir modelos</a>
+        <span id="external-status" class="text-muted" style="font-size:12px;"></span>
+      </div>
+      <div style="grid-column:1/-1;">
+        <label class="form-label">Modelos compatibles seleccionados</label>
+        <div id="selected-models" style="display:flex;flex-wrap:wrap;gap:8px;min-height:38px;padding:8px;border:1px solid var(--border);border-radius:10px;background:var(--bg2);"><span class="text-muted" id="no-selected" style="font-size:12px;">Selecciona modelos del autocompletado. Puedes añadir varios.</span></div>
+        <div id="selected-hidden"></div>
+        <div class="text-muted" style="font-size:11px;margin-top:6px;">Las compatibilidades nuevas se guardan como pendientes de verificación. No se darán por confirmadas solo por coincidir el nombre.</div>
+      </div>
+      <div style="grid-column:1/-1;">
+        <label class="form-label" for="referencia">Referencia</label>
+        <input class="form-control" id="referencia" name="referencia" maxlength="120" placeholder="Código del fabricante o referencia interna">
+      </div>
+      <div style="grid-column:1/-1;">
+        <label class="form-label" for="descripcion">Descripción / notas</label>
+        <textarea class="form-control" id="descripcion" name="descripcion" maxlength="1000" rows="4" placeholder="Versiones, proveedor, observaciones…"></textarea>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px;">
+      <a href="{{ url_for('despiece') }}" class="btn btn-secondary">Cancelar</a>
+      <button type="submit" class="btn btn-primary">Guardar pieza</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  const brandInput = document.getElementById('marca');
+  const modelInput = document.getElementById('modelo');
+  const suggestions = document.getElementById('model-suggestions');
+  const selectedBox = document.getElementById('selected-models');
+  const hiddenBox = document.getElementById('selected-hidden');
+  const externalButton = document.getElementById('external-search');
+  const externalStatus = document.getElementById('external-status');
+  const selected = new Map();
+  let primaryModelId = null;
+  let timer = null;
+  let controller = null;
+
+  function renderSelected() {
+    selectedBox.innerHTML = '';
+    hiddenBox.innerHTML = '';
+    if (!selected.size) {
+      const span = document.createElement('span');
+      span.className = 'text-muted'; span.style.fontSize = '12px';
+      span.textContent = 'Selecciona modelos del autocompletado. Puedes añadir varios.';
+      selectedBox.appendChild(span);
+    }
+    selected.forEach((item, id) => {
+      const chip = document.createElement('span');
+      chip.style.cssText = 'display:inline-flex;align-items:center;gap:7px;padding:6px 9px;border-radius:18px;background:var(--bg3);font-size:12px;';
+      chip.textContent = `${item.marca} ${item.modelo}`;
+      const remove = document.createElement('button');
+      remove.type = 'button'; remove.textContent = '×'; remove.title = 'Quitar';
+      remove.style.cssText = 'border:0;background:none;color:var(--red);font-size:16px;cursor:pointer;padding:0;';
+      remove.addEventListener('click', () => {
+        selected.delete(id);
+        if (primaryModelId === id) {
+          const next = selected.values().next();
+          if (!next.done) {
+            const item = next.value;
+            primaryModelId = String(item.id);
+            brandInput.value = item.marca;
+            modelInput.value = item.modelo;
+          } else {
+            primaryModelId = null;
+          }
+        }
+        renderSelected();
+      });
+      chip.appendChild(remove); selectedBox.appendChild(chip);
+      const hidden = document.createElement('input'); hidden.type = 'hidden'; hidden.name = 'modelo_id'; hidden.value = id; hiddenBox.appendChild(hidden);
+    });
+  }
+  function choose(item) {
+    const id = String(item.id);
+    if (!selected.has(id)) selected.set(id, item);
+    if (primaryModelId === null) {
+      primaryModelId = id;
+      brandInput.value = item.marca;
+      modelInput.value = item.modelo;
+    }
+    renderSelected(); suggestions.style.display = 'none';
+  }
+  async function searchLocal() {
+    const q = modelInput.value.trim();
+    if (q.length < 2) { suggestions.style.display = 'none'; return; }
+    if (controller) controller.abort();
+    controller = new AbortController();
+    try {
+      const params = new URLSearchParams({q, marca: brandInput.value.trim()});
+      const response = await fetch(`{{ url_for('despiece_inteligente.api_sugerencias_modelos') }}?${params}`, {signal: controller.signal});
+      const data = await response.json();
+      suggestions.innerHTML = '';
+      (data.modelos || []).forEach(item => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.style.cssText = 'display:block;width:100%;text-align:left;padding:9px;border:0;border-radius:7px;background:transparent;color:var(--t1);cursor:pointer;';
+        button.innerHTML = `<strong>${escapeHtml(item.modelo)}</strong><div style="font-size:11px;color:var(--t2);">${escapeHtml(item.marca)}${item.numero_modelo ? ' · ' + escapeHtml(item.numero_modelo) : ''}</div>`;
+        button.addEventListener('click', () => choose(item));
+        suggestions.appendChild(button);
+      });
+      if (!data.modelos || !data.modelos.length) {
+        const empty = document.createElement('div'); empty.className = 'text-muted'; empty.style.cssText = 'padding:10px;font-size:12px;'; empty.textContent = 'No hay coincidencias en tu catálogo local. Puedes consultar el catálogo externo.'; suggestions.appendChild(empty);
+      }
+      suggestions.style.display = 'block';
+    } catch (error) {
+      if (error.name !== 'AbortError') console.warn('No se pudo buscar el modelo localmente.');
+    }
+  }
+  function escapeHtml(value) { return String(value || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  modelInput.addEventListener('input', () => { window.clearTimeout(timer); timer = window.setTimeout(searchLocal, 220); });
+  brandInput.addEventListener('input', () => { if (modelInput.value.trim().length >= 2) { window.clearTimeout(timer); timer = window.setTimeout(searchLocal, 220); } });
+  document.addEventListener('click', event => { if (!suggestions.contains(event.target) && event.target !== modelInput) suggestions.style.display = 'none'; });
+
+  externalButton.addEventListener('click', async () => {
+    const q = modelInput.value.trim();
+    if (q.length < 2) { externalStatus.textContent = 'Escribe al menos dos caracteres del modelo.'; return; }
+    externalButton.disabled = true; externalStatus.textContent = 'Consultando proveedor externo…';
+    try {
+      const response = await fetch('{{ url_for("despiece_inteligente.api_buscar_modelos_externos") }}', {
+        method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({q})
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.message || 'No se pudo consultar el proveedor.');
+      const count = data.resultados?.length || 0;
+      externalStatus.textContent = count ? `${count} coincidencias revisadas; ${data.nuevos_pendientes || 0} novedades enviadas a aprobación.` : 'No se encontraron modelos externos.';
+      if (data.pendientes_en_revision) {
+        const link = document.createElement('a'); link.href = '{{ url_for("despiece_inteligente.modelos") }}'; link.textContent = ' Revisar novedades'; link.style.marginLeft = '6px'; externalStatus.appendChild(link);
+      }
+    } catch (error) { externalStatus.textContent = error.message || 'Error al consultar catálogo externo.'; }
+    finally { externalButton.disabled = false; }
+  });
+})();
+</script>
+{% endblock %}

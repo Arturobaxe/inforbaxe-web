@@ -3,7 +3,8 @@
 {% block page_title %}🧩 Despiece y repuestos{% endblock %}
 {% block page_sub %}Catálogo de piezas organizado por familias y modelos{% endblock %}
 {% block topbar_actions %}
-<a href="{{ url_for('despiece_repuesto_nuevo') }}" class="btn btn-primary">＋ Nueva pieza</a>
+<a href="{{ url_for('despiece_inteligente.modelos') }}" class="btn btn-secondary">📱 Catálogo de modelos</a>
+<a href="{{ url_for('despiece_inteligente.nueva_pieza_inteligente') }}" class="btn btn-primary">＋ Nueva pieza</a>
 {% endblock %}
 {% block content %}
 <div style="display:grid;grid-template-columns:minmax(0,1fr);gap:16px;">
@@ -79,6 +80,7 @@
             <td class="td-mono">{{ p.referencia or '—' }}</td>
             <td style="max-width:260px;white-space:normal;font-size:12px;">{{ p.descripcion or '—' }}</td>
             <td style="white-space:nowrap;">
+              <a href="{{ url_for('despiece_inteligente.gestionar_compatibilidades', repuesto_id=p.id) }}" class="btn btn-secondary btn-sm">Compatibilidad</a>
               <a href="{{ url_for('despiece_repuesto_editar', id_repuesto=p.id) }}" class="btn btn-blue btn-sm">Editar</a>
               <form method="post" action="{{ url_for('despiece_repuesto_eliminar', id_repuesto=p.id) }}" style="display:inline;" onsubmit="return confirm('¿Eliminar esta pieza del catálogo?');">
                 <button class="btn btn-danger btn-sm" type="submit">Eliminar</button>
