@@ -80,6 +80,7 @@
             <td class="td-mono">{{ p.referencia or '—' }}</td>
             <td style="max-width:260px;white-space:normal;font-size:12px;">{{ p.descripcion or '—' }}</td>
             <td style="white-space:nowrap;">
+              <a href="{{ url_for('despiece_inteligente.buscar_referencia', repuesto_id=p.id) }}" class="btn btn-green btn-sm">Buscar ref.</a>
               <a href="{{ url_for('despiece_inteligente.gestionar_compatibilidades', repuesto_id=p.id) }}" class="btn btn-secondary btn-sm">Compatibilidad</a>
               <a href="{{ url_for('despiece_repuesto_editar', id_repuesto=p.id) }}" class="btn btn-blue btn-sm">Editar</a>
               <form method="post" action="{{ url_for('despiece_repuesto_eliminar', id_repuesto=p.id) }}" style="display:inline;" onsubmit="return confirm('¿Eliminar esta pieza del catálogo?');">
