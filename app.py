@@ -19,6 +19,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 import database as db
+from despiece_inteligente import despiece_bp
+
 
 app = Flask(__name__)
 app.secret_key  = os.environ.get("SECRET_KEY", "dev-secret-change-me")
@@ -29,6 +31,8 @@ METODOS_PAGO    = ["Efectivo", "Tarjeta", "Bizum", "Transferencia", "Otro"]
 _login_attempts = {}
 MAX_ATTEMPTS    = 5
 BLOCK_SECONDS   = 300
+app.register_blueprint(despiece_bp)
+
 
 def login_required(f):
     @wraps(f)
