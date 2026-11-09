@@ -244,13 +244,37 @@
     researchSelected.clear();
     researchIndexesInput.value = '[]';
     try {
-      const response = await fetch('{{ url_for("despiece_inteligente.api_buscar_referencia_automatica") }}', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-        body: JSON.stringify({referencia: reference, pieza: partName})
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'No se pudo completar la investigación.');
+      const controller = new AbortController();
+      const requestTimer = window.setTimeout(() => controller.abort(), 28000);
+      let response;
+      let responseText = '';
+      let data = null;
+      try {
+        response = await fetch('{{ url_for("despiece_inteligente.api_buscar_referencia_automatica") }}', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+          body: JSON.stringify({referencia: reference, pieza: partName}),
+          credentials: 'same-origin',
+          cache: 'no-store',
+          signal: controller.signal
+        });
+        responseText = await response.text();
+      } finally {
+        window.clearTimeout(requestTimer);
+      }
+      if (!responseText.trim()) {
+        throw new Error(`El servidor devolvió una respuesta vacía (HTTP ${response ? response.status : 'sin respuesta'}). Revisa Events y Logs de Render.`);
+      }
+      try {
+        data = JSON.parse(responseText);
+      } catch (_parseError) {
+        const contentType = response?.headers?.get('content-type') || 'desconocido';
+        const looksLikeLogin = /<html|<!doctype/i.test(responseText);
+        throw new Error(looksLikeLogin
+          ? `Render devolvió una página HTML en vez de JSON (HTTP ${response.status}). Puede haber caducado la sesión o haberse producido un error 500.`
+          : `Respuesta no válida del servidor (HTTP ${response.status}, ${contentType}). ${responseText.slice(0, 180)}`);
+      }
+      if (!response.ok) throw new Error(data.message || `La investigación falló (HTTP ${response.status}).`);
       renderResearchResults(data);
       researchStatus.textContent = data.models?.length
         ? `Investigación terminada: ${data.models.length} candidatos superan el consenso.`
@@ -258,7 +282,7 @@
             ? 'No se pudieron localizar páginas en los catálogos públicos.'
             : `Investigación terminada: ${Number(data.successful_domains || 0)} dominios aportaron evidencia, sin consenso suficiente.`);
     } catch (error) {
-      researchStatus.textContent = error.message || 'No se pudo completar la búsqueda automática.';
+      researchStatus.textContent = error.name === 'AbortError' ? 'La investigación ha tardado más de 28 segundos y se ha cancelado para evitar que Render corte la conexión. Prueba otra vez; el diagnóstico indicará si los buscadores están bloqueando la consulta.' : (error.message || 'No se pudo completar la búsqueda automática.');
     } finally {
       researchButton.disabled = false;
       researchButton.textContent = '🔎 Investigar compatibilidades automáticamente';
