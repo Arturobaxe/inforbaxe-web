@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Nueva pieza — Despiece inteligente{% endblock %}
 {% block page_title %}＋ Nueva pieza{% endblock %}
-{% block page_sub %}Selecciona uno o varios modelos compatibles del catálogo local{% endblock %}
+{% block page_sub %}Añade una pieza y encuentra sus modelos compatibles por catálogo local o referencia{% endblock %}
 {% block topbar_actions %}<a href="{{ url_for('despiece_inteligente.modelos') }}" class="btn btn-secondary">📱 Gestionar modelos</a>{% endblock %}
 {% block content %}
 <div style="max-width:900px;">
@@ -18,19 +18,17 @@
         <input class="form-control" id="pieza" name="pieza" maxlength="120" required placeholder="Pantalla OLED, batería, conector de carga…">
       </div>
       <div>
-        <label class="form-label" for="marca">Marca *</label>
-        <input class="form-control" id="marca" name="marca" list="brand-options" maxlength="80" required autocomplete="off" placeholder="Empieza a escribir: Apple, Samsung…">
+        <label class="form-label" for="marca">Marca principal</label>
+        <input class="form-control" id="marca" name="marca" list="brand-options" maxlength="80" autocomplete="off" placeholder="Se completará al seleccionar un resultado">
         <datalist id="brand-options">{% for brand in marcas %}<option value="{{ brand }}">{% endfor %}</datalist>
       </div>
       <div style="position:relative;">
-        <label class="form-label" for="modelo">Modelo principal *</label>
-        <input class="form-control" id="modelo" name="modelo" maxlength="120" required autocomplete="off" placeholder="Escribe: 13 pr…">
+        <label class="form-label" for="modelo">Modelo principal</label>
+        <input class="form-control" id="modelo" name="modelo" maxlength="120" autocomplete="off" placeholder="Opcional: se completará con los modelos encontrados">
         <div id="model-suggestions" class="card" style="display:none;position:absolute;z-index:30;top:100%;left:0;right:0;padding:6px;max-height:260px;overflow:auto;box-shadow:var(--shadow-lg);"></div>
       </div>
-      <div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-        <button class="btn btn-secondary btn-sm" id="external-search" type="button">Buscar en catálogo externo</button>
-        <a href="{{ url_for('despiece_inteligente.modelos') }}" class="text-muted" style="font-size:12px;">¿No aparece? Revisar o añadir modelos</a>
-        <span id="external-status" class="text-muted" style="font-size:12px;"></span>
+      <div style="grid-column:1/-1;">
+        <a href="{{ url_for('despiece_inteligente.modelos') }}" class="text-muted" style="font-size:12px;">¿No aparece el modelo en el catálogo local? Revisar modelos</a>
       </div>
       <div style="grid-column:1/-1;">
         <label class="form-label">Modelos compatibles seleccionados</label>
@@ -39,8 +37,16 @@
         <div class="text-muted" style="font-size:11px;margin-top:6px;">Las compatibilidades nuevas se guardan como pendientes de verificación. No se darán por confirmadas solo por coincidir el nombre.</div>
       </div>
       <div style="grid-column:1/-1;">
-        <label class="form-label" for="referencia">Referencia</label>
-        <input class="form-control" id="referencia" name="referencia" maxlength="120" placeholder="Código del fabricante o referencia interna">
+        <label class="form-label" for="referencia">Referencia de la pieza</label>
+        <input class="form-control" id="referencia" name="referencia" maxlength="120" placeholder="Ej. EB-BN980ABY">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:9px;">
+          <button class="btn btn-secondary btn-sm" id="reference-research-button" type="button">🔎 Investigar compatibilidades automáticamente</button>
+          <span class="text-muted" id="reference-research-status" style="font-size:12px;"></span>
+        </div>
+        <div class="text-muted" style="font-size:11px;margin-top:5px;">Escribe la familia y la pieza (por ejemplo, Baterías / Batería), introduce la referencia exacta y pulsa Investigar. Puedes dejar Marca y Modelo principal vacíos: se completarán al seleccionar un resultado. INFORBAXE consulta fuentes públicas desde Render; no abre buscadores en tu navegador ni necesita API key.</div>
+        <div id="reference-research-results" style="display:grid;gap:10px;margin-top:12px;"></div>
+        <input type="hidden" name="investigacion_token" id="investigacion-token">
+        <input type="hidden" name="investigacion_indices" id="investigacion-indices" value="[]">
       </div>
       <div style="grid-column:1/-1;">
         <label class="form-label" for="descripcion">Descripción / notas</label>
@@ -62,8 +68,6 @@
   const suggestions = document.getElementById('model-suggestions');
   const selectedBox = document.getElementById('selected-models');
   const hiddenBox = document.getElementById('selected-hidden');
-  const externalButton = document.getElementById('external-search');
-  const externalStatus = document.getElementById('external-status');
   const selected = new Map();
   let primaryModelId = null;
   let timer = null;
@@ -72,7 +76,7 @@
   function renderSelected() {
     selectedBox.innerHTML = '';
     hiddenBox.innerHTML = '';
-    if (!selected.size) {
+    if (!selected.size && (!researchSelected || !researchSelected.size)) {
       const span = document.createElement('span');
       span.className = 'text-muted'; span.style.fontSize = '12px';
       span.textContent = 'Selecciona modelos del autocompletado. Puedes añadir varios.';
@@ -102,6 +106,16 @@
       });
       chip.appendChild(remove); selectedBox.appendChild(chip);
       const hidden = document.createElement('input'); hidden.type = 'hidden'; hidden.name = 'modelo_id'; hidden.value = id; hiddenBox.appendChild(hidden);
+    });
+    researchSelected.forEach((item, index) => {
+      const chip = document.createElement('span');
+      chip.style.cssText = 'display:inline-flex;align-items:center;gap:7px;padding:6px 9px;border-radius:18px;background:var(--bg3);font-size:12px;';
+      chip.textContent = `${item.brand} ${item.model_name} · consenso`;
+      const remove = document.createElement('button');
+      remove.type = 'button'; remove.textContent = '×'; remove.title = 'Quitar';
+      remove.style.cssText = 'border:0;background:none;color:var(--red);font-size:16px;cursor:pointer;padding:0;';
+      remove.addEventListener('click', () => { researchSelected.delete(index); renderResearchSelection(); });
+      chip.appendChild(remove); selectedBox.appendChild(chip);
     });
   }
   function choose(item) {
@@ -133,7 +147,7 @@
         suggestions.appendChild(button);
       });
       if (!data.modelos || !data.modelos.length) {
-        const empty = document.createElement('div'); empty.className = 'text-muted'; empty.style.cssText = 'padding:10px;font-size:12px;'; empty.textContent = 'No hay coincidencias en tu catálogo local. Puedes consultar el catálogo externo.'; suggestions.appendChild(empty);
+        const empty = document.createElement('div'); empty.className = 'text-muted'; empty.style.cssText = 'padding:10px;font-size:12px;'; empty.textContent = 'No hay coincidencias en el catálogo local. Puedes investigar por referencia de pieza más abajo.'; suggestions.appendChild(empty);
       }
       suggestions.style.display = 'block';
     } catch (error) {
@@ -145,24 +159,109 @@
   brandInput.addEventListener('input', () => { if (modelInput.value.trim().length >= 2) { window.clearTimeout(timer); timer = window.setTimeout(searchLocal, 220); } });
   document.addEventListener('click', event => { if (!suggestions.contains(event.target) && event.target !== modelInput) suggestions.style.display = 'none'; });
 
-  externalButton.addEventListener('click', async () => {
-    const q = modelInput.value.trim();
-    if (q.length < 2) { externalStatus.textContent = 'Escribe al menos dos caracteres del modelo.'; return; }
-    externalButton.disabled = true; externalStatus.textContent = 'Consultando proveedor externo…';
+  const referenceInput = document.getElementById('referencia');
+  const researchButton = document.getElementById('reference-research-button');
+  const researchStatus = document.getElementById('reference-research-status');
+  const researchResults = document.getElementById('reference-research-results');
+  const researchToken = document.getElementById('investigacion-token');
+  const researchIndexesInput = document.getElementById('investigacion-indices');
+  const researchSelected = new Map();
+  let lastResearchModels = [];
+
+  function renderResearchSelection() {
+    researchIndexesInput.value = JSON.stringify(Array.from(researchSelected.keys()).map(Number));
+    researchResults.querySelectorAll('[data-research-index]').forEach(card => {
+      const index = Number(card.getAttribute('data-research-index'));
+      const checkbox = card.querySelector('input[type="checkbox"]');
+      if (checkbox) checkbox.checked = researchSelected.has(index);
+    });
+    const first = researchSelected.values().next();
+    if (!first.done && selected.size === 0) {
+      brandInput.value = first.value.brand || '';
+      modelInput.value = first.value.model_name || '';
+    }
+    renderSelected();
+  }
+
+  function renderResearchResults(data) {
+    lastResearchModels = Array.isArray(data.models) ? data.models : [];
+    researchSelected.clear();
+    researchToken.value = data.research_token || '';
+    researchIndexesInput.value = '[]';
+    if (!lastResearchModels.length) {
+      researchResults.innerHTML = `<div class="card"><strong>${escapeHtml(data.message || 'No se ha encontrado consenso suficiente.')}</strong><p class="text-muted" style="font-size:12px;margin:6px 0 0;">Se han consultado ${Number(data.successful_domains || 0)} dominios con evidencia. Si no hay al menos tres fuentes coincidentes, no se proponen compatibilidades.</p></div>`;
+      return;
+    }
+    researchResults.innerHTML = `<div class="card"><div style="font-weight:700;">Modelos con consenso suficiente</div><div class="text-muted" style="font-size:12px;margin-top:4px;">${Number(data.successful_domains || 0)} dominios con evidencia. Marca los modelos que quieres asociar a esta pieza.</div></div>` +
+      lastResearchModels.map((item, index) => {
+        const sources = (item.sources || []).map(source => escapeHtml(source.domain)).join(' · ');
+        return `<label class="card" data-research-index="${index}" style="display:flex;gap:10px;align-items:flex-start;cursor:pointer;">\
+          <input type="checkbox" style="margin-top:4px;" aria-label="Seleccionar ${escapeHtml(item.model_name)}">\
+          <span style="display:grid;gap:4px;flex:1;min-width:0;">\
+            <strong>${escapeHtml(item.brand)} ${escapeHtml(item.model_name)}</strong>\
+            <span class="text-muted" style="font-size:12px;">Códigos: ${escapeHtml((item.codes || []).join(', ') || 'No publicados')}</span>\
+            <span class="text-muted" style="font-size:11px;">${escapeHtml(sources)}</span>\
+          </span>\
+          <span class="badge badge-green">${Number(item.matches)}/${Number(item.total_sources)} · ${Number(item.confidence)}%</span>\
+        </label>`;
+      }).join('');
+    researchResults.querySelectorAll('[data-research-index]').forEach(card => {
+      const index = Number(card.getAttribute('data-research-index'));
+      const checkbox = card.querySelector('input[type="checkbox"]');
+      checkbox.addEventListener('change', () => {
+        if (checkbox.checked) researchSelected.set(index, lastResearchModels[index]);
+        else researchSelected.delete(index);
+        renderResearchSelection();
+      });
+    });
+  }
+
+  researchButton.addEventListener('click', async () => {
+    const reference = referenceInput.value.trim();
+    const partName = document.getElementById('pieza').value.trim();
+    if (reference.length < 4) {
+      researchStatus.textContent = 'Introduce una referencia de al menos 4 caracteres.';
+      referenceInput.focus();
+      return;
+    }
+    researchButton.disabled = true;
+    researchButton.textContent = 'Investigando…';
+    researchStatus.textContent = 'Consultando fuentes independientes desde INFORBAXE…';
+    researchResults.innerHTML = '';
+    researchToken.value = '';
+    researchSelected.clear();
+    researchIndexesInput.value = '[]';
     try {
-      const response = await fetch('{{ url_for("despiece_inteligente.api_buscar_modelos_externos") }}', {
-        method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({q})
+      const response = await fetch('{{ url_for("despiece_inteligente.api_buscar_referencia_automatica") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: JSON.stringify({referencia: reference, pieza: partName})
       });
       const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.message || 'No se pudo consultar el proveedor.');
-      const count = data.resultados?.length || 0;
-      externalStatus.textContent = count ? `${count} coincidencias revisadas; ${data.nuevos_pendientes || 0} novedades enviadas a aprobación.` : 'No se encontraron modelos externos.';
-      if (data.pendientes_en_revision) {
-        const link = document.createElement('a'); link.href = '{{ url_for("despiece_inteligente.modelos") }}'; link.textContent = ' Revisar novedades'; link.style.marginLeft = '6px'; externalStatus.appendChild(link);
-      }
-    } catch (error) { externalStatus.textContent = error.message || 'Error al consultar catálogo externo.'; }
-    finally { externalButton.disabled = false; }
+      if (!response.ok) throw new Error(data.message || 'No se pudo completar la investigación.');
+      renderResearchResults(data);
+      researchStatus.textContent = data.models?.length
+        ? `Investigación terminada: ${data.models.length} candidatos superan el consenso.`
+        : `Investigación terminada sin consenso suficiente (${Number(data.successful_domains || 0)} dominios con evidencia).`;
+    } catch (error) {
+      researchStatus.textContent = error.message || 'No se pudo completar la búsqueda automática.';
+    } finally {
+      researchButton.disabled = false;
+      researchButton.textContent = '🔎 Investigar compatibilidades automáticamente';
+    }
   });
+
+  // Si cambia la referencia después de investigar, invalidar los candidatos anteriores.
+  function clearResearchResults() {
+    researchToken.value = '';
+    researchIndexesInput.value = '[]';
+    researchSelected.clear();
+    researchResults.innerHTML = '';
+    researchStatus.textContent = '';
+    renderSelected();
+  }
+  referenceInput.addEventListener('input', clearResearchResults);
+  document.getElementById('pieza').addEventListener('input', clearResearchResults);
 })();
 </script>
 {% endblock %}
