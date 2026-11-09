@@ -1273,6 +1273,25 @@ def _extract_evidence_from_html(reference, domain, url, title, html, piece_name=
         "excerpt": compact[:1200],
     }
 
+
+
+
+def _candidate_consensus_key(candidate):
+    """Compara el nombre comercial cuando esta reconocido; si no, usa el codigo exacto."""
+    brand = _clean(candidate.get("brand"), 80).casefold()
+    name = _clean(candidate.get("model_name"), 140)
+    code = _clean(candidate.get("code"), 100).upper()
+    if name and not name.casefold().startswith("modelo identificado por codigo"):
+        normalized = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii").casefold()
+        if brand == "samsung":
+            normalized = re.sub(r"\\b(?:samsung|galaxy)\\b", " ", normalized)
+        normalized = re.sub(r"[^a-z0-9]+", "", normalized)
+        if normalized:
+            return f"name:{brand}:{normalized}"
+    if code:
+        return f"code:{brand}:{code}"
+    return f"name:{brand}:{name.casefold()}"
+
 def _automatic_reference_research(reference,piece_name=""):
     ref=re.sub(r"[^A-Za-z0-9._/-]","",_clean(reference,80)).upper()
     piece=_clean(piece_name,100)
@@ -1337,8 +1356,10 @@ def _automatic_reference_research(reference,piece_name=""):
                 code = candidate.get("code", "").upper().strip()
                 brand = candidate.get("brand", "").strip()
                 name = candidate.get("model_name", "").strip()
-                key = (f"{brand}:{code}" if code else f"name:{brand}:{name}").casefold()
-                entry = source_candidates.setdefault(key, {**candidate, "sources": []})
+                key = _candidate_consensus_key(candidate)
+                entry = source_candidates.setdefault(key, {**candidate, "codes": [], "sources": []})
+                if code and code not in entry["codes"]:
+                    entry["codes"].append(code)
                 source_ref = {
                     "domain": page["domain"], "title": page["title"],
                     "url": page["url"], "source_group": source_group
@@ -1347,8 +1368,11 @@ def _automatic_reference_research(reference,piece_name=""):
                     entry["sources"].append(source_ref)
 
         for key, candidate in source_candidates.items():
-            entry = by_candidate.setdefault(key, {**candidate, "domains": set(), "sources": []})
+            entry = by_candidate.setdefault(key, {**candidate, "codes": list(candidate.get("codes", [])), "domains": set(), "sources": []})
             entry["domains"].add(source_group)
+            for code in candidate.get("codes", []):
+                if code and code not in entry["codes"]:
+                    entry["codes"].append(code)
             for source in candidate["sources"]:
                 if not any(existing["url"] == source["url"] for existing in entry["sources"]):
                     entry["sources"].append(source)
@@ -1367,8 +1391,8 @@ def _automatic_reference_research(reference,piece_name=""):
         if count < minimum:
             continue
         models.append({
-            "code": item.get("code", ""),
-            "codes": [item.get("code")] if item.get("code") else [],
+            "code": (item.get("codes") or [item.get("code", "")])[0],
+            "codes": item.get("codes") or ([item.get("code")] if item.get("code") else []),
             "brand": item.get("brand") or "Marca por confirmar",
             "model_name": item.get("model_name") or "Modelo sin identificar",
             "matches": count,
