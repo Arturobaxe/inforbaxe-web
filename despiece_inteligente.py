@@ -650,7 +650,7 @@ _REFERENCE_SOURCES = (
     "spainbateria.es", "impextrom.com", "componentidigitali.com",
     "repuestosmovil.es", "techcomponentes.com", "gsmobile.es",
     "phoneparts.es", "fixandgoparts.com", "newprime.es", "partob.com",
-    "restaurio.es", "subtel.es",
+    "restaurio.es", "subtel.es", "thesmartphone.eu",
 )
 
 # Rutas de búsqueda pública de tiendas. Se prueban varias rutas compatibles con
@@ -686,12 +686,17 @@ _DIRECT_CATALOGS = (
         "https://www.componentidigitali.com/it/search?query={q}",
         "https://www.componentidigitali.com/?s={q}",
     )),
+    ("Subtel", "subtel.es", (
+        "https://www.subtel.es/search?q={q}",
+        "https://www.subtel.es/search?query={q}",
+        "https://www.subtel.es/?s={q}",
+    )),
 )
 
 # Identificadores técnicos usados por distintos fabricantes. Se extraen
 # códigos de dispositivo, nunca códigos de pieza arbitrarios.
 _MODEL_PATTERNS = [
-    ("Samsung", re.compile(r"\b(?:SM|GT|SCH|SGH)-[A-Z0-9]{3,}(?:/[A-Z0-9]+)?\b", re.I)),
+    ("Samsung", re.compile(r"\b(?:SM|GT|SCH|SGH)-[A-Z0-9]{3,}(?:/(?!SM-|GT-|SCH-|SGH-)[A-Z0-9]+)?\b", re.I)),
     ("Apple", re.compile(r"\bA\d{4}\b", re.I)),
     ("Xiaomi", re.compile(r"\b(?:2[0-9]{6}[A-Z]{1,2}|[MC]\d{4}[A-Z0-9]{2,4})\b", re.I)),
     ("Huawei/Honor", re.compile(r"\b[A-Z]{3}-(?:[A-Z]{2,4}\d{1,2}|[A-Z0-9]{3,6})\b", re.I)),
@@ -713,7 +718,7 @@ _MODEL_PATTERNS = [
 # referencia exacta presente en la misma página.
 _DEVICE_NAME_PATTERNS = [
     ("Apple", re.compile(r"\b(?:iPhone\s+\d{1,2}(?:\s+(?:Pro\s+Max|Pro|Plus|mini|Air))?|iPad(?:\s+(?:Pro|Air|mini))?(?:\s+\d{1,2})?)\b", re.I)),
-    ("Samsung", re.compile(r"\bGalaxy\s+(?:(?:S|A|M|F|J|Note)\s*\d{1,3}|Z\s*(?:Fold|Flip)\s*\d{1,2}|Tab\s+S?\d{1,2})(?:\s*(?:5G|4G|Ultra|Plus|FE))?\b", re.I)),
+    ("Samsung", re.compile(r"\b(?:(?:Samsung\s+)?Galaxy\s+|Samsung\s+)(?:(?:S|A|M|F|J|Note)\s*\d{1,3}|Z\s*(?:Fold|Flip)\s*\d{1,2}|Tab\s+S?\d{1,2})(?:\s*(?:5G|4G|Ultra|Plus|FE|Pro|DUOS))?\b|\bNote\s*\d{1,3}(?:\s*(?:4G|5G|DUOS))?\b", re.I)),
     ("Xiaomi", re.compile(r"\b(?:Xiaomi\s+\d{1,2}(?:T)?(?:\s+Pro)?|Redmi\s+(?:Note\s+)?\d{1,2}(?:\s+(?:Pro|Pro\+|5G|4G))?|POCO\s+[A-Z0-9]+(?:\s+Pro)?)\b", re.I)),
     ("Huawei", re.compile(r"\b(?:Huawei\s+)?(?:P\d{1,2}(?:\s+Pro)?|Mate\s+\d{1,2}(?:\s+Pro)?|Nova\s+\d{1,2})\b", re.I)),
     ("Honor", re.compile(r"\bHonor\s+(?:Magic\s*\d{1,2}(?:\s+Pro)?|\d{1,3}(?:\s+Pro)?|X\d{1,2})\b", re.I)),
@@ -747,13 +752,63 @@ class _ResultLinks(HTMLParser):
             self._href=None; self._text=[]
 
 class _VisibleText(HTMLParser):
-    def __init__(self): super().__init__(); self.parts=[]; self.skip=0
+    """Extrae texto visible y metadatos de producto sin ejecutar JavaScript."""
+    _SKIP_TAGS = {"style", "noscript", "svg", "header", "footer", "nav"}
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts = []
+        self.skip_depth = 0
+        self.script_modes = []
+
+    def _add(self, value, maximum=12000):
+        value = str(value or "").strip()
+        if value:
+            self.parts.append(value[:maximum])
+
     def handle_starttag(self, tag, attrs):
-        if tag in ("script", "style", "noscript", "svg", "header", "footer"): self.skip+=1
+        attrs = dict(attrs)
+        if tag == "script":
+            script_type = (attrs.get("type") or "").lower().split(";")[0].strip()
+            if script_type in ("application/ld+json", "application/json", "application/json+ld"):
+                self.script_modes.append("json")
+            else:
+                self.script_modes.append("skip")
+                self.skip_depth += 1
+            return
+        if tag in self._SKIP_TAGS:
+            self.skip_depth += 1
+            return
+        if self.skip_depth:
+            return
+
+        if tag == "meta":
+            content = attrs.get("content")
+            meta_name = " ".join((attrs.get("name", ""), attrs.get("property", ""), attrs.get("itemprop", ""))).lower()
+            if content and (not meta_name or any(x in meta_name for x in ("product", "description", "title", "model", "sku", "part", "compat"))):
+                self._add(content, 5000)
+
+        for key, value in attrs.items():
+            if key in ("alt", "title", "aria-label"):
+                self._add(value, 1000)
+            elif key.startswith("data-") and any(token in key.lower() for token in ("product", "model", "compat", "sku", "part", "reference", "title", "name")):
+                self._add(value, 3000)
+
     def handle_endtag(self, tag):
-        if tag in ("script", "style", "noscript", "svg", "header", "footer") and self.skip: self.skip-=1
+        if tag == "script":
+            if self.script_modes:
+                mode = self.script_modes.pop()
+                if mode == "skip":
+                    self.skip_depth = max(0, self.skip_depth - 1)
+            return
+        if tag in self._SKIP_TAGS and self.skip_depth:
+            self.skip_depth -= 1
+
     def handle_data(self, data):
-        if not self.skip and data.strip(): self.parts.append(data.strip())
+        if self.script_modes and self.script_modes[-1] == "json":
+            self._add(data, 120000)
+        elif not self.skip_depth:
+            self._add(data, 5000)
 
 def _http_text(url, limit=1_200_000, timeout=7):
     req=Request(url, headers={
@@ -828,6 +883,35 @@ def _reference_in_text(reference, text):
     haystack=_reference_compact(text)
     return bool(needle and needle in haystack)
 
+
+
+def _reference_match_span(text, reference):
+    """Devuelve la posición de una referencia aunque HTML la separe con espacios o guiones."""
+    needle = _reference_compact(reference)
+    if not needle:
+        return None
+    pattern = r"[^A-Z0-9]*".join(re.escape(char) for char in needle)
+    match = re.search(pattern, text or "", re.IGNORECASE)
+    return (match.start(), match.end()) if match else None
+
+
+def _source_group_for_evidence(domain, text):
+    """Agrupa dominios que publican fichas del mismo vendedor explícito."""
+    match = re.search(
+        r"\b(?:tienda|seller|vendedor|vendido\s+por|sold\s+by|store)\s*[:|]\s*(?:\|\s*)?(.{2,100})",
+        text or "", re.IGNORECASE
+    )
+    if match:
+        seller = re.split(
+            r"\b(?:modelo(?:s|\(s\))?|referencia|reference|sku|part\s*number|stock|precio)\b",
+            match.group(1), maxsplit=1, flags=re.IGNORECASE
+        )[0]
+        seller = re.sub(r"^[\s|:,-]+|[\s|:,-]+$", "", seller)
+        seller = _clean(seller, 60)
+        if len(seller) >= 3:
+            return "seller:" + _norm(seller)
+    return "domain:" + (domain or "unknown")
+
 def _base_catalog_domain(host):
     host=(host or "").lower()
     return next((d for d in _REFERENCE_SOURCES if host == d or host.endswith("."+d)), host)
@@ -846,59 +930,113 @@ def _likely_product_url(url, domain):
             return True
     return any(path.endswith(ext) for ext in (".html", ".htm", ".uw")) or bool(re.search(r"p\d+/?$",path))
 
-def _parse_catalog_links(html, base_url, domain):
-    parser=_ResultLinks(); parser.feed(html); found=[]; seen=set()
-    for href,title in parser.links:
-        url=urljoin(base_url,href)
-        if not url.startswith("https://") or not _domain_allowed(url) or domain not in _domain_host(url): continue
-        if not _likely_product_url(url,domain): continue
-        key=url.split("#",1)[0]
-        if key not in seen:
-            seen.add(key); found.append((key,_clean(title,180)))
-        if len(found)>=4: break
-    return found
+def _parse_catalog_links(html, base_url, domain, reference=""):
+    parser = _ResultLinks()
+    parser.feed(html)
+    found = []
+    seen = set()
+    needle = _reference_compact(reference)
+    for href, title in parser.links:
+        url = urljoin(base_url, href)
+        if not url.startswith("https://") or not _domain_allowed(url) or domain not in _domain_host(url):
+            continue
+        if not _likely_product_url(url, domain):
+            continue
+        key = url.split("#", 1)[0]
+        if key in seen:
+            continue
+        seen.add(key)
+        label = _clean(title, 180)
+        hay = _reference_compact(unquote(key) + " " + label)
+        exact = bool(needle and needle in hay)
+        found.append((0 if exact else 1, key, label))
+    found.sort(key=lambda item: item[0])
+    return [(url, title) for _rank, url, title in found[:6]]
 
-def _search_direct_catalog(name,domain,templates,reference,piece_name=""):
-    query=quote_plus(reference)
-    diagnostics={"source":name,"domain":domain,"status":"sin_resultados","search_pages":0,"product_links":0,"pages_read":0,"reference_pages":0}
-    product_links=[]; evidence=[]
+
+def _search_direct_catalog(name, domain, templates, reference, piece_name=""):
+    query = quote_plus(reference)
+    diagnostics = {
+        "source": name, "domain": domain, "status": "sin_resultados",
+        "search_pages": 0, "product_links": 0, "pages_read": 0,
+        "reference_pages": 0, "exact_result_links": 0
+    }
+    exact_links = []
+    fallback_links = []
+    evidence = []
+    needle = _reference_compact(reference)
+
     for template in templates:
-        search_url=template.format(q=query)
+        search_url = template.format(q=query)
         if not _robots_can_fetch(search_url):
-            diagnostics["status"]="bloqueado_por_robots"
+            diagnostics["status"] = "bloqueado_por_robots"
             continue
         try:
-            html,final_url,status=_http_text(search_url,650_000,timeout=4)
-            diagnostics["search_pages"]+=1
-            if status>=400 or domain not in _domain_host(final_url):
-                diagnostics["status"]=f"http_{status}"; continue
-            links=_parse_catalog_links(html,final_url,domain)
-            product_links.extend((u,t) for u,t in links)
-            # Algunas tiendas muestran texto y compatibilidad en los resultados.
-            parsed=_extract_evidence_from_html(reference,domain,final_url,f"{name} · resultados de búsqueda",html,piece_name)
-            if parsed: evidence.append(parsed)
+            html, final_url, status = _http_text(search_url, 650_000, timeout=4)
+            diagnostics["search_pages"] += 1
+            if status >= 400 or domain not in _domain_host(final_url):
+                diagnostics["status"] = f"http_{status}"
+                continue
+
+            links = _parse_catalog_links(html, final_url, domain, reference)
+            for url, title in links:
+                hay = _reference_compact(unquote(url) + " " + title)
+                if needle and needle in hay:
+                    exact_links.append((url, title))
+                else:
+                    fallback_links.append((url, title))
+
+            parsed = _extract_evidence_from_html(
+                reference, domain, final_url, f"{name} · resultados de búsqueda", html, piece_name
+            )
+            if parsed:
+                evidence.append(parsed)
+                diagnostics["status"] = "referencia_y_modelos_en_resultados"
+                break
+
+            # No detenerse por cualquier enlace de producto: la ruta puede haber
+            # devuelto productos genéricos. Probar las otras rutas de búsqueda.
+            if exact_links:
+                diagnostics["status"] = "resultado_exacto_encontrado"
+                break
             if links:
-                diagnostics["status"]="resultados_encontrados"; break
-            diagnostics["status"]="pagina_accesible_sin_productos"
+                diagnostics["status"] = "resultados_no_especificos"
+            elif diagnostics["status"] == "sin_resultados":
+                diagnostics["status"] = "pagina_accesible_sin_productos"
+
         except HTTPError as exc:
-            diagnostics["status"]=f"http_{exc.code}"
+            diagnostics["status"] = f"http_{exc.code}"
         except Exception as exc:
-            diagnostics["status"]="error_de_conexion"
-            log.info("Búsqueda directa en %s falló: %s",domain,exc)
-    product_links=list(dict.fromkeys(product_links))[:4]
-    diagnostics["product_links"]=len(product_links)
-    for url,title in product_links:
+            diagnostics["status"] = "error_de_conexion"
+            log.info("Búsqueda directa en %s falló: %s", domain, exc)
+
+    # Priorizar enlaces cuyo título o URL contiene la referencia exacta.
+    product_links = []
+    seen_links = set()
+    for url, title in exact_links + fallback_links:
+        if url not in seen_links:
+            seen_links.add(url)
+            product_links.append((url, title))
+        if len(product_links) >= 4:
+            break
+
+    diagnostics["exact_result_links"] = len(exact_links)
+    diagnostics["product_links"] = len(product_links)
+
+    for url, title in product_links:
         if not _robots_can_fetch(url):
             continue
         try:
-            html,final_url,status=_http_text(url,1_200_000,timeout=5)
-            diagnostics["pages_read"]+=1
-            item=_extract_evidence_from_html(reference,domain,final_url,title,html,piece_name)
+            html, final_url, status = _http_text(url, 1_200_000, timeout=5)
+            diagnostics["pages_read"] += 1
+            item = _extract_evidence_from_html(reference, domain, final_url, title, html, piece_name)
             if item:
-                diagnostics["reference_pages"]+=1; evidence.append(item)
+                diagnostics["reference_pages"] += 1
+                evidence.append(item)
         except Exception as exc:
-            log.info("No se pudo leer producto %s: %s",url,exc)
-    return evidence,diagnostics
+            log.info("No se pudo leer producto %s: %s", url, exc)
+
+    return evidence, diagnostics
 
 class _SearchEngineLinks(HTMLParser):
     def __init__(self): super().__init__(); self.links=[]; self.href=None; self.text=[]
@@ -997,75 +1135,143 @@ def _device_names_near(text, code=None):
                 candidates.append({"marca":brand,"modelo":name})
     return candidates
 
+def _compatibility_windows(text, reference):
+    """Devuelve los bloques de compatibilidad y señala si hay una etiqueta explícita."""
+    label_pattern = re.compile(
+        r"\b(?:compatible\s+(?:con|para|with|for)|compatibilidad|compatibility|"
+        r"model(?:o)?s?\s*(?:\(s\))?\s*[:\-]|modelos?\s+compatibles?|"
+        r"fits?\s+(?:the\s+following|for|with)|se\s+adapta\s+a|se\s+ajusta\s+a|"
+        r"suitable\s+for|works?\s+with|dispositivos?\s+compatibles?)\b",
+        re.IGNORECASE
+    )
+    matches = list(label_pattern.finditer(text or ""))
+    windows = []
+    for match in matches:
+        windows.append((text or "")[max(0, match.start() - 220):min(len(text or ""), match.end() + 2800)])
+
+    span = _reference_match_span(text or "", reference)
+    if span:
+        start, end = span
+        windows.append((text or "")[max(0, start - 1800):min(len(text or ""), end + 5200)])
+
+    unique = []
+    seen = set()
+    for window in windows:
+        value = re.sub(r"\s+", " ", window).strip()
+        key = value[:500].casefold()
+        if value and key not in seen:
+            seen.add(key)
+            unique.append(value)
+        if len(unique) >= 10:
+            break
+    return unique, bool(matches)
+
+
 def _closest_device_name(text, code_start, code_end, brand):
-    groups={"Huawei/Honor":{"Huawei","Honor"},"OPPO/OnePlus":{"OPPO","OnePlus"},"Tecno/Infinix":{"Tecno","Infinix"}}
-    allowed=groups.get(brand,{brand})
-    left=max(0,code_start-260); right=min(len(text),code_end+260)
-    window=text[left:right]
-    matches=[]
-    for name_brand,pattern in _DEVICE_NAME_PATTERNS:
-        if name_brand not in allowed: continue
+    groups = {
+        "Huawei/Honor": {"Huawei", "Honor"},
+        "OPPO/OnePlus": {"OPPO", "OnePlus"},
+        "Tecno/Infinix": {"Tecno", "Infinix"},
+    }
+    allowed = groups.get(brand, {brand})
+    radius = 900
+    left = max(0, code_start - radius)
+    right = min(len(text), code_end + radius)
+    window = text[left:right]
+    matches = []
+    for name_brand, pattern in _DEVICE_NAME_PATTERNS:
+        if name_brand not in allowed:
+            continue
         for match in pattern.finditer(window):
-            absolute_start=left+match.start(); absolute_end=left+match.end()
-            distance=min(abs(absolute_end-code_start),abs(absolute_start-code_end))
-            name=re.sub(r"\s+"," ",match.group(0)).strip(" -|,;:")
-            if name and distance<=260:
-                matches.append((distance,name_brand,name))
-    if not matches: return None
-    matches.sort(key=lambda item:(item[0],len(item[2])))
-    # Si dos nombres distintos están prácticamente igual de cerca, no adivinamos.
-    if len(matches)>1 and matches[0][0]==matches[1][0] and matches[0][2].casefold()!=matches[1][2].casefold():
+            absolute_start = left + match.start()
+            absolute_end = left + match.end()
+            distance = min(abs(absolute_end - code_start), abs(absolute_start - code_end))
+            name = re.sub(r"\s+", " ", match.group(0)).strip(" -|,;:")
+            if name and distance <= radius:
+                matches.append((distance, name_brand, name))
+    if not matches:
         return None
-    return {"marca":matches[0][1],"modelo":matches[0][2]}
+    matches.sort(key=lambda item: (item[0], len(item[2])))
+    if len(matches) > 1 and matches[0][0] == matches[1][0] and matches[0][2].casefold() != matches[1][2].casefold():
+        return None
+    return {"marca": matches[0][1], "modelo": matches[0][2]}
+
 
 def _extract_device_candidates(reference, compact, title=""):
-    candidates=[]
-    for brand,pattern in _MODEL_PATTERNS:
-        for match in pattern.finditer(compact):
-            code=match.group(0).upper()
-            detected_brand=_brand_for_code(code) or brand
-            name=_closest_device_name(compact,match.start(),match.end(),detected_brand)
+    windows, has_explicit_compatibility = _compatibility_windows(compact, reference)
+    if not windows:
+        return []
+    # El título suele incluir el nombre comercial aunque el cuerpo solo enumere códigos.
+    search_text = " ".join([title or ""] + windows)
+    candidates = []
+
+    for brand, pattern in _MODEL_PATTERNS:
+        for match in pattern.finditer(search_text):
+            code = match.group(0).upper()
+            detected_brand = _brand_for_code(code) or brand
+            name = _closest_device_name(search_text, match.start(), match.end(), detected_brand)
             if name:
-                candidates.append({"code":code,"brand":name["marca"],"model_name":name["modelo"]})
+                candidates.append({
+                    "code": code, "brand": name["marca"], "model_name": name["modelo"]
+                })
             else:
-                candidates.append({"code":code,"brand":detected_brand,"model_name":f"Modelo identificado por código {code}"})
-    # Si la página no contiene códigos de modelo, solo aceptamos un nombre
-    # comercial cuando está en la zona de la referencia exacta y no hay varios
-    # modelos de la misma marca que pudieran confundirse.
+                candidates.append({
+                    "code": code, "brand": detected_brand,
+                    "model_name": f"Modelo identificado por código {code}"
+                })
+
+    # Sin códigos, aceptar varios nombres solo si la ficha los enumera en una
+    # sección de compatibilidad explícita. En otro caso exigimos un único nombre.
     if not candidates:
-        ref_pos=_reference_compact(compact).find(_reference_compact(reference))
-        names=[]
-        for brand,pattern in _DEVICE_NAME_PATTERNS:
-            for match in pattern.finditer(compact):
-                name=re.sub(r"\s+"," ",match.group(0)).strip(" -|,;:")
-                names.append({"marca":brand,"modelo":name,"pos":match.start()})
-        if ref_pos>=0 and names:
-            # El texto normalizado puede cambiar offsets; usamos una ventana amplia
-            # alrededor de la aparición literal para páginas simples.
-            literal_pos=compact.casefold().find(reference.casefold())
-            near=[x for x in names if literal_pos<0 or abs(x["pos"]-literal_pos)<900]
-            unique={(x["marca"].casefold(),x["modelo"].casefold()):x for x in near}
-            if len(unique)==1:
-                x=next(iter(unique.values()))
-                candidates.append({"code":"","brand":x["marca"],"model_name":x["modelo"]})
-    unique=[]; seen=set()
+        names = []
+        for window in windows:
+            for brand, pattern in _DEVICE_NAME_PATTERNS:
+                for match in pattern.finditer(window):
+                    model_name = re.sub(r"\s+", " ", match.group(0)).strip(" -|,;:")
+                    if model_name:
+                        names.append({"code": "", "brand": brand, "model_name": model_name})
+        unique_names = {}
+        for item in names:
+            key = (item["brand"].casefold(), item["model_name"].casefold())
+            unique_names[key] = item
+        if has_explicit_compatibility or len(unique_names) == 1:
+            candidates.extend(unique_names.values())
+
+    unique = []
+    seen = set()
     for item in candidates:
-        key=(item.get("code","").casefold(),item.get("brand","").casefold(),item.get("model_name","").casefold())
-        if key not in seen: seen.add(key); unique.append(item)
+        key = (
+            item.get("code", "").casefold(),
+            item.get("brand", "").casefold(),
+            item.get("model_name", "").casefold()
+        )
+        if key not in seen:
+            seen.add(key)
+            unique.append(item)
     return unique[:60]
 
-def _extract_evidence_from_html(reference,domain,url,title,html,piece_name=""):
-    if not _domain_allowed(url) or domain not in _domain_host(url): return None
-    parser=_VisibleText(); parser.feed(html)
-    text=" ".join(parser.parts); compact=re.sub(r"\s+"," ",text)
-    if not _reference_in_text(reference,compact): return None
-    # Limita la extracción a la zona de la referencia para no confundir los
-    # modelos de la pieza con productos relacionados del pie de página.
-    ref_pos=compact.casefold().find(reference.casefold())
-    evidence_window=(compact[max(0,ref_pos-4200):min(len(compact),ref_pos+8200)] if ref_pos>=0 else compact[:9000])
-    candidates=_extract_device_candidates(reference,evidence_window,title)
-    return {"domain":domain,"url":url,"title":re.sub(r"\s+"," ",title or "").strip()[:180] or domain,
-            "candidates":candidates,"excerpt":compact[:1200]}
+def _extract_evidence_from_html(reference, domain, url, title, html, piece_name=""):
+    if not _domain_allowed(url) or domain not in _domain_host(url):
+        return None
+    parser = _VisibleText()
+    parser.feed(html)
+    text = " ".join(parser.parts)
+    compact = re.sub(r"\s+", " ", text)
+    if not _reference_in_text(reference, compact):
+        return None
+
+    candidates = _extract_device_candidates(reference, compact, title)
+    if not candidates:
+        return None
+    title_clean = re.sub(r"\s+", " ", title or "").strip()[:180] or domain
+    return {
+        "domain": domain,
+        "source_group": _source_group_for_evidence(domain, compact),
+        "url": url,
+        "title": title_clean,
+        "candidates": candidates,
+        "excerpt": compact[:1200],
+    }
 
 def _automatic_reference_research(reference,piece_name=""):
     ref=re.sub(r"[^A-Za-z0-9._/-]","",_clean(reference,80)).upper()
@@ -1107,48 +1313,78 @@ def _automatic_reference_research(reference,piece_name=""):
                 log.info("Lectura de fuente externa fallida: %s",exc)
     diagnostics[-1]["pages_read"]=global_read_attempts
 
-    # 3) Una sola evidencia por dominio. No se cuentan URL duplicadas ni páginas
-    # espejo del mismo catálogo como fuentes distintas.
-    by_domain={}
+    # 3) Una sola evidencia por vendedor/origen editorial. Si dos dominios
+    # publican una ficha cuyo campo "Tienda" identifica al mismo vendedor,
+    # cuentan como una única confirmación independiente.
+    by_domain = {}
     for item in evidence:
-        domain=item["domain"]
-        current=by_domain.setdefault(domain,{"domain":domain,"pages":[]})
-        if not any(p["url"]==item["url"] for p in current["pages"]): current["pages"].append(item)
-    independent_domains=sorted(by_domain)
-    total_domains=len(independent_domains)
-    by_candidate={}
-    for domain,container in by_domain.items():
-        domain_candidates={}
-        for page in container["pages"]:
-            for candidate in page.get("candidates",[]):
-                code=candidate.get("code","").upper().strip(); brand=candidate.get("brand","").strip()
-                name=candidate.get("model_name","").strip()
-                key=(f"{brand}:{code}" if code else f"name:{brand}:{name}").casefold()
-                entry=domain_candidates.setdefault(key,{**candidate,"sources":[]})
-                entry["sources"].append({"domain":domain,"title":page["title"],"url":page["url"]})
-        for key,candidate in domain_candidates.items():
-            entry=by_candidate.setdefault(key,{**candidate,"domains":set(),"sources":[]})
-            entry["domains"].add(domain)
-            for src in candidate["sources"]:
-                if not any(x["url"]==src["url"] for x in entry["sources"]): entry["sources"].append(src)
-            if entry["model_name"].startswith("Modelo identificado por código") and not candidate["model_name"].startswith("Modelo identificado"):
-                entry["model_name"]=candidate["model_name"]
+        domain = item["domain"]
+        source_group = item.get("source_group") or ("domain:" + domain)
+        current = by_domain.setdefault(source_group, {
+            "source_group": source_group, "domains": set(), "pages": []
+        })
+        current["domains"].add(domain)
+        if not any(page["url"] == item["url"] for page in current["pages"]):
+            current["pages"].append(item)
 
-    minimum=max(2,math.ceil((2/3)*total_domains)) if total_domains>=2 else 2
-    models=[]
-    for key,item in sorted(by_candidate.items()):
-        count=len(item["domains"])
-        if count<minimum: continue
-        models.append({"code":item.get("code",""),"codes":[item.get("code")] if item.get("code") else [],
-            "brand":item.get("brand") or "Marca por confirmar","model_name":item.get("model_name") or "Modelo sin identificar",
-            "matches":count,"total_sources":total_domains,"confidence":round(100*count/max(total_domains,1)),
-            "sources":item["sources"]})
-
-    sources=[]
-    for domain,container in by_domain.items():
+    independent_sources = sorted(by_domain)
+    total_domains = len(independent_sources)
+    by_candidate = {}
+    for source_group, container in by_domain.items():
+        source_candidates = {}
         for page in container["pages"]:
-            if not any(x["url"]==page["url"] for x in sources):
-                sources.append({"domain":domain,"title":page["title"],"url":page["url"]})
+            for candidate in page.get("candidates", []):
+                code = candidate.get("code", "").upper().strip()
+                brand = candidate.get("brand", "").strip()
+                name = candidate.get("model_name", "").strip()
+                key = (f"{brand}:{code}" if code else f"name:{brand}:{name}").casefold()
+                entry = source_candidates.setdefault(key, {**candidate, "sources": []})
+                source_ref = {
+                    "domain": page["domain"], "title": page["title"],
+                    "url": page["url"], "source_group": source_group
+                }
+                if not any(source["url"] == source_ref["url"] for source in entry["sources"]):
+                    entry["sources"].append(source_ref)
+
+        for key, candidate in source_candidates.items():
+            entry = by_candidate.setdefault(key, {**candidate, "domains": set(), "sources": []})
+            entry["domains"].add(source_group)
+            for source in candidate["sources"]:
+                if not any(existing["url"] == source["url"] for existing in entry["sources"]):
+                    entry["sources"].append(source)
+            current_name = entry.get("model_name", "")
+            candidate_name = candidate.get("model_name", "")
+            current_is_code = current_name.startswith("Modelo identificado por código")
+            candidate_is_code = candidate_name.startswith("Modelo identificado por código")
+            if current_is_code and not candidate_is_code:
+                entry["model_name"] = candidate_name
+                entry["brand"] = candidate.get("brand") or entry.get("brand")
+
+    minimum = max(2, math.ceil((2 / 3) * total_domains)) if total_domains >= 2 else 2
+    models = []
+    for key, item in sorted(by_candidate.items()):
+        count = len(item["domains"])
+        if count < minimum:
+            continue
+        models.append({
+            "code": item.get("code", ""),
+            "codes": [item.get("code")] if item.get("code") else [],
+            "brand": item.get("brand") or "Marca por confirmar",
+            "model_name": item.get("model_name") or "Modelo sin identificar",
+            "matches": count,
+            "total_sources": total_domains,
+            "confidence": round(100 * count / max(total_domains, 1)),
+            "sources": item["sources"],
+        })
+
+    sources = []
+    for source_group, container in by_domain.items():
+        for page in container["pages"]:
+            if not any(existing["url"] == page["url"] for existing in sources):
+                sources.append({
+                    "domain": page["domain"], "title": page["title"], "url": page["url"],
+                    "source_group": source_group
+                })
     source_diags=[d for d in diagnostics if d.get("source")]
     # Resumen compatible con el formulario de alta de piezas. En versiones
     # anteriores, el backend devolvía diagnostics como una lista mientras que
@@ -1180,6 +1416,7 @@ def _automatic_reference_research(reference,piece_name=""):
         "pages_checked": pages_checked,
         "pages_with_exact_reference": len(exact_reference_urls),
         "domains_with_evidence": domains_with_model_candidates,
+        "independent_sources_with_evidence": total_domains,
         "search_errors": errors,
         "source_diagnostics": source_diags,
     }
