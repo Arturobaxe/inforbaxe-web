@@ -1150,13 +1150,48 @@ def _automatic_reference_research(reference,piece_name=""):
             if not any(x["url"]==page["url"] for x in sources):
                 sources.append({"domain":domain,"title":page["title"],"url":page["url"]})
     source_diags=[d for d in diagnostics if d.get("source")]
+    # Resumen compatible con el formulario de alta de piezas. En versiones
+    # anteriores, el backend devolvía diagnostics como una lista mientras que
+    # el formulario esperaba un objeto; por eso la interfaz enseñaba ceros.
+    direct_diags=[d for d in source_diags if d.get("domain")]
+    domains_with_links={
+        d.get("domain") for d in direct_diags
+        if int(d.get("product_links", 0) or 0) > 0
+    }
+    domains_with_links.update(domain for domain, _url, _title in search_urls if domain)
+    discovered_urls=set()
+    for d in direct_diags:
+        # Los conectores directos exponen enlaces de producto por dominio,
+        # aunque no se incluya el URL individual en el diagnóstico.
+        for idx in range(int(d.get("product_links", 0) or 0)):
+            discovered_urls.add(f"direct:{d.get('domain')}:{idx}")
+    discovered_urls.update(url for _domain, url, _title in search_urls)
+    pages_checked=sum(int(d.get("pages_read", 0) or 0) for d in direct_diags) + int(global_read_attempts)
+    exact_reference_urls={item.get("url") for item in evidence if item.get("url")}
+    errors=[d for d in source_diags if (
+        d.get("status") in ("error_de_conexion", "bloqueado_por_robots", "bloqueado_o_no_disponible")
+        or str(d.get("status", "")).startswith("http_")
+    )]
+    domains_with_model_candidates=len({item.get("domain") for item in evidence if item.get("domain") and item.get("candidates")})
+    diagnostics_summary={
+        "domains_consulted": len(direct_diags),
+        "domains_with_search_results": len(domains_with_links),
+        "pages_discovered": len(discovered_urls),
+        "pages_checked": pages_checked,
+        "pages_with_exact_reference": len(exact_reference_urls),
+        "domains_with_evidence": domains_with_model_candidates,
+        "search_errors": errors,
+        "source_diagnostics": source_diags,
+    }
     result={"ok":bool(models),"reference":ref,"piece":piece,"sources":sources,"models":models,
         "checked_domains":[x[1] for x in _DIRECT_CATALOGS],"successful_domains":total_domains,
         "minimum_consensus":minimum,"diagnostics":source_diags,
-        "pages_read":sum(int(d.get("pages_read",0)) for d in diagnostics),
+        "diagnostics_summary":diagnostics_summary,
+        "source_diagnostics":source_diags,
+        "pages_read":pages_checked,
         "message":("Se encontraron coincidencias entre fuentes independientes." if models else
                    "No se ha podido confirmar ninguna compatibilidad con evidencia suficiente."),
-        "errors":[d for d in source_diags if d.get("status") in ("error_de_conexion","bloqueado_por_robots","bloqueado_o_no_disponible")],
+        "errors":errors,
         "cached":False}
     ttl=_REFERENCE_CACHE_POSITIVE_TTL if models else _REFERENCE_CACHE_NEGATIVE_TTL
     _REFERENCE_CACHE[cache_key]=(now,result)
