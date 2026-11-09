@@ -832,13 +832,13 @@ class _VisibleText(HTMLParser):
     def handle_data(self, data):
         if not self.skip and data.strip(): self.parts.append(data.strip())
 
-def _http_text(url, limit=1_200_000):
+def _http_text(url, limit=1_200_000, timeout=8):
     # User-Agent de navegador estándar; algunos catálogos bloquean identificadores de bots.
     req=Request(url, headers={"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
                               "Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
                               "Accept-Language":"es-ES,es;q=0.9,en;q=0.8",
                               "Cache-Control":"no-cache"})
-    with urlopen(req, timeout=8) as response:
+    with urlopen(req, timeout=timeout) as response:
         data=response.read(limit)
         charset=response.headers.get_content_charset() or "utf-8"
         return data.decode(charset, errors="replace"), response.geturl()
@@ -1072,7 +1072,7 @@ def _reference_is_present(text, reference):
 
 def _extract_evidence(reference, domain, url, title, piece_name=""):
     try:
-        html, final_url = _http_text(url)
+        html, final_url = _http_text(url, timeout=5)
         final_host = (urlparse(final_url).hostname or "").lower()
         if not _domain_allowed(final_url) or not (final_host == domain or final_host.endswith("." + domain)):
             return {"status": "redirect_outside_catalogue", "domain": domain}
@@ -1093,7 +1093,45 @@ def _extract_evidence(reference, domain, url, title, piece_name=""):
             "excerpt": compact[:1200]}
 
 
+def _search_public_engine(engine, query):
+    """Search one public engine once; return only allow-listed repair-catalogue pages."""
+    links = []
+    try:
+        if engine == "DuckDuckGo":
+            search_url = "https://html.duckduckgo.com/html/?q=" + quote_plus(query)
+            html, _ = _http_text(search_url, 500_000, timeout=5)
+            parser = _DDGResults()
+            parser.feed(html)
+            raw_links = parser.links
+        else:
+            search_url = "https://www.bing.com/search?format=rss&q=" + quote_plus(query)
+            xml, _ = _http_text(search_url, 500_000, timeout=5)
+            root = ET.fromstring(xml)
+            raw_links = [
+                ((item.findtext("link") or "").strip(), (item.findtext("title") or "").strip())
+                for item in root.findall(".//item")
+            ]
+        for url, title in raw_links:
+            if not str(url).startswith("http") or not _domain_allowed(url):
+                continue
+            host = (urlparse(url).hostname or "").lower()
+            domain = next((d for d in _REFERENCE_SOURCES if host == d or host.endswith("." + d)), None)
+            if not domain:
+                continue
+            links.append((domain, url.split("#", 1)[0], _clean(title or domain, 180)))
+    except Exception as exc:
+        log.info("Búsqueda pública %s fallida: %s", engine, exc)
+        return engine, [], str(exc)[:180]
+    return engine, links, "" if links else "El buscador no devolvió enlaces de catálogos admitidos."
+
+
 def _automatic_reference_research(reference, piece_name=""):
+    """Bounded, server-side public-web research with per-domain consensus.
+
+    Search engines are queried globally (rather than once per catalogue), which
+    avoids dozens of serial network calls and Render's upstream request timeout.
+    Only pages hosted on the allow-list are opened and counted as evidence.
+    """
     ref = re.sub(r"[^A-Za-z0-9._/-]", "", _clean(reference, 80)).upper()
     piece = _clean(piece_name, 100)
     if len(ref) < 4:
@@ -1103,131 +1141,134 @@ def _automatic_reference_research(reference, piece_name=""):
     now = time.time()
     cached = _REFERENCE_CACHE.get(cache_key)
     if cached and now - cached[0] < _REFERENCE_CACHE_TTL:
-        result = dict(cached[1]); result["cached"] = True
+        result = dict(cached[1])
+        result["cached"] = True
         return result
 
-    results, errors, discovered = [], [], []
-    search_errors = []
-    search_domains_with_links = set()
-    # Cada catálogo se consulta por la referencia exacta. La categoría se
-    # conserva para diagnóstico/contexto, pero no añade términos obligatorios.
-    with ThreadPoolExecutor(max_workers=12) as pool:
-        futures = {pool.submit(_search_source_domain, ref, domain, piece): domain
-                   for domain in _REFERENCE_SOURCES}
+    category_terms = _piece_search_terms(piece)
+    queries = [f'"{ref}"', f'{ref} {category_terms}'.strip()]
+    search_jobs = [(engine, query) for query in queries for engine in ("DuckDuckGo", "Bing")]
+    discovered, search_errors = [], []
+    engines_with_results = set()
+    # Four bounded search requests replace up to 80 per-domain requests.
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = {pool.submit(_search_public_engine, engine, query): (engine, query)
+                   for engine, query in search_jobs}
         for future in as_completed(futures):
-            domain = futures[future]
+            engine, _query = futures[future]
             try:
-                returned_domain, links, engine_errors = future.result()
-                search_errors.extend(f"{domain}:{engine}" for engine in engine_errors)
+                returned_engine, links, error = future.result()
                 if links:
-                    search_domains_with_links.add(returned_domain)
-                discovered.extend((returned_domain, url, title) for url, title in links)
+                    engines_with_results.add(returned_engine)
+                    discovered.extend(links)
+                if error:
+                    search_errors.append(f"{returned_engine}: {error}")
             except Exception as exc:
-                search_errors.append(domain)
-                log.info("Búsqueda de referencia fallida en %s: %s", domain, exc)
+                search_errors.append(f"{engine}: {str(exc)[:160]}")
 
-    # Evitar repetir la misma URL si la han devuelto los dos buscadores.
+    # Deduplicate by URL; each catalogue host can contribute at most one vote.
     unique_pages, seen_pages = [], set()
     for domain, url, title in discovered:
         key = url.split("#", 1)[0].rstrip("/").casefold()
         if key not in seen_pages:
-            seen_pages.add(key); unique_pages.append((domain, url, title))
+            seen_pages.add(key)
+            unique_pages.append((domain, url, title))
+    # Cap the amount of external work to keep the request responsive on Render.
+    unique_pages = unique_pages[:12]
 
-    page_status = {}
-    with ThreadPoolExecutor(max_workers=16) as pool:
-        futures = {pool.submit(_extract_evidence, ref, domain, url, title, piece): (domain, url)
-                   for domain, url, title in unique_pages[:60]}
+    results, page_status = [], {}
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        futures = {pool.submit(_extract_evidence, ref, domain, url, title, piece,): (domain, url)
+                   for domain, url, title in unique_pages}
         for future in as_completed(futures):
             try:
                 outcome = future.result()
-                status = (outcome or {}).get("status", "page_unavailable")
-                domain = (outcome or {}).get("domain", futures[future][0])
+                outcome = outcome or {"status": "page_unavailable", "domain": futures[future][0]}
+                status = outcome.get("status", "page_unavailable")
                 page_status[status] = page_status.get(status, 0) + 1
                 if status == "ok":
                     results.append(outcome)
             except Exception as exc:
                 page_status["page_unavailable"] = page_status.get("page_unavailable", 0) + 1
-                log.info("No se pudo extraer evidencia de %s: %s", futures[future][0], exc)
+                log.info("No se pudo leer la página %s: %s", futures[future][1], exc)
 
-    # Un dominio = un voto. Agrupamos por código regulatorio cuando exista;
-    # si no, por nombre comercial exacto.
+    # Aggregate by normalized model name within brand. Different regulatory
+    # variants (e.g. regional SM codes) are retained under the same device.
     by_candidate = {}
     evidence_domains = set()
-    for item in results:
-        evidence_domains.add(item["domain"])
-        for candidate in item["candidates"]:
-            code = candidate.get("code", "")
-            name = candidate.get("model_name", "")
-            brand = candidate.get("brand", "")
-            usable_name = name and not name.startswith("Modelo identificado por código")
-            key = (f"{brand}:{name}".casefold() if usable_name else f"{brand}:{code}".casefold())
-            entry = by_candidate.setdefault(key, {**candidate, "codes_set": set(), "domains": set(), "sources": []})
+    for evidence in results:
+        evidence_domains.add(evidence["domain"])
+        for candidate in evidence.get("candidates", []):
+            brand = _clean(candidate.get("brand"), 80) or "Marca por confirmar"
+            name = _clean(candidate.get("model_name"), 140)
+            code = _clean(candidate.get("code"), 100).upper()
+            is_generic = name.startswith("Modelo identificado por código")
+            key = (f"{brand}:{code}" if is_generic and code else f"{brand}:{_norm(name)}").casefold()
+            entry = by_candidate.setdefault(key, {
+                "brand": brand, "model_name": name, "codes_set": set(),
+                "domains": set(), "sources": []
+            })
             if code:
                 entry["codes_set"].add(code)
-            entry["domains"].add(item["domain"])
-            if not any(x["url"] == item["url"] for x in entry["sources"]):
-                entry["sources"].append({"domain": item["domain"], "title": item["title"], "url": item["url"]})
-            if entry["model_name"].startswith("Modelo identificado por código") and usable_name:
+            entry["domains"].add(evidence["domain"])
+            if not any(source["url"] == evidence["url"] for source in entry["sources"]):
+                entry["sources"].append({
+                    "domain": evidence["domain"], "title": evidence["title"], "url": evidence["url"]
+                })
+            if entry["model_name"].startswith("Modelo identificado por código") and not is_generic:
                 entry["model_name"] = name
-                entry["brand"] = brand or entry["brand"]
 
     total_domains = len(evidence_domains)
-    # Dos tercios representa "casi todas" y evita exigir unanimidad cuando
-    # solo tres catálogos han podido aportar fichas. Nunca se acepta una única fuente.
-    minimum = max(2, int((total_domains * (2 / 3)) + 0.999)) if total_domains else 2
-
-    models = []
-    best_match = 0
-    for key, item in sorted(by_candidate.items()):
+    # Need at least two independent domains; thereafter two-thirds of domains
+    # that actually contained the exact part reference and a device candidate.
+    minimum = max(2, (total_domains * 2 + 2) // 3) if total_domains else 2
+    models, best_match = [], 0
+    for _key, item in sorted(by_candidate.items()):
         count = len(item["domains"])
         best_match = max(best_match, count)
         if count < minimum:
             continue
         models.append({
-            "code": item.get("code", ""),
-            "codes": sorted(item.get("codes_set") or ([item.get("code")] if item.get("code") else [])),
-            "brand": item.get("brand") or "Marca por confirmar",
-            "model_name": item.get("model_name") or "Modelo sin identificar",
+            "code": sorted(item["codes_set"])[0] if item["codes_set"] else "",
+            "codes": sorted(item["codes_set"]),
+            "brand": item["brand"],
+            "model_name": item["model_name"],
             "matches": count,
             "total_sources": total_domains,
             "confidence": round(100 * count / max(total_domains, 1)),
-            "sources": item["sources"],
+            "sources": item["sources"][:8],
         })
 
     source_list = []
     for item in results:
-        if not any(x["domain"] == item["domain"] for x in source_list):
+        if not any(source["domain"] == item["domain"] for source in source_list):
             source_list.append({"domain": item["domain"], "title": item["title"], "url": item["url"]})
 
     diagnostics = {
+        "search_engines_consulted": ["DuckDuckGo", "Bing"],
+        "search_engines_with_results": sorted(engines_with_results),
         "domains_consulted": len(_REFERENCE_SOURCES),
-        "domains_with_search_results": len(search_domains_with_links),
+        "domains_with_search_results": len({domain for domain, _url, _title in unique_pages}),
         "pages_discovered": len(unique_pages),
         "pages_checked": sum(page_status.values()),
         "pages_with_exact_reference": page_status.get("no_model_identified", 0) + page_status.get("ok", 0),
         "pages_with_models": page_status.get("ok", 0),
         "domains_with_evidence": total_domains,
-        "search_errors": search_errors[:30],
+        "search_errors": search_errors[:12],
         "page_status": page_status,
         "best_candidate_matches": best_match,
     }
 
     if models:
-        message = "Se encontraron modelos respaldados por fuentes independientes. Revisa y selecciona los que quieras guardar."
+        message = "Se encontraron modelos con consenso entre catálogos independientes. Revisa las fuentes antes de guardarlos."
     elif not unique_pages:
-        message = ("Los buscadores públicos no devolvieron páginas de los catálogos consultados. "
-                   "No significa que la pieza no sea compatible: Render puede no tener acceso a esos buscadores o no estar indexada la referencia.")
-    elif not results and page_status.get("ok", 0) == 0:
-        if page_status.get("reference_not_found_on_page", 0):
-            message = "Se localizaron páginas, pero no pudimos verificar la referencia exacta en su contenido. No se proponen compatibilidades."
-        else:
-            message = "Se localizaron páginas, pero los catálogos bloquearon la lectura o no mostraron modelos identificables. No se proponen compatibilidades."
+        message = "Los buscadores no devolvieron páginas de catálogos admitidos. No significa que la pieza no sea compatible; puede ser un bloqueo de búsqueda desde Render."
+    elif not results:
+        message = "Se localizaron páginas, pero no se pudo leer una referencia exacta junto con modelos de dispositivo. No se propone ninguna compatibilidad."
     elif total_domains < 2:
-        message = (f"Solo encontramos evidencia utilizable en {total_domains} catálogo(s). "
-                   "Necesitamos al menos dos dominios independientes para proponer modelos.")
+        message = f"Solo {total_domains} catálogo(s) aportaron evidencia utilizable; hacen falta al menos dos dominios independientes."
     else:
-        message = (f"Encontramos evidencia en {total_domains} catálogos, pero ningún modelo alcanzó "
-                   f"el mínimo de {minimum} coincidencias independientes (dos tercios de las fuentes). No se propone ninguno como compatible.")
+        message = f"Hay evidencia en {total_domains} catálogos, pero ningún modelo alcanza {minimum} coincidencias independientes."
 
     result = {
         "ok": bool(models), "reference": ref, "piece": piece,
@@ -1236,26 +1277,25 @@ def _automatic_reference_research(reference, piece_name=""):
         "successful_domains": total_domains,
         "minimum_consensus": minimum,
         "diagnostics": diagnostics,
-        "message": message, "errors": search_errors[:30], "cached": False,
+        "message": message, "errors": search_errors[:12], "cached": False,
     }
-
-    # Nunca cachear fallos totales: si un buscador estuvo bloqueado unos
-    # segundos, el usuario puede volver a intentar sin esperar seis horas.
+    # Cache only positive, evidence-backed results. Failed searches can be retried
+    # immediately because network blocks and search-engine throttling are transient.
     if models:
         _REFERENCE_CACHE[cache_key] = (now, result)
-    elif results:
-        _REFERENCE_CACHE[cache_key] = (now, result)
-        # resultados parciales: solo 3 minutos de caché
-        _REFERENCE_CACHE[cache_key] = (now - _REFERENCE_CACHE_TTL + 180, result)
     return result
 
 @despiece_bp.post("/api/despiece/buscar-referencia")
 @_login_required
 def api_buscar_referencia_automatica():
-    payload=request.get_json(silent=True) or {}
-    reference=_clean(payload.get("referencia"),80)
-    piece_name=_clean(payload.get("pieza"),120)
     try:
+        payload = request.get_json(silent=True) or {}
+        if not isinstance(payload, dict):
+            return jsonify({"ok": False, "message": "La solicitud no tiene el formato esperado.", "sources": [], "models": []}), 400
+        reference = _clean(payload.get("referencia"), 80)
+        piece_name = _clean(payload.get("pieza"), 120)
+        if len(reference) < 4:
+            return jsonify({"ok": False, "message": "Introduce una referencia de al menos 4 caracteres.", "sources": [], "models": []}), 400
         result=_automatic_reference_research(reference,piece_name)
         if result.get("models"):
             signer = URLSafeTimedSerializer(current_app.secret_key, salt="inforbaxe-reference-research-v1")
@@ -1281,10 +1321,14 @@ def api_buscar_referencia_automatica():
                 "piece": result.get("piece", ""),
                 "models": compact_models,
             })
-        return jsonify(result)
-    except Exception:
+        response = jsonify(result)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except Exception as exc:
         log.exception("Error en investigación automática de referencia")
-        return jsonify({"ok":False,"message":"No se pudo completar la búsqueda automática. Inténtalo más tarde.","sources":[],"models":[]}), 502
+        response = jsonify({"ok": False, "message": "Error interno al investigar la referencia.", "detail": str(exc)[:240], "sources": [], "models": []})
+        response.headers["Cache-Control"] = "no-store"
+        return response, 502
 
 @despiece_bp.get("/despiece/buscar-referencia")
 @_login_required
