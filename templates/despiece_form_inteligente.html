@@ -188,11 +188,23 @@
     researchSelected.clear();
     researchToken.value = data.research_token || '';
     researchIndexesInput.value = '[]';
+    const diagnostics = data.diagnostics || {};
+    const diagnosticLines = [
+      `${Number(diagnostics.domains_consulted || 0)} catálogos consultados`,
+      `${Number(diagnostics.domains_with_search_results || 0)} catálogos devolvieron enlaces`,
+      `${Number(diagnostics.pages_discovered || 0)} páginas localizadas`,
+      `${Number(diagnostics.pages_checked || 0)} páginas leídas`,
+      `${Number(diagnostics.pages_with_exact_reference || 0)} páginas contenían la referencia`,
+      `${Number(diagnostics.domains_with_evidence || data.successful_domains || 0)} dominios aportaron modelos`
+    ];
+    const diagnosticHtml = `<div class="text-muted" style="font-size:11px;line-height:1.6;margin-top:7px;">${diagnosticLines.map(escapeHtml).join(' · ')}</div>` +
+      (diagnostics.search_errors && diagnostics.search_errors.length
+        ? `<div class="text-muted" style="font-size:11px;margin-top:5px;">Algunas consultas fueron bloqueadas o no respondieron (${diagnostics.search_errors.length}).</div>` : '');
     if (!lastResearchModels.length) {
-      researchResults.innerHTML = `<div class="card"><strong>${escapeHtml(data.message || 'No se ha encontrado consenso suficiente.')}</strong><p class="text-muted" style="font-size:12px;margin:6px 0 0;">Se han consultado ${Number(data.successful_domains || 0)} dominios con evidencia. Si no hay al menos tres fuentes coincidentes, no se proponen compatibilidades.</p></div>`;
+      researchResults.innerHTML = `<div class="card"><strong>${escapeHtml(data.message || 'No se ha encontrado consenso suficiente.')}</strong>${diagnosticHtml}<div class="text-muted" style="font-size:11px;margin-top:7px;">No se guardará ninguna compatibilidad cuando la evidencia sea insuficiente o contradictoria.</div></div>`;
       return;
     }
-    researchResults.innerHTML = `<div class="card"><div style="font-weight:700;">Modelos con consenso suficiente</div><div class="text-muted" style="font-size:12px;margin-top:4px;">${Number(data.successful_domains || 0)} dominios con evidencia. Marca los modelos que quieres asociar a esta pieza.</div></div>` +
+    researchResults.innerHTML = `<div class="card"><div style="font-weight:700;">Modelos con consenso suficiente</div><div class="text-muted" style="font-size:12px;margin-top:4px;">Se exige un mínimo de ${Number(data.minimum_consensus || 2)} fuentes independientes por modelo. Marca los modelos que quieres asociar a esta pieza.</div>${diagnosticHtml}</div>` +
       lastResearchModels.map((item, index) => {
         const sources = (item.sources || []).map(source => escapeHtml(source.domain)).join(' · ');
         return `<label class="card" data-research-index="${index}" style="display:flex;gap:10px;align-items:flex-start;cursor:pointer;">\
@@ -242,7 +254,9 @@
       renderResearchResults(data);
       researchStatus.textContent = data.models?.length
         ? `Investigación terminada: ${data.models.length} candidatos superan el consenso.`
-        : `Investigación terminada sin consenso suficiente (${Number(data.successful_domains || 0)} dominios con evidencia).`;
+        : (Number(data.diagnostics?.domains_with_search_results || 0) === 0
+            ? 'No se pudieron localizar páginas en los catálogos públicos.'
+            : `Investigación terminada: ${Number(data.successful_domains || 0)} dominios aportaron evidencia, sin consenso suficiente.`);
     } catch (error) {
       researchStatus.textContent = error.message || 'No se pudo completar la búsqueda automática.';
     } finally {
