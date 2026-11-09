@@ -11,7 +11,7 @@ import os
 import re
 from datetime import datetime, timedelta, timezone
 from functools import wraps
-from urllib.parse import urlencode, quote_plus, urlparse, parse_qs, unquote
+from urllib.parse import urlencode, quote_plus, urlparse, parse_qs, unquote, urljoin
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -19,9 +19,9 @@ from html.parser import HTMLParser
 import time
 import unicodedata
 import xml.etree.ElementTree as ET
+import math
 
-from flask import Blueprint, abort, current_app, flash, jsonify, redirect, render_template, request, session, url_for
-from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, session, url_for
 
 import database as db
 
@@ -427,72 +427,15 @@ def guardar_pieza_inteligente():
     except (TypeError, ValueError):
         flash("Selecciona una familia válida.", "error")
         return redirect(url_for("despiece_inteligente.nueva_pieza_inteligente"))
-
     marca = _clean(request.form.get("marca"), 80)
     modelo = _clean(request.form.get("modelo"), 120)
     pieza = _clean(request.form.get("pieza"), 120)
     referencia = _clean(request.form.get("referencia"), 120)
     descripcion = _clean(request.form.get("descripcion"), 1000)
-
-    # Leer y validar candidatos elegidos a partir de un resultado firmado por el servidor.
-    research_candidates = []
-    token = _clean(request.form.get("investigacion_token"), 120000)
-    raw_indexes = request.form.get("investigacion_indices", "[]")
-    try:
-        selected_indexes = json.loads(raw_indexes)
-        if not isinstance(selected_indexes, list):
-            selected_indexes = []
-        selected_indexes = sorted({int(x) for x in selected_indexes if str(x).isdigit()})
-    except (TypeError, ValueError, json.JSONDecodeError):
-        selected_indexes = []
-
-    if token and selected_indexes:
-        try:
-            signer = URLSafeTimedSerializer(current_app.secret_key, salt="inforbaxe-reference-research-v1")
-            signed_result = signer.loads(token, max_age=1800)
-            signed_reference = _clean(signed_result.get("reference"), 80).upper()
-            if signed_reference != re.sub(r"[^A-Za-z0-9._/-]", "", referencia).upper():
-                raise BadSignature("La referencia cambió después de la investigación.")
-            signed_models = signed_result.get("models", [])
-            research_candidates = [signed_models[i] for i in selected_indexes if 0 <= i < len(signed_models)]
-        except (BadSignature, SignatureExpired, TypeError, ValueError):
-            flash("La búsqueda ha caducado o la referencia ha cambiado. Vuelve a investigar antes de guardar.", "error")
-            return redirect(url_for("despiece_inteligente.nueva_pieza_inteligente"))
-
-    selected_ids = []
-    for raw_id in request.form.getlist("modelo_id"):
-        try:
-            model_id = int(raw_id)
-        except (TypeError, ValueError):
-            continue
-        if model_id not in selected_ids:
-            selected_ids.append(model_id)
-
     try:
         valid_family = client.table("despiece_familias").select("id").eq("id", familia_id).limit(1).execute().data or []
-        if not valid_family or not pieza:
-            raise ValueError("Completa una familia válida y el nombre de la pieza.")
-
-        # Si el usuario solo ha buscado por referencia, usar el primer modelo elegido
-        # como modelo principal de la pieza. El resto se guardará como compatibilidades.
-        valid_selected = []
-        if selected_ids:
-            valid_rows = (client.table("despiece_modelos").select("id,marca,modelo")
-                          .in_("id", selected_ids).eq("estado", "activo").execute().data or [])
-            valid_by_id = {int(row["id"]): row for row in valid_rows}
-            valid_selected = [valid_by_id[x] for x in selected_ids if x in valid_by_id]
-
-        if not (marca and modelo):
-            if research_candidates:
-                first = research_candidates[0]
-                marca = _clean(first.get("brand"), 80)
-                modelo = _clean(first.get("model_name"), 120)
-            elif valid_selected:
-                marca = _clean(valid_selected[0].get("marca"), 80)
-                modelo = _clean(valid_selected[0].get("modelo"), 120)
-        if not modelo:
-            raise ValueError("Indica un modelo principal o selecciona al menos un modelo encontrado por referencia.")
-
+        if not valid_family or not modelo or not pieza:
+            raise ValueError("Completa una familia válida, un modelo y una pieza.")
         inserted = (client.table("despiece_repuestos").insert({
             "familia_id": familia_id,
             "marca": marca,
@@ -503,97 +446,42 @@ def guardar_pieza_inteligente():
         }).execute().data or [])
         if not inserted:
             raise RuntimeError("Supabase no devolvió el repuesto creado.")
-        repuesto_id = int(inserted[0]["id"])
-
-        # Vincular modelos locales seleccionados; nunca rebajar una relación ya verificada.
-        linked_ids = set()
-        for row in valid_selected:
-            model_id = int(row["id"])
-            existing_rel = (client.table("despiece_repuesto_modelos").select("estado_compatibilidad,notas")
-                            .eq("repuesto_id", repuesto_id).eq("modelo_id", model_id).limit(1).execute().data or [])
-            status = "verificada" if existing_rel and existing_rel[0].get("estado_compatibilidad") == "verificada" else "pendiente"
-            client.table("despiece_repuesto_modelos").upsert({
-                "repuesto_id": repuesto_id, "modelo_id": model_id,
-                "estado_compatibilidad": status,
-            }, on_conflict="repuesto_id,modelo_id").execute()
-            linked_ids.add(model_id)
-
-        # Incorporar modelos que han superado el consenso y que el usuario ha marcado.
-        for candidate in research_candidates:
-            candidate_brand = _clean(candidate.get("brand"), 80)
-            candidate_name = _clean(candidate.get("model_name"), 140)
-            if not candidate_brand or not candidate_name:
+        repuesto_id = inserted[0]["id"]
+        selected = []
+        for raw_id in request.form.getlist("modelo_id"):
+            try:
+                value = int(raw_id)
+            except (TypeError, ValueError):
                 continue
-            sources = candidate.get("sources") if isinstance(candidate.get("sources"), list) else []
-            unique_domains = set()
-            safe_sources = []
-            for source in sources[:12]:
-                if not isinstance(source, dict):
-                    continue
-                domain = _clean(source.get("domain"), 100).lower()
-                source_url = _clean(source.get("url"), 500)
-                if domain and _domain_allowed(source_url) and domain not in unique_domains:
-                    unique_domains.add(domain)
-                    safe_sources.append(f"{domain}: {source_url}")
-            matches = int(candidate.get("matches") or 0)
-            confidence = int(candidate.get("confidence") or 0)
-            if len(unique_domains) < 3 or matches < 3 or confidence < 70:
-                continue
-
-            model_row = _find_model(candidate_brand, candidate_name)
-            codes = candidate.get("codes") if isinstance(candidate.get("codes"), list) else []
-            codes = [_clean(x, 100) for x in codes[:20] if _clean(x, 100)]
-            if not model_row:
-                model_payload = {
-                    "marca": candidate_brand,
-                    "modelo": candidate_name,
-                    "nombre_completo": f"{candidate_brand} {candidate_name}",
-                    "numero_modelo": codes[0] if codes else _clean(candidate.get("code"), 100),
-                    "numeros_modelo": codes or ([_clean(candidate.get("code"), 100)] if candidate.get("code") else []),
-                    "tipo": "phone",
-                    "estado": "pendiente",
-                    "origen": "busqueda_referencia",
-                    "proveedor": "investigacion_web",
-                    "proveedor_id": "",
-                }
-                created = client.table("despiece_modelos").insert(model_payload).execute().data or []
-                if not created:
-                    raise RuntimeError("No se pudo registrar un modelo encontrado por referencia.")
-                model_row = created[0]
-            model_id = int(model_row["id"])
-            old_relation = (client.table("despiece_repuesto_modelos").select("estado_compatibilidad,notas")
-                            .eq("repuesto_id", repuesto_id).eq("modelo_id", model_id).limit(1).execute().data or [])
-            old_status = old_relation[0].get("estado_compatibilidad") if old_relation else ""
-            status = "verificada" if old_status == "verificada" else "pendiente"
-            note = (f"Investigación por referencia {referencia}. Consenso: {matches}/{candidate.get('total_sources', matches)} "
-                    f"dominios ({confidence}%). Fuentes: {' | '.join(safe_sources)}")[:1000]
-            old_notes = old_relation[0].get("notas", "") if old_relation else ""
-            client.table("despiece_repuesto_modelos").upsert({
-                "repuesto_id": repuesto_id,
-                "modelo_id": model_id,
-                "estado_compatibilidad": status,
-                "notas": " ".join(x for x in (old_notes, note) if x)[:1000],
-            }, on_conflict="repuesto_id,modelo_id").execute()
-            linked_ids.add(model_id)
-
-        # Si no se seleccionó ningún resultado externo ni modelo del catálogo,
-        # conservar el comportamiento anterior del formulario.
-        if not linked_ids:
+            if value not in selected:
+                selected.append(value)
+        if selected:
+            valid_models = (client.table("despiece_modelos").select("id")
+                            .in_("id", selected).eq("estado", "activo").execute().data or [])
+            valid_ids = {int(item["id"]) for item in valid_models}
+            relations = [{"repuesto_id": repuesto_id, "modelo_id": model_id, "estado_compatibilidad": "pendiente"}
+                         for model_id in selected if model_id in valid_ids]
+            if relations:
+                client.table("despiece_repuesto_modelos").insert(relations).execute()
+        else:
+            # Si el modelo ya existe en el catálogo, enlazarlo automáticamente como pendiente de verificación.
             existing = _find_model(marca, modelo)
             if existing and existing.get("estado") == "activo":
-                client.table("despiece_repuesto_modelos").upsert({
-                    "repuesto_id": repuesto_id, "modelo_id": int(existing["id"]),
+                client.table("despiece_repuesto_modelos").insert({
+                    "repuesto_id": repuesto_id,
+                    "modelo_id": existing["id"],
                     "estado_compatibilidad": "pendiente",
-                }, on_conflict="repuesto_id,modelo_id").execute()
-            elif marca and modelo and not existing:
-                _stage_provider_device({
-                    "marca": marca, "modelo": modelo,
-                    "nombre_completo": f"{marca} {modelo}",
-                    "numero_modelo": "", "numeros_modelo": [],
-                    "tipo": "phone", "proveedor": "manual", "proveedor_id": "",
-                })
-
-        flash("Pieza añadida. Los modelos encontrados se han vinculado como compatibilidades pendientes de revisión.", "success")
+                }).execute()
+            else:
+                # La pieza no se pierde: su modelo queda en el campo tradicional y se propone al catálogo.
+                if marca and modelo and not existing:
+                    _stage_provider_device({
+                        "marca": marca, "modelo": modelo,
+                        "nombre_completo": f"{marca} {modelo}",
+                        "numero_modelo": "", "numeros_modelo": [],
+                        "tipo": "phone", "proveedor": "manual", "proveedor_id": "",
+                    })
+        flash("Pieza añadida. Revisa sus compatibilidades desde el catálogo.", "success")
         return redirect(url_for("despiece"))
     except ValueError as exc:
         flash(str(exc), "error")
@@ -750,14 +638,54 @@ def _parse_model_numbers(value):
 # Busca referencias de cualquier familia de repuesto. Solo descarga páginas
 # de distribuidores/catálogos permitidos y exige referencia exacta + modelo.
 _REFERENCE_CACHE = {}
-_REFERENCE_CACHE_TTL = 6 * 60 * 60
+_REFERENCE_CACHE_POSITIVE_TTL = 6 * 60 * 60
+_REFERENCE_CACHE_NEGATIVE_TTL = 5 * 60
+_ROBOTS_CACHE = {}
+
+# Fuentes con búsquedas públicas de catálogo. iFixit se excluye de la extracción
+# automatizada: su robots.txt bloquea /Search y /api/*, y su API publica licencia
+# no comercial. Puede ser consultado manualmente por el usuario desde su web.
 _REFERENCE_SOURCES = (
-    "ifixit.com", "impextrom.com", "ovisat.com", "servicepacksamsung.com",
-    "pds.com.gr", "techtekshop.es", "subtel.es", "repuestosmovil.es",
-    "restaurio.es", "techcomponentes.com", "phoneparts.es", "gsmobile.es",
-    "spainsellers.com", "fixandgoparts.com", "newprime.es", "partob.com",
-    "mobilepartsfinder.com", "combodekho.com", "abhaytechnicals.com",
-    "componentidigitali.com", "global-spares.com", "spainbateria.es",
+    "ovisat.com", "servicepacksamsung.com", "techtekshop.es",
+    "spainbateria.es", "impextrom.com", "componentidigitali.com",
+    "repuestosmovil.es", "techcomponentes.com", "gsmobile.es",
+    "phoneparts.es", "fixandgoparts.com", "newprime.es", "partob.com",
+    "restaurio.es", "subtel.es",
+)
+
+# Rutas de búsqueda pública de tiendas. Se prueban varias rutas compatibles con
+# motores de tienda habituales; cada página se valida por dominio y referencia.
+_DIRECT_CATALOGS = (
+    ("Ovisat", "ovisat.com", (
+        "https://ovisat.com/es/search?controller=search&s={q}",
+        "https://ovisat.com/search?controller=search&s={q}",
+        "https://ovisat.com/es/buscar?controller=search&s={q}",
+    )),
+    ("Service Pack Samsung", "servicepacksamsung.com", (
+        "https://servicepacksamsung.com/es/search?controller=search&s={q}",
+        "https://servicepacksamsung.com/search?controller=search&s={q}",
+        "https://servicepacksamsung.com/es/buscar?controller=search&s={q}",
+    )),
+    ("Techtek", "techtekshop.es", (
+        "https://www.techtekshop.es/es/search?controller=search&s={q}",
+        "https://www.techtekshop.es/es/search?q={q}",
+        "https://www.techtekshop.es/?s={q}",
+    )),
+    ("SpainBateria", "spainbateria.es", (
+        "https://www.spainbateria.es/search?q={q}",
+        "https://www.spainbateria.es/buscar?q={q}",
+        "https://www.spainbateria.es/?s={q}",
+    )),
+    ("Impextrom", "impextrom.com", (
+        "https://www.impextrom.com/es/search?controller=search&s={q}",
+        "https://www.impextrom.com/search?q={q}",
+        "https://www.impextrom.com/?s={q}",
+    )),
+    ("Componenti Digitali", "componentidigitali.com", (
+        "https://www.componentidigitali.com/en/search?query={q}",
+        "https://www.componentidigitali.com/it/search?query={q}",
+        "https://www.componentidigitali.com/?s={q}",
+    )),
 )
 
 # Identificadores técnicos usados por distintos fabricantes. Se extraen
@@ -804,24 +732,19 @@ _DEVICE_NAME_PATTERNS = [
     ("Infinix", re.compile(r"\bInfinix\s+(?:Hot|Note|Zero|GT)\s+(?:\d{1,2}(?:\s+Pro)?|[A-Z0-9]{2,8})\b", re.I)),
 ]
 
-class _DDGResults(HTMLParser):
+class _ResultLinks(HTMLParser):
+    """Extrae enlaces de páginas de resultados sin depender de una clase CSS concreta."""
     def __init__(self):
-        super().__init__(); self.links=[]; self._href=None; self._text=[]; self._capture=False
+        super().__init__(); self.links=[]; self._href=None; self._text=[]
     def handle_starttag(self, tag, attrs):
-        attrs=dict(attrs)
-        if tag == "a" and ("result__a" in attrs.get("class", "") or "result-link" in attrs.get("class", "")):
-            self._href=attrs.get("href"); self._text=[]; self._capture=True
+        if tag == "a":
+            attrs=dict(attrs); self._href=attrs.get("href"); self._text=[]
     def handle_data(self, data):
-        if self._capture: self._text.append(data)
+        if self._href: self._text.append(data)
     def handle_endtag(self, tag):
-        if tag == "a" and self._capture:
-            href=self._href or ""
-            if "uddg=" in href:
-                try: href=parse_qs(urlparse(href).query).get("uddg", [href])[0]
-                except Exception: pass
-            if href.startswith("http"):
-                self.links.append((href, " ".join(self._text).strip()))
-            self._href=None; self._text=[]; self._capture=False
+        if tag == "a" and self._href:
+            self.links.append((self._href, " ".join(self._text).strip()))
+            self._href=None; self._text=[]
 
 class _VisibleText(HTMLParser):
     def __init__(self): super().__init__(); self.parts=[]; self.skip=0
@@ -832,29 +755,57 @@ class _VisibleText(HTMLParser):
     def handle_data(self, data):
         if not self.skip and data.strip(): self.parts.append(data.strip())
 
-def _http_text(url, limit=1_200_000, timeout=8):
-    # User-Agent de navegador estándar; algunos catálogos bloquean identificadores de bots.
-    req=Request(url, headers={"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-                              "Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                              "Accept-Language":"es-ES,es;q=0.9,en;q=0.8",
-                              "Cache-Control":"no-cache"})
+def _http_text(url, limit=1_200_000, timeout=7):
+    req=Request(url, headers={
+        "User-Agent":"INFORBAXE-CompatibilityResearch/1.0 (+public-catalog-search)",
+        "Accept":"text/html,application/xhtml+xml,application/rss+xml,application/xml;q=0.9,*/*;q=0.5",
+        "Accept-Language":"es-ES,es;q=0.9,en;q=0.8",
+    })
     with urlopen(req, timeout=timeout) as response:
         data=response.read(limit)
         charset=response.headers.get_content_charset() or "utf-8"
-        return data.decode(charset, errors="replace"), response.geturl()
+        return data.decode(charset, errors="replace"), response.geturl(), response.status
+
+def _domain_host(url):
+    return (urlparse(url).hostname or "").lower().split(":")[0]
 
 def _domain_allowed(url):
-    host=(urlparse(url).hostname or "").lower().split(":")[0]
+    host=_domain_host(url)
     return any(host == d or host.endswith("."+d) for d in _REFERENCE_SOURCES)
 
+def _robots_can_fetch(url):
+    """Respeta robots.txt: ante bloqueo o fallo de red no fuerza el rastreo."""
+    parsed=urlparse(url); origin=f"{parsed.scheme}://{parsed.netloc}"; now=time.time()
+    cached=_ROBOTS_CACHE.get(origin)
+    if cached and now-cached[0] < 12*60*60:
+        parser, allowed=cached[1], cached[2]
+        return allowed if parser is None else parser.can_fetch("INFORBAXE-CompatibilityResearch", url)
+    robots_url=origin+"/robots.txt"
+    try:
+        req=Request(robots_url,headers={"User-Agent":"INFORBAXE-CompatibilityResearch/1.0"})
+        with urlopen(req,timeout=4) as response:
+            text=response.read(256_000).decode(response.headers.get_content_charset() or "utf-8",errors="replace")
+        parser=__import__("urllib.robotparser",fromlist=["RobotFileParser"]).RobotFileParser()
+        parser.set_url(robots_url); parser.parse(text.splitlines())
+        _ROBOTS_CACHE[origin]=(now,parser,True)
+        return parser.can_fetch("INFORBAXE-CompatibilityResearch",url)
+    except HTTPError as exc:
+        # 404/410 means no published robots policy. Other HTTP errors fail closed.
+        allowed=exc.code in (404,410)
+        _ROBOTS_CACHE[origin]=(now,None,allowed)
+        return allowed
+    except Exception as exc:
+        log.info("No se pudo comprobar robots.txt de %s: %s",origin,exc)
+        _ROBOTS_CACHE[origin]=(now,None,False)
+        return False
+
 def _piece_search_terms(piece_name=""):
-    """Map any workshop part label to multilingual terms for public search."""
     value=unicodedata.normalize("NFKD", _norm(piece_name)).encode("ascii", "ignore").decode("ascii")
     maps = {
         ("bater", "battery", "acumulador"): "bateria battery replacement accu",
         ("pantall", "display", "screen", "lcd", "oled"): "pantalla display screen LCD OLED replacement",
         ("camar", "camera", "lente"): "camara camera rear front lens replacement",
-        ("conector", "carga", "charging", "usb", "flex carga"): "conector carga charging port USB flex replacement",
+        ("conector", "carga", "charging", "usb"): "conector carga charging port USB flex replacement",
         ("altavoz", "auricular", "speaker", "earpiece", "microfono", "microphone"): "altavoz auricular speaker earpiece microphone",
         ("vibrador", "vibrator", "motor vibr"): "vibrador vibrator motor replacement",
         ("tapa", "carcasa", "housing", "back cover", "chasis"): "tapa trasera carcasa housing back cover frame",
@@ -863,87 +814,160 @@ def _piece_search_terms(piece_name=""):
         ("antena", "nfc", "coaxial"): "antena antenna NFC coaxial cable",
         ("sim", "bandeja", "tray"): "bandeja SIM tray card reader",
         ("sensor", "huella", "fingerprint", "proximidad"): "sensor fingerprint proximity flex",
-        ("cristal", "glass", "camara trasera"): "cristal glass lens camera replacement",
+        ("cristal", "glass"): "cristal glass lens replacement",
     }
     for keys, terms in maps.items():
-        if any(key in value for key in keys):
-            return terms
-    return _clean(piece_name, 80)
+        if any(key in value for key in keys): return terms
+    return _clean(piece_name,80)
 
-def _search_source_domain(reference, domain, piece_name=""):
-    """Find product pages using the exact part number, without over-constraining the query.
+def _reference_compact(value):
+    return re.sub(r"[^A-Z0-9]", "", str(value or "").upper())
 
-    The former query required many translated category words simultaneously. Most
-    product catalogues do not contain all those terms, so search engines returned
-    no links even when the exact reference was indexed. Query the exact reference
-    first, and consult both public engines instead of treating Bing as a fallback
-    only when DuckDuckGo returns zero links.
-    """
-    query = f'"{reference}" site:{domain}'
-    found = []
-    errors = []
+def _reference_in_text(reference, text):
+    needle=_reference_compact(reference)
+    haystack=_reference_compact(text)
+    return bool(needle and needle in haystack)
 
-    # DuckDuckGo HTML results.
-    try:
-        search_url = "https://html.duckduckgo.com/html/?q=" + quote_plus(query)
-        html, _ = _http_text(search_url, 500_000)
-        parser = _DDGResults(); parser.feed(html)
-        for url, title in parser.links:
-            host = (urlparse(url).hostname or "").lower()
-            if _domain_allowed(url) and (host == domain or host.endswith("." + domain)):
-                found.append((url, title or domain))
-    except Exception as exc:
-        errors.append("DuckDuckGo")
-        log.info("DuckDuckGo no disponible para %s: %s", domain, exc)
+def _base_catalog_domain(host):
+    host=(host or "").lower()
+    return next((d for d in _REFERENCE_SOURCES if host == d or host.endswith("."+d)), host)
 
-    # Bing RSS is queried independently; it often indexes different product pages.
-    try:
-        bing_url = "https://www.bing.com/search?format=rss&q=" + quote_plus(query)
-        xml, _ = _http_text(bing_url, 500_000)
-        root = ET.fromstring(xml)
-        for item in root.findall(".//item"):
-            url = (item.findtext("link") or "").strip()
-            title = (item.findtext("title") or "").strip()
-            host = (urlparse(url).hostname or "").lower()
-            if url.startswith("http") and _domain_allowed(url) and (host == domain or host.endswith("." + domain)):
-                found.append((url, title or domain))
-    except Exception as exc:
-        errors.append("Bing")
-        log.info("Bing RSS no disponible para %s: %s", domain, exc)
+def _likely_product_url(url, domain):
+    path=(urlparse(url).path or "").lower()
+    domain=_base_catalog_domain(domain)
+    if any(x in path for x in ("/login", "/cart", "/account", "/search", "/buscar", "/contact", "/category")):
+        return False
+    if domain == "ovisat.com": return bool(re.search(r"-p\d+/?$",path) or "/producto/" in path)
+    if domain == "techtekshop.es": return "/producto/" in path or bool(re.search(r"/\d+[-/]",path))
+    if domain == "servicepacksamsung.com": return path.endswith(".html")
+    if domain == "componentidigitali.com": return path.endswith(".uw") or ".gp." in path
+    if domain in {"impextrom.com", "repuestosmovil.es", "techcomponentes.com", "gsmobile.es", "subtel.es"}:
+        if any(token in path for token in ("/producto", "/product", "/piezas", "/repuesto", "/bateria", "/pantalla")):
+            return True
+    return any(path.endswith(ext) for ext in (".html", ".htm", ".uw")) or bool(re.search(r"p\d+/?$",path))
 
-    # Si la búsqueda entrecomillada no devolvió nada, probar sin comillas.
-    # Algunos buscadores tokenizan las referencias con guiones de forma distinta.
-    if not found:
-        loose_query = f'{reference} site:{domain}'
-        for engine in ("ddg", "bing"):
-            try:
-                if engine == "ddg":
-                    loose_url = "https://html.duckduckgo.com/html/?q=" + quote_plus(loose_query)
-                    loose_html, _ = _http_text(loose_url, 500_000)
-                    loose_parser = _DDGResults(); loose_parser.feed(loose_html)
-                    loose_items = loose_parser.links
-                else:
-                    loose_url = "https://www.bing.com/search?format=rss&q=" + quote_plus(loose_query)
-                    loose_xml, _ = _http_text(loose_url, 500_000)
-                    loose_root = ET.fromstring(loose_xml)
-                    loose_items = [((item.findtext("link") or "").strip(), (item.findtext("title") or "").strip())
-                                   for item in loose_root.findall(".//item")]
-                for url, title in loose_items:
-                    host = (urlparse(url).hostname or "").lower()
-                    if url.startswith("http") and _domain_allowed(url) and (host == domain or host.endswith("." + domain)):
-                        found.append((url, title or domain))
-            except Exception as exc:
-                log.info("Búsqueda alternativa %s no disponible para %s: %s", engine, domain, exc)
-
-    unique = []
-    seen = set()
-    for url, title in found:
-        key = url.split("#", 1)[0].rstrip("/").casefold()
+def _parse_catalog_links(html, base_url, domain):
+    parser=_ResultLinks(); parser.feed(html); found=[]; seen=set()
+    for href,title in parser.links:
+        url=urljoin(base_url,href)
+        if not url.startswith("https://") or not _domain_allowed(url) or domain not in _domain_host(url): continue
+        if not _likely_product_url(url,domain): continue
+        key=url.split("#",1)[0]
         if key not in seen:
-            seen.add(key); unique.append((url, title))
-        if len(unique) >= 4:
-            break
-    return domain, unique, errors
+            seen.add(key); found.append((key,_clean(title,180)))
+        if len(found)>=4: break
+    return found
+
+def _search_direct_catalog(name,domain,templates,reference,piece_name=""):
+    query=quote_plus(reference)
+    diagnostics={"source":name,"domain":domain,"status":"sin_resultados","search_pages":0,"product_links":0,"pages_read":0,"reference_pages":0}
+    product_links=[]; evidence=[]
+    for template in templates:
+        search_url=template.format(q=query)
+        if not _robots_can_fetch(search_url):
+            diagnostics["status"]="bloqueado_por_robots"
+            continue
+        try:
+            html,final_url,status=_http_text(search_url,650_000,timeout=4)
+            diagnostics["search_pages"]+=1
+            if status>=400 or domain not in _domain_host(final_url):
+                diagnostics["status"]=f"http_{status}"; continue
+            links=_parse_catalog_links(html,final_url,domain)
+            product_links.extend((u,t) for u,t in links)
+            # Algunas tiendas muestran texto y compatibilidad en los resultados.
+            parsed=_extract_evidence_from_html(reference,domain,final_url,f"{name} · resultados de búsqueda",html,piece_name)
+            if parsed: evidence.append(parsed)
+            if links:
+                diagnostics["status"]="resultados_encontrados"; break
+            diagnostics["status"]="pagina_accesible_sin_productos"
+        except HTTPError as exc:
+            diagnostics["status"]=f"http_{exc.code}"
+        except Exception as exc:
+            diagnostics["status"]="error_de_conexion"
+            log.info("Búsqueda directa en %s falló: %s",domain,exc)
+    product_links=list(dict.fromkeys(product_links))[:4]
+    diagnostics["product_links"]=len(product_links)
+    for url,title in product_links:
+        if not _robots_can_fetch(url):
+            continue
+        try:
+            html,final_url,status=_http_text(url,1_200_000,timeout=5)
+            diagnostics["pages_read"]+=1
+            item=_extract_evidence_from_html(reference,domain,final_url,title,html,piece_name)
+            if item:
+                diagnostics["reference_pages"]+=1; evidence.append(item)
+        except Exception as exc:
+            log.info("No se pudo leer producto %s: %s",url,exc)
+    return evidence,diagnostics
+
+class _SearchEngineLinks(HTMLParser):
+    def __init__(self): super().__init__(); self.links=[]; self.href=None; self.text=[]
+    def handle_starttag(self,tag,attrs):
+        if tag=="a": self.href=dict(attrs).get("href"); self.text=[]
+    def handle_data(self,data):
+        if self.href: self.text.append(data)
+    def handle_endtag(self,tag):
+        if tag=="a" and self.href:
+            self.links.append((self.href," ".join(self.text).strip())); self.href=None; self.text=[]
+
+def _search_engine(engine,url,reference):
+    diag={"source":engine,"status":"sin_resultados","links":0}; links=[]
+    try:
+        html,final_url,status=_http_text(url,700_000,timeout=4)
+        if status>=400: diag["status"]=f"http_{status}"; return links,diag
+        if engine=="Bing RSS":
+            root=ET.fromstring(html)
+            for item in root.findall(".//item"):
+                u=(item.findtext("link") or "").strip(); title=(item.findtext("title") or "").strip()
+                if u.startswith("https://") and _domain_allowed(u): links.append((u,title))
+        else:
+            parser=_SearchEngineLinks(); parser.feed(html)
+            for href,title in parser.links:
+                u=href
+                if href.startswith("//"): u="https:"+href
+                if "uddg=" in u:
+                    try: u=parse_qs(urlparse(u).query).get("uddg",[u])[0]
+                    except Exception: pass
+                elif "r.search.yahoo.com" in u:
+                    try:
+                        raw_path=urlparse(u).path
+                        m=re.search(r"/RU=([^/]+)",raw_path)
+                        if m: u=unquote(m.group(1))
+                    except Exception: pass
+                if u.startswith("https://") and _domain_allowed(u): links.append((u,title))
+        unique=[]; seen=set()
+        for u,t in links:
+            key=u.split("#",1)[0]
+            if key not in seen: seen.add(key); unique.append((key,t))
+        links=unique[:20]; diag["links"]=len(links); diag["status"]="resultados_encontrados" if links else "sin_enlaces_de_catalogos"
+    except Exception as exc:
+        diag["status"]="bloqueado_o_no_disponible"; log.info("Buscador %s no disponible: %s",engine,exc)
+    return links,diag
+
+def _global_search_urls(reference,piece_name=""):
+    context=_piece_search_terms(piece_name)
+    queries=[f'"{reference}" {context} compatibilidad', f'"{reference}" "compatible con" OR "compatible for"']
+    engines=[]
+    for q in queries:
+        engines.extend([
+            ("DuckDuckGo Lite", "https://lite.duckduckgo.com/lite/?q="+quote_plus(q)),
+            ("Bing RSS", "https://www.bing.com/search?format=rss&q="+quote_plus(q)),
+            ("Yahoo", "https://search.yahoo.com/search?p="+quote_plus(q)),
+            ("Mojeek", "https://www.mojeek.com/search?q="+quote_plus(q)),
+        ])
+    found=[]; diagnostics=[]
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures=[pool.submit(_search_engine,name,url,reference) for name,url in engines]
+        for fut in as_completed(futures):
+            try:
+                links,diag=fut.result(); found.extend(links); diagnostics.append(diag)
+            except Exception: pass
+    unique=[]; seen=set()
+    for u,t in found:
+        domain=_domain_host(u)
+        if _likely_product_url(u,domain) and u not in seen:
+            seen.add(u); unique.append((domain,u,t))
+    return unique[:30],diagnostics
 
 def _brand_for_code(code):
     upper=code.upper()
@@ -973,362 +997,192 @@ def _device_names_near(text, code=None):
                 candidates.append({"marca":brand,"modelo":name})
     return candidates
 
-def _canonical_model_name(value):
-    name = re.sub(r"\s+", " ", str(value or "")).strip(" -|,;:")
-    # Normaliza pequeñas diferencias tipográficas que usan los catálogos.
-    name = re.sub(r"(?i)\bGalaxy\s+Note\s*(\d+)", r"Galaxy Note \1", name)
-    name = re.sub(r"(?i)\bGalaxy\s+([SAMFJ])\s*(\d+)", r"Galaxy \1\2", name)
-    return name
-
+def _closest_device_name(text, code_start, code_end, brand):
+    groups={"Huawei/Honor":{"Huawei","Honor"},"OPPO/OnePlus":{"OPPO","OnePlus"},"Tecno/Infinix":{"Tecno","Infinix"}}
+    allowed=groups.get(brand,{brand})
+    left=max(0,code_start-260); right=min(len(text),code_end+260)
+    window=text[left:right]
+    matches=[]
+    for name_brand,pattern in _DEVICE_NAME_PATTERNS:
+        if name_brand not in allowed: continue
+        for match in pattern.finditer(window):
+            absolute_start=left+match.start(); absolute_end=left+match.end()
+            distance=min(abs(absolute_end-code_start),abs(absolute_start-code_end))
+            name=re.sub(r"\s+"," ",match.group(0)).strip(" -|,;:")
+            if name and distance<=260:
+                matches.append((distance,name_brand,name))
+    if not matches: return None
+    matches.sort(key=lambda item:(item[0],len(item[2])))
+    # Si dos nombres distintos están prácticamente igual de cerca, no adivinamos.
+    if len(matches)>1 and matches[0][0]==matches[1][0] and matches[0][2].casefold()!=matches[1][2].casefold():
+        return None
+    return {"marca":matches[0][1],"modelo":matches[0][2]}
 
 def _extract_device_candidates(reference, compact, title=""):
-    """Extract exact device codes and associate each with the nearest commercial model name."""
-    candidates = []
-    ref_position = compact.casefold().find(reference.casefold())
-    if ref_position >= 0:
-        scan_text = compact[max(0, ref_position - 2500):min(len(compact), ref_position + 9000)]
-    else:
-        scan_text = compact[:9000]
-
-    # Detect all commercial model-name occurrences with positions. This avoids
-    # assigning every code on a multi-model product page to the first name.
-    name_hits = []
-    for brand_name, pattern in _DEVICE_NAME_PATTERNS:
-        for match in pattern.finditer(scan_text):
-            model_name = _canonical_model_name(match.group(0))
-            if model_name:
-                name_hits.append((brand_name, model_name, match.start(), match.end()))
-
-    brand_groups = {
-        "Huawei/Honor": {"Huawei", "Honor"},
-        "OPPO/OnePlus": {"OPPO", "OnePlus"},
-        "Tecno/Infinix": {"Tecno", "Infinix"},
-    }
-    coded_keys = set()
-    for device_brand, pattern in _MODEL_PATTERNS:
-        for match in pattern.finditer(scan_text):
-            code = match.group(0).upper()
-            allowed_brands = brand_groups.get(device_brand, {device_brand})
-            possible = []
-            for name_brand, model_name, name_start, name_end in name_hits:
-                if name_brand not in allowed_brands:
-                    continue
-                if name_end <= match.start():
-                    direction = 0  # El nombre que precede al código suele ser el encabezado del bloque de variantes.
-                    distance = match.start() - name_end
-                elif name_start >= match.end():
-                    direction = 1
-                    distance = name_start - match.end()
-                else:
-                    direction = 0
-                    distance = 0
-                if distance <= 260:
-                    possible.append((direction, distance, name_brand, model_name))
-            if possible:
-                possible.sort(key=lambda x: (x[0], x[1]))
-                _, _, model_brand, model_name = possible[0]
+    candidates=[]
+    for brand,pattern in _MODEL_PATTERNS:
+        for match in pattern.finditer(compact):
+            code=match.group(0).upper()
+            detected_brand=_brand_for_code(code) or brand
+            name=_closest_device_name(compact,match.start(),match.end(),detected_brand)
+            if name:
+                candidates.append({"code":code,"brand":name["marca"],"model_name":name["modelo"]})
             else:
-                model_brand = device_brand
-                model_name = f"Modelo identificado por código {code}"
-            key = (model_brand.casefold(), model_name.casefold(), code.casefold())
-            if key not in coded_keys:
-                coded_keys.add(key)
-                candidates.append({"code": code, "brand": model_brand, "model_name": model_name})
-
-    # Some catalogues publish the commercial name but omit the regulatory
-    # code. Keep those names as evidence too, but only near the exact part ref.
-    for name_brand, model_name, name_start, name_end in name_hits:
-        ref_pos = scan_text.casefold().find(reference.casefold())
-        if ref_pos < 0 or abs(name_start - ref_pos) > 3200:
-            continue
-        if not any(x["brand"].casefold() == name_brand.casefold()
-                   and x["model_name"].casefold() == model_name.casefold() for x in candidates):
-            candidates.append({"code": "", "brand": name_brand, "model_name": model_name})
-
-    unique = []
-    seen = set()
+                candidates.append({"code":code,"brand":detected_brand,"model_name":f"Modelo identificado por código {code}"})
+    # Si la página no contiene códigos de modelo, solo aceptamos un nombre
+    # comercial cuando está en la zona de la referencia exacta y no hay varios
+    # modelos de la misma marca que pudieran confundirse.
+    if not candidates:
+        ref_pos=_reference_compact(compact).find(_reference_compact(reference))
+        names=[]
+        for brand,pattern in _DEVICE_NAME_PATTERNS:
+            for match in pattern.finditer(compact):
+                name=re.sub(r"\s+"," ",match.group(0)).strip(" -|,;:")
+                names.append({"marca":brand,"modelo":name,"pos":match.start()})
+        if ref_pos>=0 and names:
+            # El texto normalizado puede cambiar offsets; usamos una ventana amplia
+            # alrededor de la aparición literal para páginas simples.
+            literal_pos=compact.casefold().find(reference.casefold())
+            near=[x for x in names if literal_pos<0 or abs(x["pos"]-literal_pos)<900]
+            unique={(x["marca"].casefold(),x["modelo"].casefold()):x for x in near}
+            if len(unique)==1:
+                x=next(iter(unique.values()))
+                candidates.append({"code":"","brand":x["marca"],"model_name":x["modelo"]})
+    unique=[]; seen=set()
     for item in candidates:
-        key = (item["code"].casefold(), item["brand"].casefold(), item["model_name"].casefold())
-        if key not in seen:
-            seen.add(key)
-            unique.append(item)
+        key=(item.get("code","").casefold(),item.get("brand","").casefold(),item.get("model_name","").casefold())
+        if key not in seen: seen.add(key); unique.append(item)
     return unique[:60]
 
-def _reference_compact(value):
-    return re.sub(r"[^A-Z0-9]", "", str(value or "").upper())
+def _extract_evidence_from_html(reference,domain,url,title,html,piece_name=""):
+    if not _domain_allowed(url) or domain not in _domain_host(url): return None
+    parser=_VisibleText(); parser.feed(html)
+    text=" ".join(parser.parts); compact=re.sub(r"\s+"," ",text)
+    if not _reference_in_text(reference,compact): return None
+    # Limita la extracción a la zona de la referencia para no confundir los
+    # modelos de la pieza con productos relacionados del pie de página.
+    ref_pos=compact.casefold().find(reference.casefold())
+    evidence_window=(compact[max(0,ref_pos-4200):min(len(compact),ref_pos+8200)] if ref_pos>=0 else compact[:9000])
+    candidates=_extract_device_candidates(reference,evidence_window,title)
+    return {"domain":domain,"url":url,"title":re.sub(r"\s+"," ",title or "").strip()[:180] or domain,
+            "candidates":candidates,"excerpt":compact[:1200]}
 
+def _automatic_reference_research(reference,piece_name=""):
+    ref=re.sub(r"[^A-Za-z0-9._/-]","",_clean(reference,80)).upper()
+    piece=_clean(piece_name,100)
+    if len(ref)<4:
+        return {"ok":False,"message":"Introduce una referencia de al menos 4 caracteres.","sources":[],"models":[]}
+    cache_key=f"{ref}|{piece.casefold()}"; now=time.time()
+    cached=_REFERENCE_CACHE.get(cache_key)
+    if cached and now-cached[0] < (_REFERENCE_CACHE_POSITIVE_TTL if cached[1].get("models") else _REFERENCE_CACHE_NEGATIVE_TTL):
+        result=dict(cached[1]); result["cached"]=True; return result
 
-def _reference_is_present(text, reference):
-    # Admite referencias separadas por espacios, guiones no estándar o saltos
-    # introducidos por el HTML, sin aceptar coincidencias parciales cortas.
-    raw = str(text or "").casefold()
-    ref = str(reference or "").casefold()
-    if ref and ref in raw:
-        return True
-    compact_ref = _reference_compact(reference)
-    compact_text = _reference_compact(text)
-    return len(compact_ref) >= 6 and compact_ref in compact_text
-
-
-def _extract_evidence(reference, domain, url, title, piece_name=""):
-    try:
-        html, final_url = _http_text(url, timeout=5)
-        final_host = (urlparse(final_url).hostname or "").lower()
-        if not _domain_allowed(final_url) or not (final_host == domain or final_host.endswith("." + domain)):
-            return {"status": "redirect_outside_catalogue", "domain": domain}
-    except Exception as exc:
-        log.info("No se pudo leer fuente %s: %s", domain, exc)
-        return {"status": "page_unavailable", "domain": domain}
-    parser = _VisibleText(); parser.feed(html)
-    text = " ".join(parser.parts)
-    compact = re.sub(r"\s+", " ", text)
-    if not _reference_is_present(compact, reference):
-        return {"status": "reference_not_found_on_page", "domain": domain}
-    candidates = _extract_device_candidates(reference, compact, title)
-    if not candidates:
-        return {"status": "no_model_identified", "domain": domain}
-    title_clean = re.sub(r"\s+", " ", title or "").strip()[:180]
-    return {"status": "ok", "domain": domain, "url": url,
-            "title": title_clean or domain, "candidates": candidates,
-            "excerpt": compact[:1200]}
-
-
-def _search_public_engine(engine, query):
-    """Search one public engine once; return only allow-listed repair-catalogue pages."""
-    links = []
-    try:
-        if engine == "DuckDuckGo":
-            search_url = "https://html.duckduckgo.com/html/?q=" + quote_plus(query)
-            html, _ = _http_text(search_url, 500_000, timeout=5)
-            parser = _DDGResults()
-            parser.feed(html)
-            raw_links = parser.links
-        else:
-            search_url = "https://www.bing.com/search?format=rss&q=" + quote_plus(query)
-            xml, _ = _http_text(search_url, 500_000, timeout=5)
-            root = ET.fromstring(xml)
-            raw_links = [
-                ((item.findtext("link") or "").strip(), (item.findtext("title") or "").strip())
-                for item in root.findall(".//item")
-            ]
-        for url, title in raw_links:
-            if not str(url).startswith("http") or not _domain_allowed(url):
-                continue
-            host = (urlparse(url).hostname or "").lower()
-            domain = next((d for d in _REFERENCE_SOURCES if host == d or host.endswith("." + d)), None)
-            if not domain:
-                continue
-            links.append((domain, url.split("#", 1)[0], _clean(title or domain, 180)))
-    except Exception as exc:
-        log.info("Búsqueda pública %s fallida: %s", engine, exc)
-        return engine, [], str(exc)[:180]
-    return engine, links, "" if links else "El buscador no devolvió enlaces de catálogos admitidos."
-
-
-def _automatic_reference_research(reference, piece_name=""):
-    """Bounded, server-side public-web research with per-domain consensus.
-
-    Search engines are queried globally (rather than once per catalogue), which
-    avoids dozens of serial network calls and Render's upstream request timeout.
-    Only pages hosted on the allow-list are opened and counted as evidence.
-    """
-    ref = re.sub(r"[^A-Za-z0-9._/-]", "", _clean(reference, 80)).upper()
-    piece = _clean(piece_name, 100)
-    if len(ref) < 4:
-        return {"ok": False, "message": "Introduce una referencia de al menos 4 caracteres.", "sources": [], "models": []}
-
-    cache_key = f"{ref}|{piece.casefold()}"
-    now = time.time()
-    cached = _REFERENCE_CACHE.get(cache_key)
-    if cached and now - cached[0] < _REFERENCE_CACHE_TTL:
-        result = dict(cached[1])
-        result["cached"] = True
-        return result
-
-    category_terms = _piece_search_terms(piece)
-    queries = [f'"{ref}"', f'{ref} {category_terms}'.strip()]
-    search_jobs = [(engine, query) for query in queries for engine in ("DuckDuckGo", "Bing")]
-    discovered, search_errors = [], []
-    engines_with_results = set()
-    # Four bounded search requests replace up to 80 per-domain requests.
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        futures = {pool.submit(_search_public_engine, engine, query): (engine, query)
-                   for engine, query in search_jobs}
-        for future in as_completed(futures):
-            engine, _query = futures[future]
-            try:
-                returned_engine, links, error = future.result()
-                if links:
-                    engines_with_results.add(returned_engine)
-                    discovered.extend(links)
-                if error:
-                    search_errors.append(f"{returned_engine}: {error}")
-            except Exception as exc:
-                search_errors.append(f"{engine}: {str(exc)[:160]}")
-
-    # Deduplicate by URL; each catalogue host can contribute at most one vote.
-    unique_pages, seen_pages = [], set()
-    for domain, url, title in discovered:
-        key = url.split("#", 1)[0].rstrip("/").casefold()
-        if key not in seen_pages:
-            seen_pages.add(key)
-            unique_pages.append((domain, url, title))
-    # Cap the amount of external work to keep the request responsive on Render.
-    unique_pages = unique_pages[:12]
-
-    results, page_status = [], {}
-    with ThreadPoolExecutor(max_workers=12) as pool:
-        futures = {pool.submit(_extract_evidence, ref, domain, url, title, piece,): (domain, url)
-                   for domain, url, title in unique_pages}
+    evidence=[]; diagnostics=[]; discovered=[]
+    # 1) Buscar directamente dentro de los catálogos públicos (sin pasar por
+    # motores externos como intermediarios). Se respeta robots.txt.
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        futures=[pool.submit(_search_direct_catalog,*catalog,ref,piece) for catalog in _DIRECT_CATALOGS]
         for future in as_completed(futures):
             try:
-                outcome = future.result()
-                outcome = outcome or {"status": "page_unavailable", "domain": futures[future][0]}
-                status = outcome.get("status", "page_unavailable")
-                page_status[status] = page_status.get(status, 0) + 1
-                if status == "ok":
-                    results.append(outcome)
+                items,diag=future.result(); evidence.extend(items); diagnostics.append(diag)
             except Exception as exc:
-                page_status["page_unavailable"] = page_status.get("page_unavailable", 0) + 1
-                log.info("No se pudo leer la página %s: %s", futures[future][1], exc)
+                log.info("Conector directo fallido: %s",exc)
 
-    # Aggregate by normalized model name within brand. Different regulatory
-    # variants (e.g. regional SM codes) are retained under the same device.
-    by_candidate = {}
-    evidence_domains = set()
-    for evidence in results:
-        evidence_domains.add(evidence["domain"])
-        for candidate in evidence.get("candidates", []):
-            brand = _clean(candidate.get("brand"), 80) or "Marca por confirmar"
-            name = _clean(candidate.get("model_name"), 140)
-            code = _clean(candidate.get("code"), 100).upper()
-            is_generic = name.startswith("Modelo identificado por código")
-            key = (f"{brand}:{code}" if is_generic and code else f"{brand}:{_norm(name)}").casefold()
-            entry = by_candidate.setdefault(key, {
-                "brand": brand, "model_name": name, "codes_set": set(),
-                "domains": set(), "sources": []
-            })
-            if code:
-                entry["codes_set"].add(code)
-            entry["domains"].add(evidence["domain"])
-            if not any(source["url"] == evidence["url"] for source in entry["sources"]):
-                entry["sources"].append({
-                    "domain": evidence["domain"], "title": evidence["title"], "url": evidence["url"]
-                })
-            if entry["model_name"].startswith("Modelo identificado por código") and not is_generic:
-                entry["model_name"] = name
+    # 2) Complementar con buscadores públicos: una consulta global, no una
+    # consulta por cada dominio. Solo se aceptan URLs de catálogos permitidos.
+    search_urls,engine_diagnostics=_global_search_urls(ref,piece)
+    diagnostics.extend(engine_diagnostics)
+    diagnostics.append({"source":"Resultados públicos globales","status":"enlaces_encontrados" if search_urls else "sin_enlaces_de_catalogos","links":len(search_urls),"pages_read":0})
+    seen_urls={x["url"] for x in evidence}
+    # Un máximo de 12 páginas, para no saturar Render ni las tiendas.
+    global_read_attempts=0
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures={pool.submit(_extract_evidence_page,ref,domain,url,title,piece):(domain,url) for domain,url,title in search_urls[:12] if url not in seen_urls}
+        for future in as_completed(futures):
+            global_read_attempts += 1
+            try:
+                item=future.result()
+                if item: evidence.append(item)
+            except Exception as exc:
+                log.info("Lectura de fuente externa fallida: %s",exc)
+    diagnostics[-1]["pages_read"]=global_read_attempts
 
-    total_domains = len(evidence_domains)
-    # Need at least two independent domains; thereafter two-thirds of domains
-    # that actually contained the exact part reference and a device candidate.
-    minimum = max(2, (total_domains * 2 + 2) // 3) if total_domains else 2
-    models, best_match = [], 0
-    for _key, item in sorted(by_candidate.items()):
-        count = len(item["domains"])
-        best_match = max(best_match, count)
-        if count < minimum:
-            continue
-        models.append({
-            "code": sorted(item["codes_set"])[0] if item["codes_set"] else "",
-            "codes": sorted(item["codes_set"]),
-            "brand": item["brand"],
-            "model_name": item["model_name"],
-            "matches": count,
-            "total_sources": total_domains,
-            "confidence": round(100 * count / max(total_domains, 1)),
-            "sources": item["sources"][:8],
-        })
+    # 3) Una sola evidencia por dominio. No se cuentan URL duplicadas ni páginas
+    # espejo del mismo catálogo como fuentes distintas.
+    by_domain={}
+    for item in evidence:
+        domain=item["domain"]
+        current=by_domain.setdefault(domain,{"domain":domain,"pages":[]})
+        if not any(p["url"]==item["url"] for p in current["pages"]): current["pages"].append(item)
+    independent_domains=sorted(by_domain)
+    total_domains=len(independent_domains)
+    by_candidate={}
+    for domain,container in by_domain.items():
+        domain_candidates={}
+        for page in container["pages"]:
+            for candidate in page.get("candidates",[]):
+                code=candidate.get("code","").upper().strip(); brand=candidate.get("brand","").strip()
+                name=candidate.get("model_name","").strip()
+                key=(f"{brand}:{code}" if code else f"name:{brand}:{name}").casefold()
+                entry=domain_candidates.setdefault(key,{**candidate,"sources":[]})
+                entry["sources"].append({"domain":domain,"title":page["title"],"url":page["url"]})
+        for key,candidate in domain_candidates.items():
+            entry=by_candidate.setdefault(key,{**candidate,"domains":set(),"sources":[]})
+            entry["domains"].add(domain)
+            for src in candidate["sources"]:
+                if not any(x["url"]==src["url"] for x in entry["sources"]): entry["sources"].append(src)
+            if entry["model_name"].startswith("Modelo identificado por código") and not candidate["model_name"].startswith("Modelo identificado"):
+                entry["model_name"]=candidate["model_name"]
 
-    source_list = []
-    for item in results:
-        if not any(source["domain"] == item["domain"] for source in source_list):
-            source_list.append({"domain": item["domain"], "title": item["title"], "url": item["url"]})
+    minimum=max(2,math.ceil((2/3)*total_domains)) if total_domains>=2 else 2
+    models=[]
+    for key,item in sorted(by_candidate.items()):
+        count=len(item["domains"])
+        if count<minimum: continue
+        models.append({"code":item.get("code",""),"codes":[item.get("code")] if item.get("code") else [],
+            "brand":item.get("brand") or "Marca por confirmar","model_name":item.get("model_name") or "Modelo sin identificar",
+            "matches":count,"total_sources":total_domains,"confidence":round(100*count/max(total_domains,1)),
+            "sources":item["sources"]})
 
-    diagnostics = {
-        "search_engines_consulted": ["DuckDuckGo", "Bing"],
-        "search_engines_with_results": sorted(engines_with_results),
-        "domains_consulted": len(_REFERENCE_SOURCES),
-        "domains_with_search_results": len({domain for domain, _url, _title in unique_pages}),
-        "pages_discovered": len(unique_pages),
-        "pages_checked": sum(page_status.values()),
-        "pages_with_exact_reference": page_status.get("no_model_identified", 0) + page_status.get("ok", 0),
-        "pages_with_models": page_status.get("ok", 0),
-        "domains_with_evidence": total_domains,
-        "search_errors": search_errors[:12],
-        "page_status": page_status,
-        "best_candidate_matches": best_match,
-    }
-
-    if models:
-        message = "Se encontraron modelos con consenso entre catálogos independientes. Revisa las fuentes antes de guardarlos."
-    elif not unique_pages:
-        message = "Los buscadores no devolvieron páginas de catálogos admitidos. No significa que la pieza no sea compatible; puede ser un bloqueo de búsqueda desde Render."
-    elif not results:
-        message = "Se localizaron páginas, pero no se pudo leer una referencia exacta junto con modelos de dispositivo. No se propone ninguna compatibilidad."
-    elif total_domains < 2:
-        message = f"Solo {total_domains} catálogo(s) aportaron evidencia utilizable; hacen falta al menos dos dominios independientes."
-    else:
-        message = f"Hay evidencia en {total_domains} catálogos, pero ningún modelo alcanza {minimum} coincidencias independientes."
-
-    result = {
-        "ok": bool(models), "reference": ref, "piece": piece,
-        "sources": source_list, "models": models,
-        "checked_domains": list(_REFERENCE_SOURCES),
-        "successful_domains": total_domains,
-        "minimum_consensus": minimum,
-        "diagnostics": diagnostics,
-        "message": message, "errors": search_errors[:12], "cached": False,
-    }
-    # Cache only positive, evidence-backed results. Failed searches can be retried
-    # immediately because network blocks and search-engine throttling are transient.
-    if models:
-        _REFERENCE_CACHE[cache_key] = (now, result)
+    sources=[]
+    for domain,container in by_domain.items():
+        for page in container["pages"]:
+            if not any(x["url"]==page["url"] for x in sources):
+                sources.append({"domain":domain,"title":page["title"],"url":page["url"]})
+    source_diags=[d for d in diagnostics if d.get("source")]
+    result={"ok":bool(models),"reference":ref,"piece":piece,"sources":sources,"models":models,
+        "checked_domains":[x[1] for x in _DIRECT_CATALOGS],"successful_domains":total_domains,
+        "minimum_consensus":minimum,"diagnostics":source_diags,
+        "pages_read":sum(int(d.get("pages_read",0)) for d in diagnostics),
+        "message":("Se encontraron coincidencias entre fuentes independientes." if models else
+                   "No se ha podido confirmar ninguna compatibilidad con evidencia suficiente."),
+        "errors":[d for d in source_diags if d.get("status") in ("error_de_conexion","bloqueado_por_robots","bloqueado_o_no_disponible")],
+        "cached":False}
+    ttl=_REFERENCE_CACHE_POSITIVE_TTL if models else _REFERENCE_CACHE_NEGATIVE_TTL
+    _REFERENCE_CACHE[cache_key]=(now,result)
     return result
+
+def _extract_evidence_page(reference,domain,url,title,piece_name=""):
+    if not _robots_can_fetch(url): return None
+    try:
+        html,final_url,status=_http_text(url,1_200_000,timeout=5)
+        if status>=400 or domain not in _domain_host(final_url): return None
+        return _extract_evidence_from_html(reference,domain,final_url,title,html,piece_name)
+    except Exception as exc:
+        log.info("No se pudo leer fuente %s: %s",domain,exc); return None
 
 @despiece_bp.post("/api/despiece/buscar-referencia")
 @_login_required
 def api_buscar_referencia_automatica():
+    payload=request.get_json(silent=True) or {}
+    reference=_clean(payload.get("referencia"),80)
+    piece_name=_clean(payload.get("pieza"),120)
     try:
-        payload = request.get_json(silent=True) or {}
-        if not isinstance(payload, dict):
-            return jsonify({"ok": False, "message": "La solicitud no tiene el formato esperado.", "sources": [], "models": []}), 400
-        reference = _clean(payload.get("referencia"), 80)
-        piece_name = _clean(payload.get("pieza"), 120)
-        if len(reference) < 4:
-            return jsonify({"ok": False, "message": "Introduce una referencia de al menos 4 caracteres.", "sources": [], "models": []}), 400
         result=_automatic_reference_research(reference,piece_name)
-        if result.get("models"):
-            signer = URLSafeTimedSerializer(current_app.secret_key, salt="inforbaxe-reference-research-v1")
-            compact_models = []
-            for model in result.get("models", [])[:20]:
-                compact_models.append({
-                    "brand": _clean(model.get("brand"), 80),
-                    "model_name": _clean(model.get("model_name"), 140),
-                    "code": _clean(model.get("code"), 100),
-                    "codes": [_clean(code, 100) for code in (model.get("codes") or [])[:10]],
-                    "matches": int(model.get("matches") or 0),
-                    "total_sources": int(model.get("total_sources") or 0),
-                    "confidence": int(model.get("confidence") or 0),
-                    "sources": [
-                        {"domain": _clean(source.get("domain"), 100), "url": _clean(source.get("url"), 300)}
-                        for source in (model.get("sources") or [])[:6]
-                        if isinstance(source, dict)
-                    ],
-                })
-            result["models"] = result.get("models", [])[:20]
-            result["research_token"] = signer.dumps({
-                "reference": result.get("reference", ""),
-                "piece": result.get("piece", ""),
-                "models": compact_models,
-            })
-        response = jsonify(result)
-        response.headers["Cache-Control"] = "no-store"
-        return response
-    except Exception as exc:
+        return jsonify(result)
+    except Exception:
         log.exception("Error en investigación automática de referencia")
-        response = jsonify({"ok": False, "message": "Error interno al investigar la referencia.", "detail": str(exc)[:240], "sources": [], "models": []})
-        response.headers["Cache-Control"] = "no-store"
-        return response, 502
+        return jsonify({"ok":False,"message":"No se pudo completar la búsqueda automática. Inténtalo más tarde.","sources":[],"models":[]}), 502
 
 @despiece_bp.get("/despiece/buscar-referencia")
 @_login_required
