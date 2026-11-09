@@ -718,7 +718,7 @@ _MODEL_PATTERNS = [
 # referencia exacta presente en la misma página.
 _DEVICE_NAME_PATTERNS = [
     ("Apple", re.compile(r"\b(?:iPhone\s+\d{1,2}(?:\s+(?:Pro\s+Max|Pro|Plus|mini|Air))?|iPad(?:\s+(?:Pro|Air|mini))?(?:\s+\d{1,2})?)\b", re.I)),
-    ("Samsung", re.compile(r"\b(?:(?:Samsung\s+)?Galaxy\s+|Samsung\s+)(?:(?:S|A|M|F|J|Note)\s*\d{1,3}|Z\s*(?:Fold|Flip)\s*\d{1,2}|Tab\s+S?\d{1,2})(?:\s*(?:5G|4G|Ultra|Plus|FE|Pro|DUOS))?\b|\bNote\s*\d{1,3}(?:\s*(?:4G|5G|DUOS))?\b", re.I)),
+    ("Samsung", re.compile(r"\b(?:(?:Samsung\s+)?Galaxy\s+|Samsung\s+)(?:(?:S|A|M|F|J|Note)\s*\d{1,3}|Z\s*(?:Fold|Flip)\s*\d{1,2}|Tab\s+S?\d{1,2})(?:\s*(?:4G\s*/\s*5G|5G\s*/\s*4G|5G|4G|Ultra|Plus|FE|Pro|DUOS))?\b|\bNote\s*\d{1,3}(?:\s*(?:4G|5G|DUOS))?\b", re.I)),
     ("Xiaomi", re.compile(r"\b(?:Xiaomi\s+\d{1,2}(?:T)?(?:\s+Pro)?|Redmi\s+(?:Note\s+)?\d{1,2}(?:\s+(?:Pro|Pro\+|5G|4G))?|POCO\s+[A-Z0-9]+(?:\s+Pro)?)\b", re.I)),
     ("Huawei", re.compile(r"\b(?:Huawei\s+)?(?:P\d{1,2}(?:\s+Pro)?|Mate\s+\d{1,2}(?:\s+Pro)?|Nova\s+\d{1,2})\b", re.I)),
     ("Honor", re.compile(r"\bHonor\s+(?:Magic\s*\d{1,2}(?:\s+Pro)?|\d{1,3}(?:\s+Pro)?|X\d{1,2})\b", re.I)),
@@ -1139,9 +1139,9 @@ def _compatibility_windows(text, reference):
     """Devuelve los bloques de compatibilidad y señala si hay una etiqueta explícita."""
     label_pattern = re.compile(
         r"\b(?:compatible\s+(?:con|para|with|for)|compatibilidad|compatibility|"
-        r"model(?:o)?s?\s*(?:\(s\))?\s*[:\-]|modelos?\s+compatibles?|"
+        r"model(?:o)?s?\s*(?:\(s\))?|modelos?\s+compatibles?|"
         r"fits?\s+(?:the\s+following|for|with)|se\s+adapta\s+a|se\s+ajusta\s+a|"
-        r"suitable\s+for|works?\s+with|dispositivos?\s+compatibles?)\b",
+        r"suitable\s+for|works?\s+with|dispositivos?\s+compatibles?)(?=\W|$)",
         re.IGNORECASE
     )
     matches = list(label_pattern.finditer(text or ""))
