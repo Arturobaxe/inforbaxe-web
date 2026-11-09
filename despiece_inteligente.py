@@ -20,7 +20,8 @@ import time
 import unicodedata
 import xml.etree.ElementTree as ET
 
-from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, session, url_for
+from flask import Blueprint, abort, current_app, flash, jsonify, redirect, render_template, request, session, url_for
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 import database as db
 
@@ -426,15 +427,72 @@ def guardar_pieza_inteligente():
     except (TypeError, ValueError):
         flash("Selecciona una familia válida.", "error")
         return redirect(url_for("despiece_inteligente.nueva_pieza_inteligente"))
+
     marca = _clean(request.form.get("marca"), 80)
     modelo = _clean(request.form.get("modelo"), 120)
     pieza = _clean(request.form.get("pieza"), 120)
     referencia = _clean(request.form.get("referencia"), 120)
     descripcion = _clean(request.form.get("descripcion"), 1000)
+
+    # Leer y validar candidatos elegidos a partir de un resultado firmado por el servidor.
+    research_candidates = []
+    token = _clean(request.form.get("investigacion_token"), 120000)
+    raw_indexes = request.form.get("investigacion_indices", "[]")
+    try:
+        selected_indexes = json.loads(raw_indexes)
+        if not isinstance(selected_indexes, list):
+            selected_indexes = []
+        selected_indexes = sorted({int(x) for x in selected_indexes if str(x).isdigit()})
+    except (TypeError, ValueError, json.JSONDecodeError):
+        selected_indexes = []
+
+    if token and selected_indexes:
+        try:
+            signer = URLSafeTimedSerializer(current_app.secret_key, salt="inforbaxe-reference-research-v1")
+            signed_result = signer.loads(token, max_age=1800)
+            signed_reference = _clean(signed_result.get("reference"), 80).upper()
+            if signed_reference != re.sub(r"[^A-Za-z0-9._/-]", "", referencia).upper():
+                raise BadSignature("La referencia cambió después de la investigación.")
+            signed_models = signed_result.get("models", [])
+            research_candidates = [signed_models[i] for i in selected_indexes if 0 <= i < len(signed_models)]
+        except (BadSignature, SignatureExpired, TypeError, ValueError):
+            flash("La búsqueda ha caducado o la referencia ha cambiado. Vuelve a investigar antes de guardar.", "error")
+            return redirect(url_for("despiece_inteligente.nueva_pieza_inteligente"))
+
+    selected_ids = []
+    for raw_id in request.form.getlist("modelo_id"):
+        try:
+            model_id = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        if model_id not in selected_ids:
+            selected_ids.append(model_id)
+
     try:
         valid_family = client.table("despiece_familias").select("id").eq("id", familia_id).limit(1).execute().data or []
-        if not valid_family or not modelo or not pieza:
-            raise ValueError("Completa una familia válida, un modelo y una pieza.")
+        if not valid_family or not pieza:
+            raise ValueError("Completa una familia válida y el nombre de la pieza.")
+
+        # Si el usuario solo ha buscado por referencia, usar el primer modelo elegido
+        # como modelo principal de la pieza. El resto se guardará como compatibilidades.
+        valid_selected = []
+        if selected_ids:
+            valid_rows = (client.table("despiece_modelos").select("id,marca,modelo")
+                          .in_("id", selected_ids).eq("estado", "activo").execute().data or [])
+            valid_by_id = {int(row["id"]): row for row in valid_rows}
+            valid_selected = [valid_by_id[x] for x in selected_ids if x in valid_by_id]
+
+        if not (marca and modelo):
+            if research_candidates:
+                first = research_candidates[0]
+                marca = _clean(first.get("brand"), 80)
+                modelo = _clean(first.get("model_name"), 120)
+            elif valid_selected:
+                marca = _clean(valid_selected[0].get("marca"), 80)
+                modelo = _clean(valid_selected[0].get("modelo"), 120)
+        if not modelo:
+            raise ValueError("Indica un modelo principal o selecciona al menos un modelo encontrado por referencia.")
+
         inserted = (client.table("despiece_repuestos").insert({
             "familia_id": familia_id,
             "marca": marca,
@@ -445,42 +503,97 @@ def guardar_pieza_inteligente():
         }).execute().data or [])
         if not inserted:
             raise RuntimeError("Supabase no devolvió el repuesto creado.")
-        repuesto_id = inserted[0]["id"]
-        selected = []
-        for raw_id in request.form.getlist("modelo_id"):
-            try:
-                value = int(raw_id)
-            except (TypeError, ValueError):
+        repuesto_id = int(inserted[0]["id"])
+
+        # Vincular modelos locales seleccionados; nunca rebajar una relación ya verificada.
+        linked_ids = set()
+        for row in valid_selected:
+            model_id = int(row["id"])
+            existing_rel = (client.table("despiece_repuesto_modelos").select("estado_compatibilidad,notas")
+                            .eq("repuesto_id", repuesto_id).eq("modelo_id", model_id).limit(1).execute().data or [])
+            status = "verificada" if existing_rel and existing_rel[0].get("estado_compatibilidad") == "verificada" else "pendiente"
+            client.table("despiece_repuesto_modelos").upsert({
+                "repuesto_id": repuesto_id, "modelo_id": model_id,
+                "estado_compatibilidad": status,
+            }, on_conflict="repuesto_id,modelo_id").execute()
+            linked_ids.add(model_id)
+
+        # Incorporar modelos que han superado el consenso y que el usuario ha marcado.
+        for candidate in research_candidates:
+            candidate_brand = _clean(candidate.get("brand"), 80)
+            candidate_name = _clean(candidate.get("model_name"), 140)
+            if not candidate_brand or not candidate_name:
                 continue
-            if value not in selected:
-                selected.append(value)
-        if selected:
-            valid_models = (client.table("despiece_modelos").select("id")
-                            .in_("id", selected).eq("estado", "activo").execute().data or [])
-            valid_ids = {int(item["id"]) for item in valid_models}
-            relations = [{"repuesto_id": repuesto_id, "modelo_id": model_id, "estado_compatibilidad": "pendiente"}
-                         for model_id in selected if model_id in valid_ids]
-            if relations:
-                client.table("despiece_repuesto_modelos").insert(relations).execute()
-        else:
-            # Si el modelo ya existe en el catálogo, enlazarlo automáticamente como pendiente de verificación.
+            sources = candidate.get("sources") if isinstance(candidate.get("sources"), list) else []
+            unique_domains = set()
+            safe_sources = []
+            for source in sources[:12]:
+                if not isinstance(source, dict):
+                    continue
+                domain = _clean(source.get("domain"), 100).lower()
+                source_url = _clean(source.get("url"), 500)
+                if domain and _domain_allowed(source_url) and domain not in unique_domains:
+                    unique_domains.add(domain)
+                    safe_sources.append(f"{domain}: {source_url}")
+            matches = int(candidate.get("matches") or 0)
+            confidence = int(candidate.get("confidence") or 0)
+            if len(unique_domains) < 3 or matches < 3 or confidence < 70:
+                continue
+
+            model_row = _find_model(candidate_brand, candidate_name)
+            codes = candidate.get("codes") if isinstance(candidate.get("codes"), list) else []
+            codes = [_clean(x, 100) for x in codes[:20] if _clean(x, 100)]
+            if not model_row:
+                model_payload = {
+                    "marca": candidate_brand,
+                    "modelo": candidate_name,
+                    "nombre_completo": f"{candidate_brand} {candidate_name}",
+                    "numero_modelo": codes[0] if codes else _clean(candidate.get("code"), 100),
+                    "numeros_modelo": codes or ([_clean(candidate.get("code"), 100)] if candidate.get("code") else []),
+                    "tipo": "phone",
+                    "estado": "pendiente",
+                    "origen": "busqueda_referencia",
+                    "proveedor": "investigacion_web",
+                    "proveedor_id": "",
+                }
+                created = client.table("despiece_modelos").insert(model_payload).execute().data or []
+                if not created:
+                    raise RuntimeError("No se pudo registrar un modelo encontrado por referencia.")
+                model_row = created[0]
+            model_id = int(model_row["id"])
+            old_relation = (client.table("despiece_repuesto_modelos").select("estado_compatibilidad,notas")
+                            .eq("repuesto_id", repuesto_id).eq("modelo_id", model_id).limit(1).execute().data or [])
+            old_status = old_relation[0].get("estado_compatibilidad") if old_relation else ""
+            status = "verificada" if old_status == "verificada" else "pendiente"
+            note = (f"Investigación por referencia {referencia}. Consenso: {matches}/{candidate.get('total_sources', matches)} "
+                    f"dominios ({confidence}%). Fuentes: {' | '.join(safe_sources)}")[:1000]
+            old_notes = old_relation[0].get("notas", "") if old_relation else ""
+            client.table("despiece_repuesto_modelos").upsert({
+                "repuesto_id": repuesto_id,
+                "modelo_id": model_id,
+                "estado_compatibilidad": status,
+                "notas": " ".join(x for x in (old_notes, note) if x)[:1000],
+            }, on_conflict="repuesto_id,modelo_id").execute()
+            linked_ids.add(model_id)
+
+        # Si no se seleccionó ningún resultado externo ni modelo del catálogo,
+        # conservar el comportamiento anterior del formulario.
+        if not linked_ids:
             existing = _find_model(marca, modelo)
             if existing and existing.get("estado") == "activo":
-                client.table("despiece_repuesto_modelos").insert({
-                    "repuesto_id": repuesto_id,
-                    "modelo_id": existing["id"],
+                client.table("despiece_repuesto_modelos").upsert({
+                    "repuesto_id": repuesto_id, "modelo_id": int(existing["id"]),
                     "estado_compatibilidad": "pendiente",
-                }).execute()
-            else:
-                # La pieza no se pierde: su modelo queda en el campo tradicional y se propone al catálogo.
-                if marca and modelo and not existing:
-                    _stage_provider_device({
-                        "marca": marca, "modelo": modelo,
-                        "nombre_completo": f"{marca} {modelo}",
-                        "numero_modelo": "", "numeros_modelo": [],
-                        "tipo": "phone", "proveedor": "manual", "proveedor_id": "",
-                    })
-        flash("Pieza añadida. Revisa sus compatibilidades desde el catálogo.", "success")
+                }, on_conflict="repuesto_id,modelo_id").execute()
+            elif marca and modelo and not existing:
+                _stage_provider_device({
+                    "marca": marca, "modelo": modelo,
+                    "nombre_completo": f"{marca} {modelo}",
+                    "numero_modelo": "", "numeros_modelo": [],
+                    "tipo": "phone", "proveedor": "manual", "proveedor_id": "",
+                })
+
+        flash("Pieza añadida. Los modelos encontrados se han vinculado como compatibilidades pendientes de revisión.", "success")
         return redirect(url_for("despiece"))
     except ValueError as exc:
         flash(str(exc), "error")
@@ -815,10 +928,17 @@ def _device_names_near(text, code=None):
 
 def _extract_device_candidates(reference, compact, title=""):
     candidates=[]
+    ref_position=compact.casefold().find(reference.casefold())
+    if ref_position >= 0:
+        # Evita recoger códigos de otros móviles que aparezcan en menús,
+        # recomendaciones o productos relacionados de la misma página.
+        scan_text=compact[max(0,ref_position-2500):min(len(compact),ref_position+9000)]
+    else:
+        scan_text=compact[:9000]
     for brand, pattern in _MODEL_PATTERNS:
-        for match in pattern.finditer(compact):
+        for match in pattern.finditer(scan_text):
             code=match.group(0).upper()
-            context=compact[max(0,match.start()-320):min(len(compact),match.end()+180)]
+            context=scan_text[max(0,match.start()-320):min(len(scan_text),match.end()+180)]
             names=_device_names_near(context, code)
             compatible_names=[]
             brand_groups={
@@ -836,8 +956,7 @@ def _extract_device_candidates(reference, compact, title=""):
             else:
                 candidates.append({"code":code,"brand":brand,"model_name":f"Modelo identificado por código {code}"})
     title_names=_device_names_near(title or "")
-    ref_position=compact.casefold().find(reference.casefold())
-    around_reference=compact[max(0,ref_position-2200):min(len(compact),ref_position+3200)] if ref_position >= 0 else compact[:3200]
+    around_reference=scan_text
     page_names=_device_names_near(around_reference)
     # Si una página separa el nombre comercial y el código en secciones
     # próximas, asociamos el nombre solo cuando hay una única opción inequívoca
@@ -974,6 +1093,30 @@ def api_buscar_referencia_automatica():
     piece_name=_clean(payload.get("pieza"),120)
     try:
         result=_automatic_reference_research(reference,piece_name)
+        if result.get("models"):
+            signer = URLSafeTimedSerializer(current_app.secret_key, salt="inforbaxe-reference-research-v1")
+            compact_models = []
+            for model in result.get("models", [])[:20]:
+                compact_models.append({
+                    "brand": _clean(model.get("brand"), 80),
+                    "model_name": _clean(model.get("model_name"), 140),
+                    "code": _clean(model.get("code"), 100),
+                    "codes": [_clean(code, 100) for code in (model.get("codes") or [])[:10]],
+                    "matches": int(model.get("matches") or 0),
+                    "total_sources": int(model.get("total_sources") or 0),
+                    "confidence": int(model.get("confidence") or 0),
+                    "sources": [
+                        {"domain": _clean(source.get("domain"), 100), "url": _clean(source.get("url"), 300)}
+                        for source in (model.get("sources") or [])[:6]
+                        if isinstance(source, dict)
+                    ],
+                })
+            result["models"] = result.get("models", [])[:20]
+            result["research_token"] = signer.dumps({
+                "reference": result.get("reference", ""),
+                "piece": result.get("piece", ""),
+                "models": compact_models,
+            })
         return jsonify(result)
     except Exception:
         log.exception("Error en investigación automática de referencia")
