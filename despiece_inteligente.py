@@ -1277,20 +1277,20 @@ def _extract_evidence_from_html(reference, domain, url, title, html, piece_name=
 
 
 def _candidate_consensus_key(candidate):
-    """Compara el nombre comercial cuando esta reconocido; si no, usa el codigo exacto."""
+    """Compara el nombre comercial reconocido; si no, utiliza el código técnico exacto."""
     brand = _clean(candidate.get("brand"), 80).casefold()
     name = _clean(candidate.get("model_name"), 140)
     code = _clean(candidate.get("code"), 100).upper()
-    if name and not name.casefold().startswith("modelo identificado por codigo"):
-        normalized = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii").casefold()
+    normalized = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii").casefold()
+    if normalized and not normalized.startswith("modelo identificado por codigo"):
         if brand == "samsung":
-            normalized = re.sub(r"\\b(?:samsung|galaxy)\\b", " ", normalized)
+            normalized = re.sub(r"\b(?:samsung|galaxy)\b", " ", normalized)
         normalized = re.sub(r"[^a-z0-9]+", "", normalized)
         if normalized:
             return f"name:{brand}:{normalized}"
     if code:
         return f"code:{brand}:{code}"
-    return f"name:{brand}:{name.casefold()}"
+    return f"name:{brand}:{normalized}"
 
 def _automatic_reference_research(reference,piece_name=""):
     ref=re.sub(r"[^A-Za-z0-9._/-]","",_clean(reference,80)).upper()
