@@ -1135,17 +1135,36 @@ def _parse_catalog_links(html, base_url, domain, reference=""):
     return [(url, title) for _rank, url, title in found[:6]]
 
 
+_SEARCH_ECHO = re.compile(r"\b(?:b[uú]squeda|buscar|buscando|resultados?|search(?:ing)?|results?)\b", re.IGNORECASE)
+_CATALOG_JUNK = ("/login", "/cart", "/carrito", "/account", "/mi-cuenta", "/contact", "/category",
+                 "/categoria", "/search", "/buscar", "/blog", "/cms", "/pedido", "/order")
+
+
+def _is_specific_page(reference, url, title=""):
+    """Ficha cuyo título o URL contiene la referencia exacta (no páginas genéricas)."""
+    pattern = _reference_pattern(reference)
+    return bool(pattern and (pattern.search(unquote(url or "")) or pattern.search(title or "")))
+
+
+def _is_search_or_junk_url(url):
+    parsed = urlparse(url)
+    if any(x in (parsed.path or "").lower() for x in _CATALOG_JUNK):
+        return True
+    params = parse_qs(parsed.query)
+    return "search" in params.get("controller", []) or bool({"s", "q", "search", "query", "order", "page"} & set(params))
+
+
 def _search_direct_catalog(name, domain, templates, reference, piece_name=""):
     query = quote_plus(reference)
+    pattern = _reference_pattern(reference)
     diagnostics = {
         "source": name, "domain": domain, "status": "sin_resultados",
         "search_pages": 0, "product_links": 0, "pages_read": 0,
-        "reference_pages": 0, "exact_result_links": 0
+        "reference_pages": 0, "exact_result_links": 0,
+        "generic_links_ignored": 0, "found_pages": [],
     }
-    exact_links = []
-    fallback_links = []
-    evidence = []
-    needle = _reference_compact(reference)
+    exact_links, listing_links, evidence = [], [], []
+    seen = set()
 
     for template in templates:
         search_url = template.format(q=query)
@@ -1158,63 +1177,69 @@ def _search_direct_catalog(name, domain, templates, reference, piece_name=""):
             if status >= 400 or domain not in _domain_host(final_url):
                 diagnostics["status"] = f"http_{status}"
                 continue
-
-            links = _parse_catalog_links(html, final_url, domain, reference)
-            for url, title in links:
-                hay = _reference_compact(unquote(url) + " " + title)
-                if needle and needle in hay:
-                    exact_links.append((url, title))
+            text = _VisibleText(); text.feed(html)
+            lines = text.lines()
+            # Un enlace sin la referencia en URL/título solo se lee si su tarjeta la muestra;
+            # las frases que repiten la consulta ("Resultados para ...") no cuentan.
+            ref_lines = [l for l in lines if pattern.search(l) and not _SEARCH_ECHO.search(l)]
+            anchors = _ResultLinks(); anchors.feed(html)
+            for href, label in anchors.links:
+                url = urljoin(final_url, href).split("#", 1)[0]
+                if url in seen or not url.startswith("https://") or not _domain_allowed(url) \
+                        or domain not in _domain_host(url) or _is_search_or_junk_url(url):
+                    continue
+                seen.add(url)
+                label = _clean(label, 180)
+                if _is_specific_page(reference, url, label):
+                    exact_links.append((url, label, "referencia_en_url_o_titulo"))
+                elif label and any(label in l for l in ref_lines):   # tarjeta del resultado con la referencia
+                    listing_links.append((url, label, "resultado_de_busqueda_con_referencia"))
                 else:
-                    fallback_links.append((url, title))
-
+                    diagnostics["generic_links_ignored"] += 1
             parsed = _extract_evidence_from_html(
-                reference, domain, final_url, f"{name} · resultados de búsqueda", html, piece_name, listing=True
-            )
+                reference, domain, final_url, f"{name} · resultados de búsqueda", html, piece_name, listing=True)
             if parsed:
                 evidence.append(parsed)
                 diagnostics["status"] = "referencia_y_modelos_en_resultados"
                 break
-
-            # No detenerse por cualquier enlace de producto: la ruta puede haber
-            # devuelto productos genéricos. Probar las otras rutas de búsqueda.
-            if exact_links:
-                diagnostics["status"] = "resultado_exacto_encontrado"
+            if exact_links or listing_links:
+                diagnostics["status"] = "resultado_exacto_encontrado" if exact_links else "resultados_con_referencia"
                 break
-            if links:
-                diagnostics["status"] = "resultados_no_especificos"
-            elif diagnostics["status"] == "sin_resultados":
-                diagnostics["status"] = "pagina_accesible_sin_productos"
-
+            diagnostics["status"] = "sin_resultados_especificos" if (anchors.links or lines) else "pagina_accesible_sin_productos"
         except HTTPError as exc:
             diagnostics["status"] = f"http_{exc.code}"
         except Exception as exc:
             diagnostics["status"] = "error_de_conexion"
             log.info("Búsqueda directa en %s falló: %s", domain, exc)
 
-    # Priorizar enlaces cuyo título o URL contiene la referencia exacta.
     product_links = []
-    seen_links = set()
-    for url, title in exact_links + fallback_links:
-        if url not in seen_links:
-            seen_links.add(url)
-            product_links.append((url, title))
+    for url, title, reason in exact_links + listing_links:
+        if url not in {x[0] for x in product_links}:
+            product_links.append((url, title, reason))
         if len(product_links) >= 4:
             break
-
     diagnostics["exact_result_links"] = len(exact_links)
     diagnostics["product_links"] = len(product_links)
 
-    for url, title in product_links:
+    for url, title, reason in product_links:
+        entry = {"url": url, "title": title, "reason": reason, "read": False, "has_reference": False}
+        diagnostics["found_pages"].append(entry)
         if not _robots_can_fetch(url):
+            entry["status"] = "bloqueado_por_robots"
             continue
         try:
             html, final_url, status = _http_text(url, 1_200_000, timeout=5)
             diagnostics["pages_read"] += 1
+            entry["read"] = True
+            page = _VisibleText(); page.feed(html)
+            entry["has_reference"] = any(pattern.search(l) for l in page.lines())
             item = _extract_evidence_from_html(reference, domain, final_url, title, html, piece_name)
+            entry["candidates"] = len(item["candidates"]) if item else 0
             if item:
                 diagnostics["reference_pages"] += 1
                 evidence.append(item)
         except Exception as exc:
+            entry["status"] = "error_de_lectura"
             log.info("No se pudo leer producto %s: %s", url, exc)
 
     return evidence, diagnostics
@@ -1234,7 +1259,7 @@ def _search_engine(engine,url,reference):
     try:
         html,final_url,status=_http_text(url,700_000,timeout=4)
         if status>=400: diag["status"]=f"http_{status}"; return links,diag
-        if engine=="Bing RSS":
+        if engine.startswith("Bing RSS"):
             root=ET.fromstring(html)
             for item in root.findall(".//item"):
                 u=(item.findtext("link") or "").strip(); title=(item.findtext("title") or "").strip()
@@ -1258,7 +1283,7 @@ def _search_engine(engine,url,reference):
         for u,t in links:
             key=u.split("#",1)[0]
             if key not in seen: seen.add(key); unique.append((key,t))
-        links=unique[:20]; diag["links"]=len(links); diag["status"]="resultados_encontrados" if links else "sin_enlaces_de_catalogos"
+        links=unique[:20]; diag["links"]=len(links); diag["urls"]=[{"url":u,"title":_clean(t,120)} for u,t in links[:10]]; diag["status"]="resultados_encontrados" if links else "sin_enlaces_de_catalogos"
     except Exception as exc:
         diag["status"]="bloqueado_o_no_disponible"; log.info("Buscador %s no disponible: %s",engine,exc)
     return links,diag
@@ -1274,6 +1299,13 @@ def _global_search_urls(reference,piece_name=""):
             ("Yahoo", "https://search.yahoo.com/search?p="+quote_plus(q)),
             ("Mojeek", "https://www.mojeek.com/search?q="+quote_plus(q)),
         ])
+    # Consulta restringida a cada catálogo conocido: una consulta general rara vez devuelve su ficha.
+    for _name, catalog_domain, _templates in _DIRECT_CATALOGS:
+        q=f'site:{catalog_domain} "{reference}"'
+        engines.extend([
+            (f"Bing RSS site:{catalog_domain}", "https://www.bing.com/search?format=rss&q="+quote_plus(q)),
+            (f"DuckDuckGo Lite site:{catalog_domain}", "https://lite.duckduckgo.com/lite/?q="+quote_plus(q)),
+        ])
     found=[]; diagnostics=[]
     with ThreadPoolExecutor(max_workers=8) as pool:
         futures=[pool.submit(_search_engine,name,url,reference) for name,url in engines]
@@ -1284,9 +1316,14 @@ def _global_search_urls(reference,piece_name=""):
     unique=[]; seen=set()
     for u,t in found:
         domain=_domain_host(u)
-        if _likely_product_url(u,domain) and u not in seen:
-            seen.add(u); unique.append((domain,u,t))
-    return unique[:30],diagnostics
+        specific=_is_specific_page(reference,u,t)
+        if (specific or _likely_product_url(u,domain)) and u not in seen and not _is_search_or_junk_url(u):
+            seen.add(u); unique.append((0 if specific else 1,domain,u,t))
+    unique.sort(key=lambda x:x[0])   # primero las fichas con la referencia exacta en URL o título
+    result=[(d,u,t) for _r,d,u,t in unique[:30]]
+    diagnostics.append({"source":"URLs localizadas por buscadores","status":"resultados_encontrados" if result else "sin_enlaces_de_catalogos",
+        "links":len(result),"urls":[{"url":u,"title":_clean(t,120),"referencia_en_url_o_titulo":r==0} for r,_d,u,t in unique[:30]]})
+    return result,diagnostics
 
 def _brand_for_code(code):
     upper=code.upper()
