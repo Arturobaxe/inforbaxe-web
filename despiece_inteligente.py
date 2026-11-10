@@ -15,6 +15,7 @@ from urllib.parse import urlencode, quote_plus, urlparse, parse_qs, unquote, url
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from html import unescape
 from html.parser import HTMLParser
 import time
 import unicodedata
@@ -40,6 +41,17 @@ def _login_required(fn):
     def wrapped(*args, **kwargs):
         if not session.get("logged_in"):
             return redirect(url_for("login"))
+        return fn(*args, **kwargs)
+    return wrapped
+
+
+def _api_login_required(fn):
+    """Como _login_required, pero responde JSON (un redirect HTML rompe response.json() en el navegador)."""
+    @wraps(fn)
+    def wrapped(*args, **kwargs):
+        if not session.get("logged_in"):
+            return jsonify({"ok": False, "message": "La sesión ha caducado. Vuelve a iniciar sesión.",
+                            "sources": [], "models": []}), 401
         return fn(*args, **kwargs)
     return wrapped
 
@@ -481,7 +493,19 @@ def guardar_pieza_inteligente():
                         "numero_modelo": "", "numeros_modelo": [],
                         "tipo": "phone", "proveedor": "manual", "proveedor_id": "",
                     })
-        flash("Pieza añadida. Revisa sus compatibilidades desde el catálogo.", "success")
+        try:
+            saved_research, research_warning = _save_research_selection(
+                client, repuesto_id, referencia,
+                request.form.get("investigacion_token", ""), request.form.get("investigacion_indices", "[]"))
+        except Exception:
+            log.exception("No se pudo guardar la selección investigada del repuesto %s", repuesto_id)
+            saved_research, research_warning = 0, "La pieza se guardó, pero no se pudieron guardar los modelos investigados."
+        if research_warning:
+            flash(research_warning, "error")
+        if saved_research:
+            flash(f"Pieza añadida con {saved_research} modelo(s) compatibles pendientes de verificación.", "success")
+        else:
+            flash("Pieza añadida. Revisa sus compatibilidades desde el catálogo.", "success")
         return redirect(url_for("despiece"))
     except ValueError as exc:
         flash(str(exc), "error")
@@ -751,20 +775,109 @@ class _ResultLinks(HTMLParser):
             self.links.append((self._href, " ".join(self._text).strip()))
             self._href=None; self._text=[]
 
+_JSONLD_COMPAT_KEYS = {"iscompatiblewith", "isaccessoryorsparepartfor"}
+_JSONLD_SKIP_KEYS = {"offers", "aggregaterating", "review", "image", "logo", "url", "isrelatedto",
+                     "issimilarto", "mainentityofpage", "potentialaction", "breadcrumb"}
+
+
+def _plain(value):
+    """Convierte HTML incrustado en una cadena de texto con separadores."""
+    text = re.sub(r"(?i)<br\s*/?>|</li>|</p>|</tr>", " ; ", str(value))
+    text = re.sub(r"<[^>]+>", " ", text)
+    return re.sub(r"\s+", " ", unescape(text)).strip()
+
+
+def _jsonld_lines(raw):
+    """Una línea por nodo JSON-LD, sin mezclar productos relacionados con el principal."""
+    try:
+        data = json.loads(raw)
+    except Exception:
+        text = re.sub(r"\s+", " ", raw or "").strip()
+        return [text[:4000]] if text else []
+    lines = []
+
+    def scalar(v):
+        return v if isinstance(v, (str, int, float)) and not isinstance(v, bool) else None
+
+    def names(v):
+        out = []
+        if isinstance(v, list):
+            for x in v[:100]:
+                out += names(x)
+        elif isinstance(v, dict):
+            for k in ("name", "model", "alternateName", "description"):
+                if scalar(v.get(k)) is not None:
+                    out.append(_plain(v[k]))
+        elif scalar(v) is not None:
+            out.append(_plain(v))
+        return out
+
+    def walk(node, depth=0):
+        if depth > 6:
+            return
+        if isinstance(node, list):
+            for item in node[:200]:
+                walk(item, depth + 1)
+            return
+        if not isinstance(node, dict):
+            return
+        parts = []
+        for key, val in node.items():
+            lk = str(key).lower()
+            if lk == "@graph":
+                walk(val, depth + 1)
+                continue
+            if str(key).startswith("@") or lk in _JSONLD_SKIP_KEYS:
+                continue
+            if lk in _JSONLD_COMPAT_KEYS:
+                items = [x for x in names(val) if x]
+                if items:
+                    parts.append("Compatible con: " + ", ".join(items))
+            elif lk == "additionalproperty":
+                for prop in (val if isinstance(val, list) else [val]):
+                    if isinstance(prop, dict) and scalar(prop.get("name")) is not None:
+                        value = prop.get("value")
+                        value = ", ".join(names(value)) if isinstance(value, (list, dict)) else _plain(value or "")
+                        if value:
+                            parts.append(f"{_plain(prop['name'])}: {value}")
+            elif scalar(val) is not None:
+                parts.append(f"{key}: {_plain(val)}")
+            elif isinstance(val, dict) and lk in ("brand", "manufacturer") and scalar(val.get("name")):
+                parts.append(f"{key}: {_plain(val['name'])}")
+            elif isinstance(val, (list, dict)):
+                walk(val, depth + 1)
+        if parts:
+            lines.append(" | ".join(parts))
+
+    walk(data)
+    return lines
+
+
 class _VisibleText(HTMLParser):
-    """Extrae texto visible y metadatos de producto sin ejecutar JavaScript."""
+    """Texto visible por líneas (tablas, listas, párrafos) + metadatos y JSON-LD."""
     _SKIP_TAGS = {"style", "noscript", "svg", "header", "footer", "nav"}
+    _BLOCK_TAGS = {"p", "div", "li", "tr", "br", "h1", "h2", "h3", "h4", "h5", "h6", "table", "ul",
+                   "ol", "section", "article", "dt", "dd", "dl", "caption", "title", "main", "aside",
+                   "form", "select", "option", "hr", "tbody", "thead"}
 
     def __init__(self):
         super().__init__(convert_charrefs=True)
         self.parts = []
+        self.primary = []      # título, h1 y descripciones meta de la ficha
         self.skip_depth = 0
         self.script_modes = []
+        self._json = []
+        self._primary_tag = None
+        self._primary_buf = []
 
     def _add(self, value, maximum=12000):
         value = str(value or "").strip()
         if value:
             self.parts.append(value[:maximum])
+
+    def _line(self, value, maximum=5000):
+        self._add(value, maximum)
+        self.parts.append("\n")
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
@@ -772,6 +885,7 @@ class _VisibleText(HTMLParser):
             script_type = (attrs.get("type") or "").lower().split(";")[0].strip()
             if script_type in ("application/ld+json", "application/json", "application/json+ld"):
                 self.script_modes.append("json")
+                self._json = []
             else:
                 self.script_modes.append("skip")
                 self.skip_depth += 1
@@ -781,18 +895,26 @@ class _VisibleText(HTMLParser):
             return
         if self.skip_depth:
             return
+        if tag in self._BLOCK_TAGS:
+            self.parts.append("\n")
+            if tag in ("title", "h1"):
+                self._primary_tag, self._primary_buf = tag, []
+        elif tag in ("td", "th"):
+            self.parts.append("|")
 
         if tag == "meta":
             content = attrs.get("content")
             meta_name = " ".join((attrs.get("name", ""), attrs.get("property", ""), attrs.get("itemprop", ""))).lower()
             if content and (not meta_name or any(x in meta_name for x in ("product", "description", "title", "model", "sku", "part", "compat"))):
-                self._add(content, 5000)
+                self._line(_plain(content), 5000)
+                if any(x in meta_name for x in ("description", "title")):
+                    self.primary.append(_plain(content)[:1000])
 
         for key, value in attrs.items():
             if key in ("alt", "title", "aria-label"):
-                self._add(value, 1000)
+                self._line(value, 1000)
             elif key.startswith("data-") and any(token in key.lower() for token in ("product", "model", "compat", "sku", "part", "reference", "title", "name")):
-                self._add(value, 3000)
+                self._line(value, 3000)
 
     def handle_endtag(self, tag):
         if tag == "script":
@@ -800,15 +922,38 @@ class _VisibleText(HTMLParser):
                 mode = self.script_modes.pop()
                 if mode == "skip":
                     self.skip_depth = max(0, self.skip_depth - 1)
+                else:
+                    for line in _jsonld_lines("".join(self._json)):
+                        self._line(line, 6000)
+                    self._json = []
             return
         if tag in self._SKIP_TAGS and self.skip_depth:
             self.skip_depth -= 1
+            return
+        if not self.skip_depth and tag in self._BLOCK_TAGS:
+            if tag == self._primary_tag:
+                text = re.sub(r"\s+", " ", " ".join(self._primary_buf)).strip()
+                if text:
+                    self.primary.append(text[:1000])
+                self._primary_tag = None
+            self.parts.append("\n")
 
     def handle_data(self, data):
         if self.script_modes and self.script_modes[-1] == "json":
-            self._add(data, 120000)
+            self._json.append(data)
         elif not self.skip_depth:
+            if self._primary_tag:
+                self._primary_buf.append(data)
             self._add(data, 5000)
+
+    def lines(self):
+        out = []
+        for raw in " ".join(self.parts).split("\n"):
+            line = re.sub(r"\s+", " ", raw).strip(" |")
+            if line:
+                out.append(line[:6000])
+        return out
+
 
 def _http_text(url, limit=1_200_000, timeout=7):
     req=Request(url, headers={
@@ -878,21 +1023,57 @@ def _piece_search_terms(piece_name=""):
 def _reference_compact(value):
     return re.sub(r"[^A-Z0-9]", "", str(value or "").upper())
 
-def _reference_in_text(reference, text):
-    needle=_reference_compact(reference)
-    haystack=_reference_compact(text)
-    return bool(needle and needle in haystack)
-
-
-
-def _reference_match_span(text, reference):
-    """Devuelve la posición de una referencia aunque HTML la separe con espacios o guiones."""
+def _reference_pattern(reference):
+    """Referencia exacta: tolera separadores (EB-BN980ABY, EB BN980ABY) pero no prefijos/sufijos."""
     needle = _reference_compact(reference)
     if not needle:
         return None
-    pattern = r"[^A-Z0-9]*".join(re.escape(char) for char in needle)
-    match = re.search(pattern, text or "", re.IGNORECASE)
+    body = r"[^A-Z0-9]{0,2}".join(re.escape(char) for char in needle)
+    return re.compile(r"(?<![A-Z0-9])" + body + r"(?![A-Z0-9])", re.IGNORECASE)
+
+
+def _reference_in_text(reference, text):
+    pattern = _reference_pattern(reference)
+    return bool(pattern and pattern.search(text or ""))
+
+
+def _reference_match_span(text, reference):
+    pattern = _reference_pattern(reference)
+    match = pattern.search(text or "") if pattern else None
     return (match.start(), match.end()) if match else None
+
+
+def _is_near_reference(token, ref_compact):
+    """True si token parece otra referencia de la misma familia (p. ej. BN985ABY frente a BN980ABY)."""
+    token = _reference_compact(token)
+    if not token or token == ref_compact or len(token) < 4:
+        return False
+    if not (re.search(r"[A-Z]", token) and re.search(r"\d", token)):
+        return False
+    if abs(len(token) - len(ref_compact)) > 2:
+        return False
+    if token.startswith(ref_compact) or ref_compact.startswith(token):
+        return True
+    prefix = 0
+    for a, b in zip(token, ref_compact):
+        if a != b:
+            break
+        prefix += 1
+    if prefix >= max(3, len(ref_compact) // 2):
+        return True
+    return len(token) == len(ref_compact) and sum(a != b for a, b in zip(token, ref_compact)) <= 2
+
+
+def _line_has_other_reference(line, ref_compact):
+    tokens = re.findall(r"[A-Za-z0-9]+(?:[-_/.][A-Za-z0-9]+)*", line or "")
+    candidates = []
+    for tok in tokens:
+        candidates.append(tok)
+        candidates.extend(part for part in re.split(r"[/]", tok) if part != tok)
+    for a, b in zip(tokens, tokens[1:]):
+        if len(a) <= 5 and len(b) <= 12:
+            candidates.append(a + b)
+    return any(_is_near_reference(tok, ref_compact) for tok in candidates)
 
 
 def _source_group_for_evidence(domain, text):
@@ -910,7 +1091,7 @@ def _source_group_for_evidence(domain, text):
         seller = _clean(seller, 60)
         if len(seller) >= 3:
             return "seller:" + _norm(seller)
-    return "domain:" + (domain or "unknown")
+    return "domain:" + (_base_catalog_domain(domain) or "unknown")
 
 def _base_catalog_domain(host):
     host=(host or "").lower()
@@ -987,7 +1168,7 @@ def _search_direct_catalog(name, domain, templates, reference, piece_name=""):
                     fallback_links.append((url, title))
 
             parsed = _extract_evidence_from_html(
-                reference, domain, final_url, f"{name} · resultados de búsqueda", html, piece_name
+                reference, domain, final_url, f"{name} · resultados de búsqueda", html, piece_name, listing=True
             )
             if parsed:
                 evidence.append(parsed)
@@ -1135,36 +1316,61 @@ def _device_names_near(text, code=None):
                 candidates.append({"marca":brand,"modelo":name})
     return candidates
 
-def _compatibility_windows(text, reference):
-    """Devuelve los bloques de compatibilidad y señala si hay una etiqueta explícita."""
-    label_pattern = re.compile(
-        r"\b(?:compatible\s+(?:con|para|with|for)|compatibilidad|compatibility|"
-        r"model(?:o)?s?\s*(?:\(s\))?|modelos?\s+compatibles?|"
-        r"fits?\s+(?:the\s+following|for|with)|se\s+adapta\s+a|se\s+ajusta\s+a|"
-        r"suitable\s+for|works?\s+with|dispositivos?\s+compatibles?)(?=\W|$)",
-        re.IGNORECASE
-    )
-    matches = list(label_pattern.finditer(text or ""))
+_COMPAT_LABEL = re.compile(
+    r"\b(?:compatible\s+(?:con|para|with|for)|compatibles?\b|compatibilidad|compatibility|"
+    r"model(?:o)?s?\s*(?:\(s\))?|modelos?\s+compatibles?|"
+    r"fits?\s+(?:the\s+following|for|with)|se\s+adapta\s+a|se\s+ajusta\s+a|"
+    r"suitable\s+for|works?\s+with|dispositivos?\s+compatibles?|aplicable\s+a|"
+    r"v[aá]lid[oa]\s+para|dise[ñn]ad[oa]\s+para|designed\s+for|para\s+los\s+modelos)(?=\W|$)",
+    re.IGNORECASE)
+_STOP_SECTION = re.compile(
+    r"\b(?:productos?\s+(?:relacionados?|similares?|recomendados?)|art[ií]culos?\s+relacionados?|"
+    r"related\s+products?|you\s+may\s+also|tambi[eé]n\s+te\s+pueden?|otros\s+clientes|"
+    r"customers\s+also|recently\s+viewed|vistos\s+recientemente|sugerencias?)\b", re.IGNORECASE)
+
+
+def _compatibility_windows(lines, reference, listing=False, primary=()):
+    """Bloques de texto que pueden hablar de la referencia buscada.
+
+    Descarta líneas que mencionan otra referencia parecida (EB-BN985ABY frente a
+    EB-BN980ABY) y corta las secciones de productos relacionados."""
+    if isinstance(lines, str):
+        lines = [lines]
+    pattern = _reference_pattern(reference)
+    ref_c = _reference_compact(reference)
+    if not pattern:
+        return [], False
+    conflict = [_line_has_other_reference(l, ref_c) for l in lines]
+    stop = [bool(_STOP_SECTION.search(l)) for l in lines]
+    ref_idx = [i for i, l in enumerate(lines) if pattern.search(l)]
     windows = []
-    for match in matches:
-        windows.append((text or "")[max(0, match.start() - 220):min(len(text or ""), match.end() + 2800)])
-
-    span = _reference_match_span(text or "", reference)
-    if span:
-        start, end = span
-        windows.append((text or "")[max(0, start - 1800):min(len(text or ""), end + 5200)])
-
-    unique = []
-    seen = set()
+    for i in ref_idx:
+        if not conflict[i] and not stop[i]:
+            windows.append(lines[i])
+    if not listing and ref_idx:
+        first = ref_idx[0]
+        for i, line in enumerate(lines):
+            if conflict[i] or stop[i] or not _COMPAT_LABEL.search(line) or i < first - 2:
+                continue
+            block = [line]
+            for j in range(i + 1, min(len(lines), i + 15)):
+                if conflict[j] or stop[j]:
+                    break
+                block.append(lines[j])
+            windows.append(" ; ".join(block))
+        # Título/h1/meta de la ficha: solo si la página no menciona otras referencias parecidas.
+        if not any(conflict):
+            windows.extend(x for x in primary if x)
+    unique, seen = [], set()
     for window in windows:
         value = re.sub(r"\s+", " ", window).strip()
         key = value[:500].casefold()
         if value and key not in seen:
             seen.add(key)
             unique.append(value)
-        if len(unique) >= 10:
+        if len(unique) >= 24:
             break
-    return unique, bool(matches)
+    return unique, any(_COMPAT_LABEL.search(w) for w in unique)
 
 
 def _closest_device_name(text, code_start, code_end, brand):
@@ -1197,83 +1403,84 @@ def _closest_device_name(text, code_start, code_end, brand):
     return {"marca": matches[0][1], "modelo": matches[0][2]}
 
 
-def _extract_device_candidates(reference, compact, title=""):
-    windows, has_explicit_compatibility = _compatibility_windows(compact, reference)
+def _extract_device_candidates(reference, lines, title="", primary=(), listing=False):
+    ref_c = _reference_compact(reference)
+    pattern = _reference_pattern(reference)
+    windows, _explicit = _compatibility_windows(lines, reference, listing, primary)
+    # El título del resultado solo vale si contiene la referencia exacta y ninguna otra parecida.
+    if title and pattern and pattern.search(title) and not _line_has_other_reference(title, ref_c):
+        windows.append(re.sub(r"\s+", " ", title).strip())
     if not windows:
         return []
-    # El título suele incluir el nombre comercial aunque el cuerpo solo enumere códigos.
-    search_text = " ".join([title or ""] + windows)
     candidates = []
-
-    for brand, pattern in _MODEL_PATTERNS:
-        for match in pattern.finditer(search_text):
-            code = match.group(0).upper()
-            detected_brand = _brand_for_code(code) or brand
-            name = _closest_device_name(search_text, match.start(), match.end(), detected_brand)
-            if name:
-                candidates.append({
-                    "code": code, "brand": name["marca"], "model_name": name["modelo"]
-                })
-            else:
-                candidates.append({
-                    "code": code, "brand": detected_brand,
-                    "model_name": f"Modelo identificado por código {code}"
-                })
-
-    # Sin códigos, aceptar varios nombres solo si la ficha los enumera en una
-    # sección de compatibilidad explícita. En otro caso exigimos un único nombre.
-    if not candidates:
-        names = []
-        for window in windows:
-            for brand, pattern in _DEVICE_NAME_PATTERNS:
-                for match in pattern.finditer(window):
-                    model_name = re.sub(r"\s+", " ", match.group(0)).strip(" -|,;:")
-                    if model_name:
-                        names.append({"code": "", "brand": brand, "model_name": model_name})
-        unique_names = {}
-        for item in names:
-            key = (item["brand"].casefold(), item["model_name"].casefold())
-            unique_names[key] = item
-        if has_explicit_compatibility or len(unique_names) == 1:
-            candidates.extend(unique_names.values())
-
-    unique = []
-    seen = set()
+    names_pool = []
+    for window in windows:
+        span = _reference_match_span(window, reference)
+        has_label = bool(_COMPAT_LABEL.search(window))
+        window_codes = 0
+        used_names = set()
+        for brand, pat in _MODEL_PATTERNS:
+            for match in pat.finditer(window):
+                code = match.group(0).upper()
+                if span and match.start() < span[1] and match.end() > span[0]:
+                    continue
+                if _reference_compact(code) == ref_c or _is_near_reference(code, ref_c):
+                    continue
+                detected_brand = _brand_for_code(code) or brand
+                name = _closest_device_name(window, match.start(), match.end(), detected_brand)
+                window_codes += 1
+                if name:
+                    used_names.add((name["marca"].casefold(), name["modelo"].casefold()))
+                    candidates.append({"code": code, "brand": name["marca"], "model_name": name["modelo"]})
+                else:
+                    candidates.append({"code": code, "brand": detected_brand,
+                                       "model_name": f"Modelo identificado por código {code}"})
+        names = {}
+        for brand, pat in _DEVICE_NAME_PATTERNS:
+            for match in pat.finditer(window):
+                model_name = re.sub(r"\s+", " ", match.group(0)).strip(" -|,;:")
+                if model_name:
+                    names[(brand.casefold(), model_name.casefold())] = {"code": "", "brand": brand, "model_name": model_name}
+        # Nombres sin código: en secciones de compatibilidad explícitas se aceptan todos;
+        # en el resto, solo si la línea identifica un único modelo.
+        for key, item in names.items():
+            if key in used_names:
+                continue
+            if has_label or (len(names) == 1 and not window_codes):
+                names_pool.append(item)
+    candidates.extend(names_pool)
+    unique, seen = [], set()
     for item in candidates:
-        key = (
-            item.get("code", "").casefold(),
-            item.get("brand", "").casefold(),
-            item.get("model_name", "").casefold()
-        )
+        key = (item.get("code", "").casefold(), item.get("brand", "").casefold(), item.get("model_name", "").casefold())
         if key not in seen:
             seen.add(key)
             unique.append(item)
     return unique[:60]
 
-def _extract_evidence_from_html(reference, domain, url, title, html, piece_name=""):
+
+def _extract_evidence_from_html(reference, domain, url, title, html, piece_name="", listing=False):
     if not _domain_allowed(url) or domain not in _domain_host(url):
         return None
     parser = _VisibleText()
     parser.feed(html)
-    text = " ".join(parser.parts)
-    compact = re.sub(r"\s+", " ", text)
-    if not _reference_in_text(reference, compact):
+    lines = parser.lines()
+    pattern = _reference_pattern(reference)
+    if not pattern or not any(pattern.search(line) for line in lines):
         return None
-
-    candidates = _extract_device_candidates(reference, compact, title)
+    candidates = _extract_device_candidates(reference, lines, title, parser.primary, listing)
     if not candidates:
         return None
-    title_clean = re.sub(r"\s+", " ", title or "").strip()[:180] or domain
+    base = _base_catalog_domain(domain)
+    compact = " ".join(lines)
+    title_clean = re.sub(r"\s+", " ", title or "").strip()[:180] or base
     return {
-        "domain": domain,
-        "source_group": _source_group_for_evidence(domain, compact),
+        "domain": base,
+        "source_group": _source_group_for_evidence(base, compact),
         "url": url,
         "title": title_clean,
         "candidates": candidates,
         "excerpt": compact[:1200],
     }
-
-
 
 
 def _candidate_consensus_key(candidate):
@@ -1291,6 +1498,69 @@ def _candidate_consensus_key(candidate):
     if code:
         return f"code:{brand}:{code}"
     return f"name:{brand}:{normalized}"
+
+def _candidate_keys(candidate):
+    keys = []
+    code = _reference_compact((candidate.get("code") or "").split("/")[0])
+    if code:
+        keys.append("code:" + code)
+    if not str(candidate.get("model_name") or "").startswith("Modelo identificado por código"):
+        name_key = _candidate_consensus_key({**candidate, "code": ""})
+        if name_key and not name_key.endswith(":"):
+            keys.append(name_key)
+    return keys
+
+
+def _merge_candidates(by_domain):
+    """Agrupa candidatos que comparten código o nombre normalizado y cuenta fuentes independientes.
+
+    Antes un modelo citado por código en una tienda y por nombre en otra nunca coincidía."""
+    parent = {}
+
+    def find(x):
+        while parent.setdefault(x, x) != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    entries = []
+    for source_group, container in by_domain.items():
+        for page in container["pages"]:
+            for candidate in page.get("candidates", []):
+                keys = _candidate_keys(candidate)
+                if not keys:
+                    continue
+                for other in keys[1:]:
+                    parent[find(other)] = find(keys[0])
+                find(keys[0])
+                entries.append((source_group, page, candidate, keys[0]))
+    clusters = {}
+    for source_group, page, candidate, key in entries:
+        entry = clusters.setdefault(find(key), {"brand": "", "model_name": "", "codes": [], "domains": set(),
+                                                "sources": [], "names": []})
+        entry["domains"].add(source_group)
+        code = (candidate.get("code") or "").upper().strip()
+        if code and code not in entry["codes"]:
+            entry["codes"].append(code)
+        name = (candidate.get("model_name") or "").strip()
+        if name and not name.startswith("Modelo identificado por código"):
+            entry["names"].append((name, (candidate.get("brand") or "").strip()))
+        elif not entry["brand"]:
+            entry["brand"] = (candidate.get("brand") or "").strip()
+            entry["model_name"] = name
+        ref = {"domain": page["domain"], "title": page["title"], "url": page["url"], "source_group": source_group}
+        if not any(src["url"] == ref["url"] for src in entry["sources"]):
+            entry["sources"].append(ref)
+    for entry in clusters.values():
+        if entry["names"]:
+            counts = {}
+            for name, brand in entry["names"]:
+                counts[(name, brand)] = counts.get((name, brand), 0) + 1
+            name, brand = sorted(counts, key=lambda k: (-counts[k], len(k[0]), k[0]))[0]
+            entry["model_name"], entry["brand"] = name, brand or entry["brand"]
+        entry["code"] = entry["codes"][0] if entry["codes"] else ""
+    return {f"cluster:{i}": v for i, v in enumerate(clusters.values())}
+
 
 def _automatic_reference_research(reference,piece_name=""):
     ref=re.sub(r"[^A-Za-z0-9._/-]","",_clean(reference,80)).upper()
@@ -1348,45 +1618,11 @@ def _automatic_reference_research(reference,piece_name=""):
 
     independent_sources = sorted(by_domain)
     total_domains = len(independent_sources)
-    by_candidate = {}
-    for source_group, container in by_domain.items():
-        source_candidates = {}
-        for page in container["pages"]:
-            for candidate in page.get("candidates", []):
-                code = candidate.get("code", "").upper().strip()
-                brand = candidate.get("brand", "").strip()
-                name = candidate.get("model_name", "").strip()
-                key = _candidate_consensus_key(candidate)
-                entry = source_candidates.setdefault(key, {**candidate, "codes": [], "sources": []})
-                if code and code not in entry["codes"]:
-                    entry["codes"].append(code)
-                source_ref = {
-                    "domain": page["domain"], "title": page["title"],
-                    "url": page["url"], "source_group": source_group
-                }
-                if not any(source["url"] == source_ref["url"] for source in entry["sources"]):
-                    entry["sources"].append(source_ref)
-
-        for key, candidate in source_candidates.items():
-            entry = by_candidate.setdefault(key, {**candidate, "codes": list(candidate.get("codes", [])), "domains": set(), "sources": []})
-            entry["domains"].add(source_group)
-            for code in candidate.get("codes", []):
-                if code and code not in entry["codes"]:
-                    entry["codes"].append(code)
-            for source in candidate["sources"]:
-                if not any(existing["url"] == source["url"] for existing in entry["sources"]):
-                    entry["sources"].append(source)
-            current_name = entry.get("model_name", "")
-            candidate_name = candidate.get("model_name", "")
-            current_is_code = current_name.startswith("Modelo identificado por código")
-            candidate_is_code = candidate_name.startswith("Modelo identificado por código")
-            if current_is_code and not candidate_is_code:
-                entry["model_name"] = candidate_name
-                entry["brand"] = candidate.get("brand") or entry.get("brand")
+    by_candidate = _merge_candidates(by_domain)
 
     minimum = max(2, math.ceil((2 / 3) * total_domains)) if total_domains >= 2 else 2
     models = []
-    for key, item in sorted(by_candidate.items()):
+    for key, item in sorted(by_candidate.items(), key=lambda kv: (-len(kv[1]["domains"]), kv[1].get("model_name", ""))):
         count = len(item["domains"])
         if count < minimum:
             continue
@@ -1467,14 +1703,92 @@ def _extract_evidence_page(reference,domain,url,title,piece_name=""):
     except Exception as exc:
         log.info("No se pudo leer fuente %s: %s",domain,exc); return None
 
+def _research_serializer():
+    from itsdangerous import URLSafeTimedSerializer
+    from flask import current_app
+    return URLSafeTimedSerializer(current_app.secret_key, salt="despiece-research-v1")
+
+
+def _make_research_token(result):
+    """Token firmado con los modelos propuestos: el servidor solo guarda lo que él mismo propuso."""
+    models = []
+    for m in (result.get("models") or [])[:25]:
+        models.append({
+            "brand": _clean(m.get("brand"), 80), "model_name": _clean(m.get("model_name"), 140),
+            "codes": [_clean(c, 60) for c in (m.get("codes") or [])[:10]],
+            "matches": int(m.get("matches") or 0), "total_sources": int(m.get("total_sources") or 0),
+            "confidence": int(m.get("confidence") or 0),
+            "sources": [{"domain": _clean(x.get("domain"), 100), "url": _clean(x.get("url"), 500),
+                         "title": _clean(x.get("title"), 80)} for x in (m.get("sources") or [])[:6]],
+        })
+    return _research_serializer().dumps({"ref": result.get("reference", ""), "models": models})
+
+
+def _save_research_selection(client, repuesto_id, referencia, token, raw_indexes):
+    """Guarda como PENDIENTES los modelos que el usuario marcó. Devuelve (guardados, aviso)."""
+    if not token:
+        return 0, ""
+    try:
+        indexes = [int(x) for x in json.loads(raw_indexes or "[]")]
+    except (TypeError, ValueError):
+        return 0, "No se pudo leer la selección de modelos investigados."
+    if not indexes:
+        return 0, ""
+    try:
+        data = _research_serializer().loads(token, max_age=2 * 60 * 60)
+    except Exception:
+        return 0, "La investigación ha caducado o no es válida; vuelve a investigar para asociar modelos."
+    if _reference_compact(data.get("ref")) != _reference_compact(referencia):
+        return 0, "La referencia cambió después de investigar; vuelve a investigar."
+    saved = 0
+    for index in dict.fromkeys(indexes):
+        if not 0 <= index < len(data.get("models", [])):
+            continue
+        item = data["models"][index]
+        marca = _clean(item.get("brand"), 80)
+        codes = [c for c in item.get("codes", []) if c]
+        modelo = _clean(item.get("model_name"), 140)
+        if modelo.startswith("Modelo identificado por código"):
+            modelo = codes[0] if codes else ""
+        if not marca or marca == "Marca por confirmar" or not modelo:
+            continue
+        model = _find_model(marca, modelo)
+        if model:
+            model_id = int(model["id"])
+            if model.get("estado") == "ignorado":
+                client.table("despiece_modelos").update({"estado": "pendiente", "origen": "busqueda_referencia"}).eq("id", model_id).execute()
+        else:
+            inserted = client.table("despiece_modelos").insert({
+                "marca": marca, "modelo": modelo, "nombre_completo": f"{marca} {modelo}",
+                "numero_modelo": codes[0] if codes else "", "numeros_modelo": codes,
+                "tipo": "phone", "estado": "pendiente", "origen": "busqueda_referencia",
+                "proveedor": "busqueda_web_manual", "proveedor_id": "",
+            }).execute().data or []
+            if not inserted:
+                continue
+            model_id = int(inserted[0]["id"])
+        links = " | ".join(f"{x['domain']}: {x['url']}" for x in item.get("sources", [])
+                           if x.get("url", "").startswith("https://") and _domain_allowed(x["url"]))
+        note = (f"Referencia consultada: {referencia}. Consenso de fuentes: {item.get('confidence')}% "
+                f"({item.get('matches')}/{item.get('total_sources')} fuentes independientes). "
+                f"Fuentes: {links}. Aprobado por el usuario; pendiente de verificación.")[:1000]
+        client.table("despiece_repuesto_modelos").upsert({
+            "repuesto_id": repuesto_id, "modelo_id": model_id,
+            "estado_compatibilidad": "pendiente", "notas": note,
+        }, on_conflict="repuesto_id,modelo_id").execute()
+        saved += 1
+    return saved, ""
+
+
 @despiece_bp.post("/api/despiece/buscar-referencia")
-@_login_required
+@_api_login_required
 def api_buscar_referencia_automatica():
     payload=request.get_json(silent=True) or {}
     reference=_clean(payload.get("referencia"),80)
     piece_name=_clean(payload.get("pieza"),120)
     try:
-        result=_automatic_reference_research(reference,piece_name)
+        result=dict(_automatic_reference_research(reference,piece_name))
+        result["research_token"]=_make_research_token(result)
         return jsonify(result)
     except Exception:
         log.exception("Error en investigación automática de referencia")

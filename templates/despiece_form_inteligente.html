@@ -220,7 +220,7 @@
     }
     researchResults.innerHTML = `<div class="card"><div style="font-weight:700;">Modelos con consenso suficiente</div><div class="text-muted" style="font-size:12px;margin-top:4px;">Se exige un mínimo de ${Number(data.minimum_consensus || 2)} fuentes independientes por modelo. Marca los modelos que quieres asociar a esta pieza.</div>${diagnosticHtml}</div>` +
       lastResearchModels.map((item, index) => {
-        const sources = (item.sources || []).map(source => escapeHtml(source.domain)).join(' · ');
+        const sources = (item.sources || []).map(source => /^https?:\/\//i.test(source.url || '') ? `<a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">${escapeHtml(source.domain)} ↗</a>` : escapeHtml(source.domain)).join(' · ');
         return `<label class="card" data-research-index="${index}" style="display:flex;gap:10px;align-items:flex-start;cursor:pointer;">\
           <input type="checkbox" style="margin-top:4px;" aria-label="Seleccionar ${escapeHtml(item.model_name)}">\
           <span style="display:grid;gap:4px;flex:1;min-width:0;">\
@@ -263,7 +263,8 @@
         headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
         body: JSON.stringify({referencia: reference, pieza: partName})
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => null);
+      if (!data) throw new Error(response.redirected || response.status === 401 ? 'La sesión ha caducado. Recarga la página e inicia sesión.' : 'El servidor devolvió una respuesta no válida.');
       if (!response.ok) throw new Error(data.message || 'No se pudo completar la investigación.');
       renderResearchResults(data);
       researchStatus.textContent = data.models?.length
