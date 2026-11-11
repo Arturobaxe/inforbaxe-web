@@ -183,6 +183,19 @@
     renderSelected();
   }
 
+  function diagnosticPageRows(d) {
+    const pages = Array.isArray(d.found_pages) && d.found_pages.length ? d.found_pages
+      : (Array.isArray(d.urls) ? d.urls.map(u => ({url: u.url, title: u.title, pending: true})) : []);
+    if (!pages.length) return '';
+    return pages.map(p => {
+      const safe = /^https?:\/\//i.test(p.url || '');
+      const link = safe ? `<a href="${escapeHtml(p.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(p.title || p.url)}</a>` : escapeHtml(p.title || p.url || '');
+      const state = p.pending ? 'localizada por buscador (la lectura se detalla en "Páginas leídas de buscadores")'
+        : `${p.read ? 'leída' : 'no leída'} · ${p.has_reference ? 'con referencia' : 'sin referencia'} · ${Number(p.candidates || 0)} modelos extraídos${p.status ? ' · ' + escapeHtml(p.status) : ''}`;
+      return `<div class="text-muted" style="font-size:11px;margin-left:12px;word-break:break-all;">↳ ${link}<br>${escapeHtml(p.url || '')} — ${state}</div>`;
+    }).join('');
+  }
+
   function renderResearchResults(data) {
     lastResearchModels = Array.isArray(data.models) ? data.models : [];
     researchSelected.clear();
@@ -209,7 +222,7 @@
       `${Number(diagnostics.domains_with_evidence || data.successful_domains || 0)} dominios aportaron modelos`
     ];
     const sourceDetails = sourceDiagnostics.length
-      ? `<details style="margin-top:7px;"><summary style="cursor:pointer;font-size:11px;">Ver diagnóstico por fuente</summary><div style="display:grid;gap:4px;margin-top:6px;">${sourceDiagnostics.map(d => `<div class="text-muted" style="font-size:11px;">${escapeHtml(d.source || d.domain || 'Fuente')}: ${escapeHtml(d.status || 'sin estado')} · ${Number(d.search_pages || 0)} búsquedas · ${Number(d.product_links || d.links || 0)} enlaces · ${Number(d.pages_read || 0)} páginas leídas</div>`).join('')}</div></details>`
+      ? `<details style="margin-top:7px;"><summary style="cursor:pointer;font-size:11px;">Ver diagnóstico por fuente</summary><div style="display:grid;gap:4px;margin-top:6px;">${sourceDiagnostics.map(d => `<div class="text-muted" style="font-size:11px;">${escapeHtml(d.source || d.domain || 'Fuente')}: ${escapeHtml(d.status || 'sin estado')} · ${Number(d.search_pages || 0)} búsquedas · ${Number(d.product_links || d.links || 0)} enlaces · ${Number(d.pages_read || 0)} páginas leídas</div>${diagnosticPageRows(d)}`).join('')}</div></details>`
       : '';
     const diagnosticHtml = `<div class="text-muted" style="font-size:11px;line-height:1.6;margin-top:7px;">${diagnosticLines.map(escapeHtml).join(' · ')}</div>` +
       (diagnostics.search_errors && diagnostics.search_errors.length

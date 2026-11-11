@@ -1629,7 +1629,12 @@ def _automatic_reference_research(reference,piece_name=""):
     # Un máximo de 12 páginas, para no saturar Render ni las tiendas.
     global_read_attempts=0
     with ThreadPoolExecutor(max_workers=8) as pool:
-        futures={pool.submit(_extract_evidence_page,ref,domain,url,title,piece):(domain,url) for domain,url,title in search_urls[:12] if url not in seen_urls}
+        traces={}
+        futures={}
+        for domain,url,title in search_urls[:12]:
+            if url in seen_urls: continue
+            traces[url]={"url":url,"title":_clean(title,120)}
+            futures[pool.submit(_extract_evidence_page,ref,domain,url,title,piece,traces[url])]=(domain,url)
         for future in as_completed(futures):
             global_read_attempts += 1
             try:
@@ -1638,6 +1643,7 @@ def _automatic_reference_research(reference,piece_name=""):
             except Exception as exc:
                 log.info("Lectura de fuente externa fallida: %s",exc)
     diagnostics[-1]["pages_read"]=global_read_attempts
+    diagnostics[-1]["found_pages"]=list(traces.values())
 
     # 3) Una sola evidencia por vendedor/origen editorial. Si dos dominios
     # publican una ficha cuyo campo "Tienda" identifica al mismo vendedor,
@@ -1731,13 +1737,25 @@ def _automatic_reference_research(reference,piece_name=""):
     _REFERENCE_CACHE[cache_key]=(now,result)
     return result
 
-def _extract_evidence_page(reference,domain,url,title,piece_name=""):
-    if not _robots_can_fetch(url): return None
+def _extract_evidence_page(reference,domain,url,title,piece_name="",trace=None):
+    """`trace` (opcional) recibe estado de lectura para el diagnóstico; no altera el resultado."""
+    trace = trace if trace is not None else {}
+    trace.update({"read": False, "has_reference": False, "candidates": 0, "status": "sin_leer"})
+    if not _robots_can_fetch(url):
+        trace["status"] = "bloqueado_por_robots"; return None
     try:
         html,final_url,status=_http_text(url,1_200_000,timeout=5)
-        if status>=400 or domain not in _domain_host(final_url): return None
-        return _extract_evidence_from_html(reference,domain,final_url,title,html,piece_name)
+        if status>=400 or domain not in _domain_host(final_url):
+            trace["status"] = f"http_{status}" if status>=400 else "redirige_a_otro_dominio"; return None
+        trace["read"] = True
+        page=_VisibleText(); page.feed(html)
+        trace["has_reference"] = any(_reference_in_text(reference,l) for l in page.lines())
+        item=_extract_evidence_from_html(reference,domain,final_url,title,html,piece_name)
+        trace["candidates"] = len(item["candidates"]) if item else 0
+        trace["status"] = "modelos_extraidos" if item else ("sin_modelos" if trace["has_reference"] else "sin_referencia")
+        return item
     except Exception as exc:
+        trace["status"] = "error_de_lectura"
         log.info("No se pudo leer fuente %s: %s",domain,exc); return None
 
 def _research_serializer():
