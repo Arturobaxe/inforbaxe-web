@@ -6,6 +6,7 @@
   <a href="{{ url_for('clientes') }}" class="btn btn-secondary">← Volver</a>
   <a href="{{ url_for('cliente_editar', id_cliente=h.cliente.id) }}" class="btn btn-blue">✏️ Editar</a>
   <a href="{{ url_for('venta_nueva') }}?id_cliente={{ h.cliente.id }}" class="btn btn-primary">➕ Nueva venta</a>
+  <a href="{{ url_for('seguimiento_reparaciones.admin_cliente', id_cliente=h.cliente.id) }}" class="btn btn-secondary">📱 Seguimientos</a>
 {% endblock %}
 {% block content %}
 
