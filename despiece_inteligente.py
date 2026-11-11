@@ -1505,7 +1505,31 @@ def _compatibility_windows(lines, reference, listing=False, primary=()):
     return unique, any(_COMPAT_LABEL.search(w) for w in unique)
 
 
+_NAME_CONNECTORS = {"y", "and", "e", "o", "or", "model", "modelo", "models", "modelos", "number",
+                    "numero", "número", "code", "codigo", "código", "cod", "no", "nr", "ref", "n"}
+
+
+def _only_connectors(gap):
+    """El hueco entre dos elementos solo tiene separadores, conectores o códigos intermedios."""
+    if len(gap) > 200:
+        return False
+    for _brand, pat in _MODEL_PATTERNS:
+        gap = pat.sub(" ", gap)
+    return all(w in _NAME_CONNECTORS for w in re.sub(r"[\W_]+", " ", gap).casefold().split())
+
+
+def _adjacent_names(gap):
+    """Dos nombres seguidos (sin códigos entre medias): no se sabe a cuál pertenece un código vecino."""
+    return _only_connectors(gap) and not any(pat.search(gap) for _brand, pat in _MODEL_PATTERNS)
+
+
 def _closest_device_name(text, code_start, code_end, brand):
+    """Nombre al que pertenece un código, por estructura y no solo por cercanía.
+
+    - Lista «Nombre (COD1, COD2), Otro nombre (COD3)»: cada código es del nombre que lo precede.
+    - Lista «COD Nombre | COD Otro nombre»: cada código es del nombre que le sigue.
+    - Varios nombres seguidos junto a varios códigos son ambiguos: no se adivina.
+    - Si en el texto solo hay un nombre distinto, es el de todos los códigos."""
     groups = {
         "Huawei/Honor": {"Huawei", "Honor"},
         "OPPO/OnePlus": {"OPPO", "OnePlus"},
@@ -1515,24 +1539,44 @@ def _closest_device_name(text, code_start, code_end, brand):
     radius = 900
     left = max(0, code_start - radius)
     right = min(len(text), code_end + radius)
-    window = text[left:right]
-    matches = []
+    found = []
     for name_brand, pattern in _DEVICE_NAME_PATTERNS:
         if name_brand not in allowed:
             continue
-        for match in pattern.finditer(window):
-            absolute_start = left + match.start()
-            absolute_end = left + match.end()
-            distance = min(abs(absolute_end - code_start), abs(absolute_start - code_end))
+        for match in pattern.finditer(text, left, right):
             name = re.sub(r"\s+", " ", match.group(0)).strip(" -|,;:")
-            if name and distance <= radius:
-                matches.append((distance, name_brand, name))
-    if not matches:
+            if name:
+                found.append((match.start(), match.end(), name_brand, name))
+    # Nombres solapados (con y sin marca delante): se conserva el más largo.
+    found.sort(key=lambda n: (n[0], -(n[1] - n[0])))
+    names = []
+    for item in found:
+        if names and item[0] < names[-1][1]:
+            if item[1] - item[0] > names[-1][1] - names[-1][0]:
+                names[-1] = item
+            continue
+        names.append(item)
+    names = [n for n in names if n[1] <= code_start or n[0] >= code_end]
+    if not names:
         return None
-    matches.sort(key=lambda item: (item[0], len(item[2])))
-    if len(matches) > 1 and matches[0][0] == matches[1][0] and matches[0][2].casefold() != matches[1][2].casefold():
-        return None
-    return {"marca": matches[0][1], "modelo": matches[0][2]}
+    before = [n for n in names if n[1] <= code_start]
+    after = [n for n in names if n[0] >= code_end]
+    # Orientación de la lista: «Nombre (códigos)» o «código Nombre», según qué aparece primero.
+    code_starts = [m.start() for _b, pat in _MODEL_PATTERNS for m in pat.finditer(text, left, right)]
+    name_first = not code_starts or names[0][0] < min(code_starts)
+    if name_first:
+        if before and _only_connectors(text[before[-1][1]:code_start]):
+            if len(before) > 1 and _adjacent_names(text[before[-2][1]:before[-1][0]]):
+                return None
+            return {"marca": before[-1][2], "modelo": before[-1][3]}
+    elif after and _only_connectors(text[code_end:after[0][0]]):
+        if len(after) > 1 and _adjacent_names(text[after[0][1]:after[1][0]]):
+            return None
+        return {"marca": after[0][2], "modelo": after[0][3]}
+    distinct = {(n[2], n[3].casefold()) for n in names}
+    if len(distinct) == 1:
+        return {"marca": names[0][2], "modelo": names[0][3]}
+    return None
 
 
 def _extract_device_candidates(reference, lines, title="", primary=(), listing=False):
@@ -1615,6 +1659,16 @@ def _extract_evidence_from_html(reference, domain, url, title, html, piece_name=
     }
 
 
+def _strip_brand(brand, name):
+    """«Samsung Galaxy Note 20» con marca «Samsung» -> «Galaxy Note 20» (la marca va en su propio campo)."""
+    brand = (brand or "").strip()
+    name = re.sub(r"\s+", " ", name or "").strip()
+    if not brand or not name:
+        return name
+    stripped = re.sub(r"^(?:" + re.escape(brand) + r"\b[\s:\-]*)+", "", name, flags=re.IGNORECASE).strip()
+    return stripped or name
+
+
 def _candidate_consensus_key(candidate):
     """Compara el nombre comercial reconocido; si no, utiliza el código técnico exacto."""
     brand = _clean(candidate.get("brand"), 80).casefold()
@@ -1624,6 +1678,8 @@ def _candidate_consensus_key(candidate):
     if normalized and not normalized.startswith("modelo identificado por codigo"):
         if brand == "samsung":
             normalized = re.sub(r"\b(?:samsung|galaxy)\b", " ", normalized)
+        elif brand:
+            normalized = re.sub(r"^(?:" + re.escape(unicodedata.normalize("NFKD", brand).encode("ascii", "ignore").decode("ascii")) + r"\b\s*)+", "", normalized)
         normalized = re.sub(r"[^a-z0-9]+", "", normalized)
         if normalized:
             return f"name:{brand}:{normalized}"
@@ -1689,7 +1745,8 @@ def _merge_candidates(by_domain):
             for name, brand in entry["names"]:
                 counts[(name, brand)] = counts.get((name, brand), 0) + 1
             name, brand = sorted(counts, key=lambda k: (-counts[k], len(k[0]), k[0]))[0]
-            entry["model_name"], entry["brand"] = name, brand or entry["brand"]
+            entry["brand"] = brand or entry["brand"]
+            entry["model_name"] = _strip_brand(entry["brand"], name)
         entry["code"] = entry["codes"][0] if entry["codes"] else ""
     return {f"cluster:{i}": v for i, v in enumerate(clusters.values())}
 
