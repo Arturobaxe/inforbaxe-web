@@ -20,6 +20,7 @@ from dotenv import load_dotenv
 load_dotenv()
 import database as db
 from despiece_inteligente import despiece_bp
+from seguimiento_reparaciones import seguimiento_bp
 
 
 app = Flask(__name__)
@@ -32,6 +33,7 @@ _login_attempts = {}
 MAX_ATTEMPTS    = 5
 BLOCK_SECONDS   = 300
 app.register_blueprint(despiece_bp)
+app.register_blueprint(seguimiento_bp)
 
 
 def login_required(f):
