@@ -1,0 +1,29 @@
+name: Limpiar fotos de seguimientos caducados
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  limpiar-fotos:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Eliminar fotografías cuyo plazo ha terminado
+        env:
+          APP_URL: ${{ vars.INFORBAXE_RENDER_URL }}
+          CLEANUP_TOKEN: ${{ secrets.SEGUIMIENTOS_CLEANUP_TOKEN }}
+        run: |
+          set -eu
+          if [ -z "$APP_URL" ] || [ -z "$CLEANUP_TOKEN" ]; then
+            echo "Faltan INFORBAXE_RENDER_URL o SEGUIMIENTOS_CLEANUP_TOKEN."
+            exit 1
+          fi
+          case "$APP_URL" in https://*) ;; *) echo "La URL debe usar HTTPS"; exit 1 ;; esac
+          curl --fail-with-body --silent --show-error --max-time 45 \
+            --request POST "${APP_URL%/}/interno/seguimientos/limpiar" \
+            --header "Authorization: Bearer ${CLEANUP_TOKEN}" \
+            --header "Accept: application/json"
