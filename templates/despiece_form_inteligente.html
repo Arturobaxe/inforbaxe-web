@@ -183,6 +183,10 @@
     renderSelected();
   }
 
+  function diagnosticAttemptRows(d) {
+    return (Array.isArray(d.attempts) ? d.attempts : []).map(a => `<div class="text-muted" style="font-size:11px;margin-left:12px;word-break:break-all;">⇢ ${escapeHtml(a.kind || 'intento')}: ${escapeHtml(a.url || '')}<br>HTTP ${escapeHtml(a.http == null ? '—' : a.http)} · final: ${escapeHtml(a.final_url || '—')} · título: ${escapeHtml(a.title || '—')} · ${escapeHtml(a.status || '')}${a.formularios_de_busqueda != null ? ' · ' + Number(a.formularios_de_busqueda) + ' formulario(s) de búsqueda' : ''}</div>`).join('');
+  }
+
   function diagnosticPageRows(d) {
     const pages = Array.isArray(d.found_pages) && d.found_pages.length ? d.found_pages
       : (Array.isArray(d.urls) ? d.urls.map(u => ({url: u.url, title: u.title, pending: true})) : []);
@@ -222,7 +226,7 @@
       `${Number(diagnostics.domains_with_evidence || data.successful_domains || 0)} dominios aportaron modelos`
     ];
     const sourceDetails = sourceDiagnostics.length
-      ? `<details style="margin-top:7px;"><summary style="cursor:pointer;font-size:11px;">Ver diagnóstico por fuente</summary><div style="display:grid;gap:4px;margin-top:6px;">${sourceDiagnostics.map(d => `<div class="text-muted" style="font-size:11px;">${escapeHtml(d.source || d.domain || 'Fuente')}: ${escapeHtml(d.status || 'sin estado')} · ${Number(d.search_pages || 0)} búsquedas · ${Number(d.product_links || d.links || 0)} enlaces · ${Number(d.pages_read || 0)} páginas leídas</div>${diagnosticPageRows(d)}`).join('')}</div></details>`
+      ? `<details style="margin-top:7px;"><summary style="cursor:pointer;font-size:11px;">Ver diagnóstico por fuente</summary><div style="display:grid;gap:4px;margin-top:6px;">${sourceDiagnostics.map(d => `<div class="text-muted" style="font-size:11px;">${escapeHtml(d.source || d.domain || 'Fuente')}: ${escapeHtml(d.status || 'sin estado')} · ${Number(d.search_pages || 0)} búsquedas · ${Number(d.product_links || d.links || 0)} enlaces · ${Number(d.pages_read || 0)} páginas leídas</div>${diagnosticAttemptRows(d)}${diagnosticPageRows(d)}`).join('')}</div></details>`
       : '';
     const diagnosticHtml = `<div class="text-muted" style="font-size:11px;line-height:1.6;margin-top:7px;">${diagnosticLines.map(escapeHtml).join(' · ')}</div>` +
       (diagnostics.search_errors && diagnostics.search_errors.length

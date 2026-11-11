@@ -64,7 +64,7 @@ class DirectCatalog(Base):
         ev, diag = self.run_cat("Ovisat", "ovisat.com", "https://ovisat.com/es/search?controller=search&s={q}")
         self.assertEqual((ev, diag["pages_read"], diag["found_pages"]), ([], 0, []))
         self.assertEqual(diag["status"], "sin_resultados_especificos")
-        self.assertEqual(self.fetched, ["https://ovisat.com/es/search?controller=search&s=" + REF])
+        self.assertFalse([u for u in self.fetched if u.endswith(".html")])   # ninguna ficha genérica leída
 
 
 class GlobalSearch(Base):

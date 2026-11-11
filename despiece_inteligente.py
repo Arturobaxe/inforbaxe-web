@@ -11,7 +11,7 @@ import os
 import re
 from datetime import datetime, timedelta, timezone
 from functools import wraps
-from urllib.parse import urlencode, quote_plus, urlparse, parse_qs, unquote, urljoin
+from urllib.parse import parse_qsl, urlencode, quote_plus, urlparse, parse_qs, unquote, urljoin
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -1154,6 +1154,65 @@ def _is_search_or_junk_url(url):
     return "search" in params.get("controller", []) or bool({"s", "q", "search", "query", "order", "page"} & set(params))
 
 
+class _SearchForms(HTMLParser):
+    """Formularios GET de la página (para descubrir la ruta real de búsqueda de cada tienda)."""
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.forms = []
+        self._cur = None
+
+    def handle_starttag(self, tag, attrs):
+        a = {k: (v or "") for k, v in attrs}
+        if tag == "form":
+            self._cur = {"action": a.get("action", ""), "method": (a.get("method") or "get").lower(),
+                         "hint": " ".join((a.get("role", ""), a.get("class", ""), a.get("id", ""), a.get("name", ""))),
+                         "inputs": []}
+            self.forms.append(self._cur)
+        elif tag == "input" and self._cur is not None:
+            self._cur["inputs"].append(a)
+
+    def handle_endtag(self, tag):
+        if tag == "form":
+            self._cur = None
+
+
+def _html_title(html):
+    match = re.search(r"<title[^>]*>(.*?)</title>", html or "", re.IGNORECASE | re.DOTALL)
+    return _clean(unescape(match.group(1)), 140) if match else ""
+
+
+def _search_form_urls(html, base_url, reference, domain):
+    """URLs de búsqueda construidas a partir del formulario real de la tienda (sin rutas supuestas)."""
+    parser = _SearchForms(); parser.feed(html or "")
+    urls = []
+    for form in parser.forms:
+        if form["method"] != "get":
+            continue
+        fields = [i for i in form["inputs"] if (i.get("type") or "text").lower() in ("search", "text") and i.get("name")]
+        if not fields:
+            continue
+        hinted = re.search(r"search|buscar|busqueda|b[uú]squeda", form["hint"] + " " + form["action"], re.IGNORECASE)
+        named = [i for i in fields if (i.get("type") or "").lower() == "search"
+                 or re.fullmatch(r"q|s|search|query|keyword|keywords|term|search_query|buscar|text", i["name"], re.IGNORECASE)]
+        if not (hinted or named):
+            continue
+        field = (named or fields)[0]
+        target = urljoin(base_url, form["action"] or base_url)
+        parsed = urlparse(target)
+        if parsed.scheme != "https" or domain not in _domain_host(target):
+            continue
+        params = parse_qsl(parsed.query, keep_blank_values=True)
+        params += [(i["name"], i.get("value", "")) for i in form["inputs"]
+                   if (i.get("type") or "").lower() == "hidden" and i.get("name")]
+        params.append((field["name"], reference))
+        url = parsed._replace(query=urlencode(params), fragment="").geturl()
+        if url not in urls:
+            urls.append(url)
+        if len(urls) >= 2:
+            break
+    return urls
+
+
 def _search_direct_catalog(name, domain, templates, reference, piece_name=""):
     query = quote_plus(reference)
     pattern = _reference_pattern(reference)
@@ -1165,17 +1224,51 @@ def _search_direct_catalog(name, domain, templates, reference, piece_name=""):
     }
     exact_links, listing_links, evidence = [], [], []
     seen = set()
+    attempts = diagnostics["attempts"] = []
 
-    for template in templates:
-        search_url = template.format(q=query)
+    def record(kind, url):
+        entry = {"kind": kind, "url": url, "http": None, "final_url": "", "title": "", "status": "sin_intentar"}
+        attempts.append(entry)
+        return entry
+
+    def failed(entry, exc):
+        if isinstance(exc, HTTPError):
+            entry.update(http=exc.code, final_url=exc.geturl() or "", status=f"http_{exc.code}")
+        else:
+            entry.update(status="error_de_conexion", error=type(exc).__name__)
+
+    # 1) Ruta real de búsqueda: el formulario de la portada de la tienda (con sus redirecciones).
+    discovered = []
+    home = f"https://{domain}/"
+    entry = record("portada", home)
+    if not _robots_can_fetch(home):
+        entry["status"] = "bloqueado_por_robots"
+    else:
+        try:
+            home_html, home_final, home_status = _http_text(home, 650_000, timeout=4)
+            entry.update(http=home_status, final_url=home_final, title=_html_title(home_html), status="ok")
+            if domain in _domain_host(home_final):
+                discovered = _search_form_urls(home_html, home_final, reference, domain)
+            entry["formularios_de_busqueda"] = len(discovered)
+        except Exception as exc:
+            failed(entry, exc)
+
+    # 2) Plantillas configuradas, solo como alternativa.
+    candidates = [("formulario", u) for u in discovered] + [("plantilla", t.format(q=query)) for t in templates]
+
+    for kind, search_url in candidates:
+        entry = record(kind, search_url)
         if not _robots_can_fetch(search_url):
+            entry["status"] = "bloqueado_por_robots"
             diagnostics["status"] = "bloqueado_por_robots"
             continue
         try:
             html, final_url, status = _http_text(search_url, 650_000, timeout=4)
             diagnostics["search_pages"] += 1
+            entry.update(http=status, final_url=final_url, title=_html_title(html), status="ok")
             if status >= 400 or domain not in _domain_host(final_url):
-                diagnostics["status"] = f"http_{status}"
+                entry["status"] = f"http_{status}" if status >= 400 else "redirige_a_otro_dominio"
+                diagnostics["status"] = entry["status"]
                 continue
             text = _VisibleText(); text.feed(html)
             lines = text.lines()
@@ -1207,8 +1300,10 @@ def _search_direct_catalog(name, domain, templates, reference, piece_name=""):
                 break
             diagnostics["status"] = "sin_resultados_especificos" if (anchors.links or lines) else "pagina_accesible_sin_productos"
         except HTTPError as exc:
+            failed(entry, exc)
             diagnostics["status"] = f"http_{exc.code}"
         except Exception as exc:
+            failed(entry, exc)
             diagnostics["status"] = "error_de_conexion"
             log.info("Búsqueda directa en %s falló: %s", domain, exc)
 
