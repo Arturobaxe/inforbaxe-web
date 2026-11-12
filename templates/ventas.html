@@ -96,7 +96,7 @@
               <a href="{{ url_for('albaran_pdf', id_venta=v.id) }}" target="_blank" class="btn btn-secondary btn-sm" title="Albarán">🖨️</a>
               <button onclick="duplicarVenta({{ v.id }})" class="btn btn-secondary btn-sm" title="Duplicar">📋</button>
               <form method="post" action="{{ url_for('seguimiento_reparaciones.crear_desde_venta', id_venta=v.id) }}" style="display:inline;margin:0;" title="Crear enlace privado de seguimiento">
-                <button type="submit" class="btn btn-green btn-sm" aria-label="Crear seguimiento de {{ v.nombre_cliente }}" title="Crear enlace de seguimiento" onclick="return confirm('¿Crear un seguimiento privado para {{ v.equipo_modelo or 'esta venta' }}?')">🔗</button>
+                <button type="submit" class="btn btn-green btn-sm" aria-label="Crear seguimiento de {{ v.nombre_cliente }}" title="Crear enlace de seguimiento" onclick="return confirm('¿Crear un seguimiento privado para esta venta?')">🔗</button>
               </form>
               <a href="{{ url_for('venta_editar', id_venta=v.id) }}" class="btn btn-blue btn-sm">✏️</a>
               <button onclick="confirmDelete('/api/ventas/{{ v.id }}','¿Eliminar venta #{{ v.id }}?')" class="btn btn-danger btn-sm">🗑️</button>
