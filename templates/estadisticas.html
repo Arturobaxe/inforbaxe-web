@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Estadísticas — INFORBAXE{% endblock %}
+{% block page_title %}Estadísticas{% endblock %}
+{% block page_sub %}Conoce mejor tu negocio · últimos 12 meses{% endblock %}
+{% block extra_head %}
+<style>
+.stats-hero{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap;margin-bottom:18px;padding:19px 21px;border-radius:14px;background:linear-gradient(115deg,#1b2340,#29385d);color:#fff}.stats-hero h2{margin:0;font-size:18px;font-weight:750}.stats-hero p{margin:5px 0 0;color:rgba(255,255,255,.72);font-size:12px}.stats-period{padding:7px 11px;border:1px solid rgba(255,255,255,.2);border-radius:20px;color:#fff;font-size:10px;font-weight:700}
+.stats-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:17px}.stats-kpi{position:relative;overflow:hidden;min-width:0;padding:16px;border:1px solid var(--border);border-radius:12px;background:var(--bg1);box-shadow:0 3px 14px rgba(27,35,64,.035)}.stats-kpi:after{content:"";position:absolute;width:75px;height:75px;right:-31px;bottom:-38px;border-radius:50%;background:var(--kpi-color,#e8820c);opacity:.09}.stats-kpi-label{color:var(--t3);font-size:10px;font-weight:700}.stats-kpi-value{display:block;overflow:hidden;margin-top:7px;color:var(--t1);font-size:clamp(19px,2vw,26px);font-weight:800;letter-spacing:-.7px;text-overflow:ellipsis;white-space:nowrap}.stats-kpi-note{margin-top:4px;color:var(--t3);font-size:10px}
+.stats-grid{display:grid;grid-template-columns:1.35fr 1fr;gap:15px;margin-bottom:15px}.stats-card{min-width:0;padding:18px;border:1px solid var(--border);border-radius:12px;background:var(--bg1);box-shadow:0 3px 14px rgba(27,35,64,.035)}.stats-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:12px}.stats-card-title{margin:0;color:var(--t1);font-size:13px;font-weight:750}.stats-card-sub{margin:4px 0 0;color:var(--t3);font-size:10px}.chart-box{position:relative;height:255px;width:100%}.chart-box.small{height:230px}
+.top-client-list{display:grid;gap:13px}.top-client{display:grid;grid-template-columns:25px minmax(0,1fr) auto;gap:9px;align-items:center}.top-rank{display:grid;place-items:center;width:24px;height:24px;border-radius:7px;background:var(--bg3);color:var(--t2);font-size:10px;font-weight:800}.top-client-name{overflow:hidden;color:var(--t1);font-size:11px;font-weight:700;text-overflow:ellipsis;white-space:nowrap}.top-client-meta{margin-top:2px;color:var(--t3);font-size:9px}.top-client-total{color:var(--green);font-size:11px;font-weight:800;white-space:nowrap}
+.insight-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.insight{padding:14px 15px;border:1px solid var(--border);border-radius:10px;background:var(--bg2)}.insight-label{color:var(--t3);font-size:10px;font-weight:650}.insight-value{display:block;margin-top:4px;color:var(--t1);font-size:19px;font-weight:800}.insight-desc{margin-top:3px;color:var(--t3);font-size:9px;line-height:1.45}
+.recent-wrap{overflow-x:auto}.recent-table{width:100%;border-collapse:collapse;white-space:nowrap}.recent-table th{padding:10px 9px;border-bottom:1px solid var(--border);color:var(--t3);font-size:9px;text-align:left;text-transform:uppercase;letter-spacing:.06em}.recent-table td{padding:11px 9px;border-bottom:1px solid var(--border);color:var(--t2);font-size:11px}.recent-table tr:last-child td{border-bottom:0}.recent-total{color:var(--green)!important;font-weight:750}.stats-empty{display:grid;place-items:center;min-height:170px;color:var(--t3);font-size:12px;text-align:center}
+@media(max-width:1050px){.stats-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:760px){.stats-grid{grid-template-columns:1fr}.chart-box{height:230px}}@media(max-width:480px){.stats-kpi{padding:13px}.stats-card{padding:14px}.stats-hero{padding:16px}.stats-kpi-value{font-size:20px}}
+</style>
+{% endblock %}
+{% block topbar_actions %}<a href="{{ url_for('dashboard') }}" class="btn btn-secondary">← Dashboard</a>{% endblock %}
+{% block content %}
+<div class="stats-hero"><div><h2>Tu negocio, en números</h2><p>Ventas, rentabilidad, clientes y reparaciones en una sola vista.</p></div><span class="stats-period">ÚLTIMOS 12 MESES</span></div>
+<div class="stats-kpis">
+  <div class="stats-kpi" style="--kpi-color:var(--green)"><div class="stats-kpi-label">FACTURACIÓN</div><strong class="stats-kpi-value">{{ "%.2f"|format(total_facturacion) }} €</strong><div class="stats-kpi-note">Ventas registradas</div></div>
+  <div class="stats-kpi" style="--kpi-color:var(--cyan)"><div class="stats-kpi-label">BENEFICIO</div><strong class="stats-kpi-value">{{ "%.2f"|format(total_beneficio) }} €</strong><div class="stats-kpi-note">Beneficio calculado en ventas</div></div>
+  <div class="stats-kpi" style="--kpi-color:var(--accent)"><div class="stats-kpi-label">VENTAS</div><strong class="stats-kpi-value">{{ total_ventas }}</strong><div class="stats-kpi-note">{{ ventas_pagadas }} cobradas · {{ total_ventas - ventas_pagadas }} pendientes</div></div>
+  <div class="stats-kpi" style="--kpi-color:#527fd0"><div class="stats-kpi-label">TICKET MEDIO</div><strong class="stats-kpi-value">{{ "%.2f"|format(ticket_medio) }} €</strong><div class="stats-kpi-note">Facturación / nº ventas</div></div>
+</div>
+<div class="stats-grid">
+  <section class="stats-card"><div class="stats-card-head"><div><h3 class="stats-card-title">Facturación y beneficio</h3><p class="stats-card-sub">Evolución mensual durante los últimos 12 meses</p></div></div>
+    {% if total_ventas %}<div class="chart-box"><canvas id="revenue-chart"></canvas></div>{% else %}<div class="stats-empty">Todavía no hay ventas en este periodo.</div>{% endif %}
+  </section>
+  <section class="stats-card"><div class="stats-card-head"><div><h3 class="stats-card-title">Clientes más valiosos</h3><p class="stats-card-sub">Ordenados por facturación acumulada</p></div></div>
+    {% if mejores_clientes %}<div class="top-client-list">{% for cliente in mejores_clientes %}<div class="top-client"><span class="top-rank">{{ loop.index }}</span><div style="min-width:0"><div class="top-client-name">{{ cliente.nombre }}</div><div class="top-client-meta">{{ cliente.ventas }} ventas · beneficio {{ "%.2f"|format(cliente.beneficio) }} €</div></div><span class="top-client-total">{{ "%.2f"|format(cliente.facturacion) }} €</span></div>{% endfor %}</div>{% else %}<div class="stats-empty">Aún no hay clientes con ventas.</div>{% endif %}
+  </section>
+</div>
+<div class="stats-grid">
+  <section class="stats-card"><div class="stats-card-head"><div><h3 class="stats-card-title">Métodos de pago</h3><p class="stats-card-sub">Distribución del importe de ventas</p></div></div>{% if metodos %}<div class="chart-box small"><canvas id="payment-chart"></canvas></div>{% else %}<div class="stats-empty">Sin datos de métodos de pago.</div>{% endif %}</section>
+  <section class="stats-card"><div class="stats-card-head"><div><h3 class="stats-card-title">Actividad de clientes y reparaciones</h3><p class="stats-card-sub">Resumen actual del panel</p></div></div>
+    <div class="insight-grid">
+      <div class="insight"><span class="insight-label">Clientes totales</span><strong class="insight-value">{{ clientes_total }}</strong><div class="insight-desc">En la base de datos</div></div>
+      <div class="insight"><span class="insight-label">Clientes activos</span><strong class="insight-value">{{ clientes_activos }}</strong><div class="insight-desc">Marcados como activos</div></div>
+      <div class="insight"><span class="insight-label">Clientes recurrentes</span><strong class="insight-value">{{ clientes_recurrentes }}</strong><div class="insight-desc">Más de una venta en 12 meses</div></div>
+      <div class="insight"><span class="insight-label">Pendiente de cobro</span><strong class="insight-value">{{ "%.2f"|format(total_pendiente) }} €</strong><div class="insight-desc">Importe sin marcar como cobrado</div></div>
+      <div class="insight"><span class="insight-label">Reparaciones abiertas</span><strong class="insight-value">{{ seguimientos_abiertos }}</strong><div class="insight-desc">Pieza en camino o reparando</div></div>
+      <div class="insight"><span class="insight-label">Enlaces disponibles</span><strong class="insight-value">{{ enlaces_disponibles }}</strong><div class="insight-desc">Seguimientos compartidos no caducados</div></div>
+    </div><p class="stats-card-sub" style="margin-top:12px">Reparaciones finalizadas: {{ seguimientos_finalizados }}</p>
+  </section>
+</div>
+<section class="stats-card"><div class="stats-card-head"><div><h3 class="stats-card-title">Últimas ventas</h3><p class="stats-card-sub">Actividad más reciente del periodo</p></div><a href="{{ url_for('ventas') }}" class="btn btn-secondary btn-sm">Ver todas</a></div>
+  {% if ventas_recientes %}<div class="recent-wrap"><table class="recent-table"><thead><tr><th>Fecha</th><th>Cliente</th><th>Importe</th><th>Estado</th></tr></thead><tbody>{% for venta in ventas_recientes %}<tr><td>{{ venta.fecha }}</td><td>{{ venta.cliente }}</td><td class="recent-total">{{ "%.2f"|format(venta.total) }} €</td><td>{% if venta.pagado %}<span class="badge badge-green">Cobrada</span>{% else %}<span class="badge badge-red">Pendiente</span>{% endif %}</td></tr>{% endfor %}</tbody></table></div>{% else %}<div class="stats-empty">No hay ventas recientes en este periodo.</div>{% endif %}
+</section>
+{% endblock %}
+{% block scripts %}
+{% if total_ventas or metodos %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(() => {
+  if (typeof Chart === 'undefined') return;
+  Chart.defaults.font.family = "'Sora', system-ui, sans-serif";
+  Chart.defaults.color = '#7d879e';
+  Chart.defaults.plugins.legend.labels.usePointStyle = true;
+  const labels = {{ meses|map(attribute='label')|list|tojson }};
+  const facturacion = {{ meses|map(attribute='facturacion')|list|tojson }};
+  const beneficio = {{ meses|map(attribute='beneficio')|list|tojson }};
+  const paymentLabels = {{ metodos|map(attribute='nombre')|list|tojson }};
+  const paymentValues = {{ metodos|map(attribute='total')|list|tojson }};
+  const revenueCanvas = document.getElementById('revenue-chart');
+  if (revenueCanvas) new Chart(revenueCanvas, {
+    type:'bar',data:{labels,datasets:[
+      {label:'Facturación',data:facturacion,backgroundColor:'rgba(232,130,12,.75)',borderRadius:5,maxBarThickness:25},
+      {label:'Beneficio',data:beneficio,backgroundColor:'rgba(28,158,90,.75)',borderRadius:5,maxBarThickness:25}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>c.dataset.label+': '+Number(c.raw||0).toLocaleString('es-ES',{style:'currency',currency:'EUR'})}}},
+      scales:{x:{grid:{display:false}},y:{beginAtZero:true,grid:{color:'rgba(120,130,150,.12)'},ticks:{callback:v=>v+' €'}}}}
+  });
+  const paymentCanvas = document.getElementById('payment-chart');
+  if (paymentCanvas) new Chart(paymentCanvas, {
+    type:'doughnut',data:{labels:paymentLabels,datasets:[{data:paymentValues,backgroundColor:['#e8820c','#1c9e5a','#3478b9','#8b6db1','#d1a33b','#708090'],borderWidth:2,borderColor:'#fff',hoverOffset:7}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>c.label+': '+Number(c.raw||0).toLocaleString('es-ES',{style:'currency',currency:'EUR'})}}}}
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}
