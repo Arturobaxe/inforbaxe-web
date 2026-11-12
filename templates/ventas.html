@@ -10,10 +10,18 @@
 {% endblock %}
 {% block extra_head %}
 <style>
-  .sales-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:19px}
+  .sales-filter-card{position:relative;z-index:30;overflow:visible;margin-bottom:17px;padding:18px 20px}
+  .sales-filter-form{display:grid;grid-template-columns:150px 150px minmax(180px,1.2fr) minmax(125px,.9fr) minmax(105px,.7fr) auto auto;align-items:end;gap:10px}
+  .sales-filter-form .filter-field{min-width:0}
+  .sales-filter-form .form-control,.sales-filter-form .ts-wrapper{width:100%;max-width:none!important}
+  .sales-filter-form .form-control{min-height:40px}
+  .sales-filter-card .ts-wrapper{position:relative}
+  .sales-filter-card .ts-wrapper.dropdown-active{z-index:100}
+  .sales-filter-card .ts-dropdown{z-index:101}
+  .sales-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:19px;position:relative;z-index:1}
   .sales-summary .stat-card{min-width:0;border-radius:13px}
   .sales-desktop .table-wrap{overflow-x:auto;border-radius:12px}
-  .sales-table{width:100%;min-width:1120px;border-collapse:separate;border-spacing:0}
+  .sales-table{width:100%;min-width:1240px;border-collapse:separate;border-spacing:0;table-layout:auto}
   .sales-table thead th{padding:13px 12px;background:#f7f8fb;color:#8993a5;font-size:9px;letter-spacing:.09em}
   .sales-table tbody td{padding:14px 12px;border-bottom:1px solid #edf0f4;background:#fff;font-size:12px}
   .sales-table tbody tr:nth-child(even) td{background:#fcfcfe}
@@ -23,39 +31,69 @@
   .sales-table .sale-date{color:#8993a5;font-size:10px}
   .sales-table .sale-amount{font-weight:800;color:var(--green);white-space:nowrap}
   .sales-table .sale-profit{font-weight:750;color:#168c75;white-space:nowrap}
-  .sales-actions{display:flex;gap:5px;justify-content:flex-end;align-items:center;white-space:nowrap}
+  .sales-actions{display:flex;gap:5px;justify-content:flex-end;align-items:center;white-space:nowrap;min-width:220px}
   .sales-mobile{display:none}
-  .sale-list{display:grid;gap:12px}
-  .sale-swipe{position:relative;overflow:hidden;border:1px solid #e8ebf0;border-radius:14px;background:#f8eeee;box-shadow:0 3px 12px rgba(27,35,64,.045);touch-action:pan-y}
+  .sale-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+  .sale-swipe{position:relative;overflow:hidden;border:1px solid #e4e9f1;border-left:4px solid #22a06b;border-radius:16px;background:#fff;box-shadow:0 5px 18px rgba(27,35,64,.055);touch-action:pan-y;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
+  .sale-swipe:hover{transform:translateY(-2px);box-shadow:0 10px 25px rgba(27,35,64,.09);border-color:#d5deeb}
+  .sale-swipe:has(.badge-red){border-left-color:#e05252}
+  .sale-list .sale-card-front{min-height:100%}
   .sale-delete-back{position:absolute;inset:0 0 0 auto;width:94px;display:grid;place-items:center;background:linear-gradient(145deg,#d94e4e,#b92f40)}
   .sale-delete-back button{display:flex;flex-direction:column;align-items:center;gap:4px;border:0;background:transparent;color:#fff;font-size:11px;font-weight:800;cursor:pointer}
   .sale-delete-back span{font-size:21px;line-height:1}
-  .sale-card-front{position:relative;z-index:1;padding:14px 14px 11px;background:#fff;transition:transform .22s ease;will-change:transform}
+  .sale-card-front{position:relative;z-index:1;padding:16px 16px 12px;background:linear-gradient(150deg,#fff 0%,#fcfdff 100%);transition:transform .22s ease;will-change:transform}
   .sale-swipe.is-open .sale-card-front{transform:translateX(-94px)}
   .sale-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
-  .sale-client-link{display:block;color:var(--t1);font-size:14px;font-weight:800;text-decoration:none}
-  .sale-reference{margin-top:3px;color:var(--t3);font-size:10px}
+  .sale-client-link{display:block;color:#1c2d4c;font-size:14px;font-weight:850;text-decoration:none;letter-spacing:-.02em}
+  .sale-client-link:hover{color:var(--accent)}
+  .sale-reference{display:inline-flex;margin-top:5px;padding:3px 7px;border-radius:6px;background:#f1f4f9;color:#738097;font-size:10px;font-weight:700}
   .sale-date-chip{padding:5px 8px;border-radius:8px;background:#f3f5f8;color:#667389;font-size:10px;font-weight:700;white-space:nowrap}
-  .sale-products{margin-top:11px;padding:9px 10px;border-radius:9px;background:#f8f9fb;color:#586579;font-size:11px;line-height:1.45}
+  .sale-products{margin-top:12px;padding:11px 12px;border:1px solid #edf0f5;border-radius:11px;background:#f7f9fc;color:#4f5d72;font-size:11px;line-height:1.5;min-height:58px}
   .sale-products-label{display:block;margin-bottom:3px;color:#98a1af;font-size:8px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
   .sale-values{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:11px}
-  .sale-value{padding:9px 10px;border-radius:9px;background:#f3f8f5}
-  .sale-value.profit{background:#edf8f5}
+  .sale-value{padding:10px 11px;border:1px solid #e6f0e9;border-radius:10px;background:linear-gradient(145deg,#f5fbf7,#edf7f1)}
+  .sale-value.profit{border-color:#d6eee8;background:linear-gradient(145deg,#f0fbf8,#e6f6f2)}
   .sale-value span{display:block;color:#8b96a5;font-size:9px;font-weight:700}
   .sale-value strong{display:block;margin-top:3px;color:#25875e;font-size:15px;font-weight:850}
   .sale-value.profit strong{color:#168c75}
-  .sale-card-bottom{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:11px}
+  .sale-card-bottom{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:13px;flex-wrap:wrap}
   .sale-badges{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
-  .sale-card-actions{display:flex;align-items:center;justify-content:flex-end;gap:5px;flex-wrap:wrap}
-  .sale-card-actions .btn{min-width:33px;padding:6px 8px}
+  .sale-card-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap}
+  .sale-card-actions .btn{min-width:36px;min-height:36px;padding:7px 9px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center}
+  .sale-card-actions .btn-follow{gap:5px;min-width:86px;background:#edf4ff;border:1px solid #d7e5ff;color:#285fae;font-size:11px;font-weight:800}
+  .sale-card-actions .btn-follow:hover{background:#e1edff;border-color:#b9d1ff}
+  .sale-card-actions .btn-delete{background:#fff1f1;border:1px solid #ffdada;color:#d34242}
+  .sale-card-actions .btn-delete:hover{background:#ffe4e4}
   .sale-swipe-hint{margin-top:8px;color:#a4acb8;font-size:9px;text-align:right}
   .sales-empty{padding:35px 20px;text-align:center}
-  @media(max-width:900px){
+  @media(max-width:1500px){
     .sales-desktop{display:none!important}
     .sales-mobile{display:block}
+    .sale-list{grid-template-columns:repeat(2,minmax(0,1fr))}
+  }
+  @media(max-width:1150px){
+    .sales-filter-form{grid-template-columns:repeat(4,minmax(0,1fr))}
+    .sales-filter-form .filter-client-field{grid-column:span 2}
+  }
+  @media(max-width:900px){
+    .sales-filter-form{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .sales-filter-form .filter-client-field{grid-column:span 1}
+    .sales-desktop{display:none!important}
+    .sales-mobile{display:block}
+    .sale-list{grid-template-columns:1fr}
     .sales-summary{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
     .sales-summary .stat-card{padding:13px}
     .sales-summary .stat-value{font-size:19px!important}
+  }
+  @media(max-width:600px){
+    .sales-filter-card{padding:14px}
+    .sales-filter-form{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+    .sales-filter-form .filter-client-field{grid-column:span 2}
+    .sales-filter-form .filter-submit{grid-column:span 1}
+    .sales-filter-form .filter-clear{grid-column:span 1}
+    .sale-card-front{padding:13px}
+    .sale-card-bottom{align-items:flex-start}
+    .sale-card-actions{justify-content:flex-start;width:100%}
   }
   @media(max-width:480px){
     .sale-card-front{padding:12px}
@@ -69,34 +107,34 @@
 {% endblock %}
 {% block content %}
 
-<div class="card mb-4">
-  <form method="GET" style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;">
-    <div><label class="form-label">Desde</label><input type="date" name="desde" value="{{ filtros.desde }}" class="form-control" style="max-width:150px;"></div>
-    <div><label class="form-label">Hasta</label><input type="date" name="hasta" value="{{ filtros.hasta }}" class="form-control" style="max-width:150px;"></div>
-    <div>
+<div class="card sales-filter-card">
+  <form method="GET" class="sales-filter-form">
+    <div class="filter-field"><label class="form-label">Desde</label><input type="date" name="desde" value="{{ filtros.desde }}" class="form-control"></div>
+    <div class="filter-field"><label class="form-label">Hasta</label><input type="date" name="hasta" value="{{ filtros.hasta }}" class="form-control"></div>
+    <div class="filter-field filter-client-field">
       <label class="form-label">Cliente</label>
-      <select name="id_cliente" class="form-control" style="max-width:190px;">
+      <select name="id_cliente" class="form-control">
         <option value="">Todos</option>
         {% for c in clientes %}<option value="{{ c.id }}" {% if filtros.id_cliente == c.id|string %}selected{% endif %}>{{ c.nombre }}</option>{% endfor %}
       </select>
     </div>
-    <div>
+    <div class="filter-field">
       <label class="form-label">Método</label>
-      <select name="metodo" class="form-control" style="max-width:130px;">
+      <select name="metodo" class="form-control">
         <option value="">Todos</option>
         {% for m in metodos %}<option value="{{ m }}" {% if filtros.metodo == m %}selected{% endif %}>{{ m }}</option>{% endfor %}
       </select>
     </div>
-    <div>
+    <div class="filter-field">
       <label class="form-label">Pagado</label>
-      <select name="pagado" class="form-control" style="max-width:100px;">
+      <select name="pagado" class="form-control">
         <option value="">Todos</option>
         <option value="Sí" {% if filtros.pagado=='Sí' %}selected{% endif %}>Sí</option>
         <option value="No" {% if filtros.pagado=='No' %}selected{% endif %}>No</option>
       </select>
     </div>
-    <button type="submit" class="btn btn-secondary" style="margin-top:auto;">Filtrar</button>
-    <a href="{{ url_for('ventas') }}" class="btn btn-danger" style="margin-top:auto;">✖</a>
+    <button type="submit" class="btn btn-secondary filter-submit">Filtrar</button>
+    <a href="{{ url_for('ventas') }}" class="btn btn-danger filter-clear" aria-label="Limpiar filtros" title="Limpiar filtros">✕</a>
   </form>
 </div>
 
@@ -185,8 +223,9 @@
             {% if v.pagado == 'No' %}<button type="button" onclick="marcarPagado({{ v.id }},this.dataset.nombre)" data-nombre="{{ v.nombre_cliente|e }}" class="btn btn-green btn-sm" title="Cobrar">💰</button>{% endif %}
             <a href="{{ url_for('albaran_pdf', id_venta=v.id) }}" target="_blank" class="btn btn-secondary btn-sm" title="Albarán">🖨️</a>
             <button type="button" onclick="duplicarVenta({{ v.id }})" class="btn btn-secondary btn-sm" title="Duplicar">📋</button>
-            <form method="post" action="{{ url_for('seguimiento_reparaciones.crear_desde_venta', id_venta=v.id) }}" style="display:inline;margin:0"><button type="submit" class="btn btn-green btn-sm" title="Seguimiento" onclick="return confirm('¿Crear un seguimiento privado para esta venta?')">🔗</button></form>
-            <a href="{{ url_for('venta_editar', id_venta=v.id) }}" class="btn btn-blue btn-sm" title="Editar">✏️</a>
+            <form method="post" action="{{ url_for('seguimiento_reparaciones.crear_desde_venta', id_venta=v.id) }}" style="display:inline;margin:0"><button type="submit" class="btn btn-follow" title="Crear enlace de seguimiento" aria-label="Crear enlace de seguimiento" onclick="return confirm('¿Crear un seguimiento privado para esta venta?')">🔗 Enlace</button></form>
+            <a href="{{ url_for('venta_editar', id_venta=v.id) }}" class="btn btn-blue btn-sm" title="Editar" aria-label="Editar venta">✏️</a>
+            <button type="button" onclick="confirmDelete('/api/ventas/{{ v.id }}','¿Eliminar venta #{{ v.id }}?')" class="btn btn-delete" title="Eliminar" aria-label="Eliminar venta">🗑️</button>
           </div>
         </div>
         <div class="sale-swipe-hint">Desliza a la izquierda para eliminar</div>
