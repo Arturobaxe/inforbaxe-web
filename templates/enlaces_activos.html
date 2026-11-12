@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Enlaces activos — INFORBAXE{% endblock %}
+{% block page_title %}Enlaces de seguimiento{% endblock %}
+{% block page_sub %}Controla los enlaces privados que has compartido con tus clientes{% endblock %}
+{% block extra_head %}
+<style>
+  .links-intro{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+  .links-intro p{margin:4px 0 0;color:var(--t3);font-size:12px}
+  .links-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:18px}
+  .links-kpi{background:var(--bg1);border:1px solid var(--border);border-radius:12px;padding:16px}
+  .links-kpi span{display:block;color:var(--t3);font-size:11px;font-weight:650}
+  .links-kpi strong{display:block;margin-top:5px;color:var(--t1);font-size:25px;font-weight:800}
+  .links-tools{display:flex;align-items:center;gap:10px;padding:13px 15px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+  .links-tools input{max-width:360px;flex:1;min-width:190px}
+  .link-row{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(120px,.7fr) minmax(120px,.7fr) auto;gap:14px;align-items:center;padding:15px 17px;border-bottom:1px solid var(--border)}
+  .link-row:last-child{border-bottom:0}
+  .link-customer{font-size:13px;font-weight:750;color:var(--t1)}
+  .link-device{font-size:12px;color:var(--t2);margin-top:3px}
+  .link-meta{font-size:11px;color:var(--t3);line-height:1.55}
+  .link-actions{display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap}
+  .links-empty{padding:45px 20px;text-align:center}
+  .links-empty .emoji{font-size:32px;margin-bottom:9px}
+  .links-empty strong{display:block;font-size:14px}
+  .links-empty p{font-size:12px;color:var(--t3);margin:5px 0 0}
+  .links-note{padding:12px 15px;background:var(--bg2);border-top:1px solid var(--border);font-size:11px;color:var(--t3);line-height:1.6}
+  @media(max-width:760px){.link-row{grid-template-columns:1fr auto;gap:7px}.link-row .link-meta-wrap{grid-column:1}.link-actions{grid-column:2;grid-row:1/3}.links-summary{gap:8px}.links-kpi{padding:12px}.links-kpi strong{font-size:21px}}
+  @media(max-width:420px){.links-summary{grid-template-columns:1fr 1fr}.links-summary .links-kpi:last-child{grid-column:1/-1}}
+</style>
+{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">← Dashboard</a>
+{% endblock %}
+{% block content %}
+<div class="links-intro">
+  <div>
+    <div class="card-title">Todos tus enlaces, en un solo sitio</div>
+    <p>Comprueba qué clientes pueden consultar su reparación y revoca el acceso cuando quieras.</p>
+  </div>
+</div>
+<div class="links-summary">
+  <div class="links-kpi"><span>Registros con enlace</span><strong>{{ total }}</strong></div>
+  <div class="links-kpi"><span>Disponibles ahora</span><strong style="color:var(--green)">{{ disponibles }}</strong></div>
+  <div class="links-kpi"><span>Caducados pendientes de limpiar</span><strong style="color:var(--amber)">{{ caducados }}</strong></div>
+</div>
+<div class="card">
+  <div class="links-tools">
+    <input class="form-control" id="link-search" type="search" placeholder="Buscar cliente o dispositivo..." autocomplete="off">
+    <span class="text-muted" style="font-size:11px" id="link-count">{{ total }} enlaces</span>
+  </div>
+  {% if enlaces %}
+    <div id="links-list">
+      {% for item in enlaces %}
+      <div class="link-row" data-search="{{ (item.nombre_cliente ~ ' ' ~ item.equipo ~ ' ' ~ item.trabajo)|lower }}">
+        <div>
+          <div class="link-customer">{{ item.nombre_cliente }}</div>
+          <div class="link-device">{{ item.equipo }}{% if item.trabajo %} · {{ item.trabajo }}{% endif %}</div>
+        </div>
+        <div class="link-meta-wrap">
+          <span class="badge {% if item.caducado %}badge-amber{% elif item.estado == 'reparacion_acabada' %}badge-green{% elif item.estado == 'reparando' %}badge-blue{% else %}badge-amber{% endif %}">
+            {% if item.caducado %}Caducado{% else %}{{ state_labels.get(item.estado,item.estado) }}{% endif %}
+          </span>
+          <div class="link-meta" style="margin-top:5px">
+            {% if item.fecha_caducidad %}Caducidad: {{ item.fecha_caducidad[:16].replace('T',' ') }} UTC{% else %}Caduca 5 días después de finalizar{% endif %}
+          </div>
+        </div>
+        <div class="link-meta">
+          Creado: {{ item.fecha_creacion[:16].replace('T',' ') if item.fecha_creacion else '—' }} UTC
+        </div>
+        <div class="link-actions">
+          <a class="btn btn-secondary btn-sm" href="{{ url_for('seguimiento_reparaciones.admin_cliente',id_cliente=item.id_cliente) }}">Ver ficha</a>
+          <form method="post" action="{{ url_for('seguimiento_reparaciones.revocar_enlace',id_seguimiento=item.id) }}" onsubmit="return confirm('¿Revocar el enlace de {{ item.nombre_cliente }}? El cliente perderá el acceso y se eliminará la fotografía asociada.');">
+            <input type="hidden" name="origen" value="panel">
+            <button class="btn btn-danger btn-sm" type="submit">Revocar</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="links-empty" id="no-search-results" hidden><strong>No hay coincidencias</strong><p>Prueba con otro nombre o dispositivo.</p></div>
+  {% else %}
+    <div class="links-empty"><div class="emoji">🔗</div><strong>No hay enlaces de seguimiento</strong><p>Cuando generes un enlace para un cliente, aparecerá aquí.</p></div>
+  {% endif %}
+  <div class="links-note">Al revocar un enlace, el cliente pierde el acceso inmediatamente. La fotografía asociada también se elimina de Supabase Storage; el registro interno de la reparación se conserva.</div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(() => {
+  const input = document.getElementById('link-search');
+  const list = document.getElementById('links-list');
+  if (!input || !list) return;
+  const rows = [...list.querySelectorAll('.link-row')];
+  const count = document.getElementById('link-count');
+  const empty = document.getElementById('no-search-results');
+  input.addEventListener('input', () => {
+    const q = input.value.trim().toLocaleLowerCase('es');
+    let shown = 0;
+    rows.forEach(row => {
+      const match = (row.dataset.search || '').includes(q);
+      row.hidden = !match;
+      if (match) shown++;
+    });
+    count.textContent = shown + (shown === 1 ? ' enlace' : ' enlaces');
+    empty.hidden = shown !== 0;
+  });
+})();
+</script>
+{% endblock %}
