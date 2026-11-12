@@ -140,7 +140,7 @@
           <td><span class="badge badge-blue">{{ v.metodo_pago }}</span></td>
           <td>{% if v.pagado == 'Sí' %}<span class="badge badge-green">✓ Sí</span>{% else %}<span class="badge badge-red">✗ No</span>{% endif %}</td>
           <td><div class="sales-actions">
-            {% if v.pagado == 'No' %}<button type="button" onclick="marcarPagado({{ v.id }},{{ v.nombre_cliente|tojson }})" class="btn btn-green btn-sm" title="Cobrar">💰</button>{% endif %}
+            {% if v.pagado == 'No' %}<button type="button" onclick="marcarPagado({{ v.id }},this.dataset.nombre)" data-nombre="{{ v.nombre_cliente|e }}" class="btn btn-green btn-sm" title="Cobrar">💰</button>{% endif %}
             <a href="{{ url_for('albaran_pdf', id_venta=v.id) }}" target="_blank" class="btn btn-secondary btn-sm" title="Albarán">🖨️</a>
             <button type="button" onclick="duplicarVenta({{ v.id }})" class="btn btn-secondary btn-sm" title="Duplicar">📋</button>
             <form method="post" action="{{ url_for('seguimiento_reparaciones.crear_desde_venta', id_venta=v.id) }}" style="display:inline;margin:0"><button type="submit" class="btn btn-green btn-sm" title="Crear enlace de seguimiento" onclick="return confirm('¿Crear un seguimiento privado para esta venta?')">🔗</button></form>
