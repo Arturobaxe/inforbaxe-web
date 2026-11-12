@@ -250,9 +250,9 @@ def enlaces_activos():
                 .range(offset, offset + page_size - 1)
                 .execute().data or [])
         for row in rows:
-        cliente = row.pop("clientes", None) or {}
-        if isinstance(cliente, list):
-            cliente = cliente[0] if cliente else {}
+            cliente = row.pop("clientes", None) or {}
+            if isinstance(cliente, list):
+                cliente = cliente[0] if cliente else {}
             row["nombre_cliente"] = cliente.get("nombre", "Cliente")
             row["caducado"] = _is_expired(row)
             enlaces.append(row)
