@@ -21,7 +21,7 @@
   .sales-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:19px;position:relative;z-index:1}
   .sales-summary .stat-card{min-width:0;border-radius:13px}
   .sales-desktop .table-wrap{overflow-x:auto;border-radius:12px}
-  .sales-table{width:100%;min-width:1000px;border-collapse:separate;border-spacing:0 7px;table-layout:fixed}
+  .sales-table{width:100%;min-width:1060px;border-collapse:separate;border-spacing:0 7px;table-layout:fixed}
   .sales-table thead th{padding:12px 8px;background:#edf2fb;color:#657590;font-size:9px;letter-spacing:.09em;font-weight:850;white-space:nowrap}
   .sales-table th:nth-child(1){width:48px}
   .sales-table th:nth-child(2){width:82px}
@@ -31,7 +31,7 @@
   .sales-table th:nth-child(6){width:84px}
   .sales-table th:nth-child(7){width:76px}
   .sales-table th:nth-child(8){width:70px}
-  .sales-table th:nth-child(9){width:245px}
+  .sales-table th:nth-child(9){width:300px}
   .sales-table thead th:first-child{border-radius:10px 0 0 10px}
   .sales-table thead th:last-child{border-radius:0 10px 10px 0;text-align:center!important}
   .sales-table tbody td{padding:12px 9px;border-top:1px solid #e7edf6;border-bottom:1px solid #e7edf6;background:#fff;font-size:11.5px;vertical-align:middle}
@@ -47,10 +47,11 @@
   .sales-table tbody td:nth-child(4){color:#50617b;font-weight:600;line-height:1.5}
   .sales-table tbody td:nth-child(7){color:#495d7a;font-weight:700}
   .sales-table tbody td:nth-child(8){white-space:nowrap}
-  .sales-actions{display:flex;gap:4px;justify-content:center;align-items:center;white-space:nowrap;min-width:0}
-  .sales-actions form{display:inline-flex;margin:0}
-  .sales-actions .btn{width:30px;height:30px;min-width:30px;padding:0;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(25,45,75,.07)}
-  .sales-actions .btn-sale-follow{width:auto;min-width:66px;padding:0 7px;background:#eaf2ff;border:1px solid #cbdcff;color:#285da8;font-size:10px;font-weight:850}
+  .sales-actions{display:flex;gap:5px;justify-content:center;align-items:center;white-space:nowrap;min-width:270px}
+  .sales-actions form{display:inline-flex;flex:0 0 auto;margin:0}
+  .sales-actions .btn{flex:0 0 30px;width:30px;height:30px;min-width:30px;padding:0;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(25,45,75,.07)}
+  .sales-actions .btn-sale-cobrar{flex-basis:34px;width:34px;min-width:34px;height:32px;background:linear-gradient(145deg,#1eaa68,#14834d);border:1px solid #12804c;color:#fff;font-size:15px;box-shadow:0 3px 8px rgba(22,145,82,.22)}
+  .sales-actions .btn-sale-follow{flex:0 0 70px;width:70px;min-width:70px;padding:0 7px;background:#eaf2ff;border:1px solid #cbdcff;color:#285da8;font-size:10px;font-weight:850}
   .sales-actions .btn-sale-follow:hover{background:#dceaff;border-color:#a9c6ff}
   .sales-actions .btn-danger{background:#fff0f0;border:1px solid #ffd4d4;color:#cc3d46}
   .sales-actions .btn-danger:hover{background:#ffe2e2}
@@ -200,7 +201,7 @@
           <td><span class="badge badge-blue">{{ v.metodo_pago }}</span></td>
           <td>{% if v.pagado == 'Sí' %}<span class="badge badge-green">✓ Sí</span>{% else %}<span class="badge badge-red">✗ No</span>{% endif %}</td>
           <td><div class="sales-actions">
-            {% if v.pagado == 'No' %}<button type="button" onclick="marcarPagado({{ v.id }},this.dataset.nombre)" data-nombre="{{ v.nombre_cliente|e }}" class="btn btn-green btn-sm" title="Cobrar">💰</button>{% endif %}
+            {% if v.pagado == 'No' %}<button type="button" onclick="marcarPagado({{ v.id }},this.dataset.nombre)" data-nombre="{{ v.nombre_cliente|e }}" class="btn btn-sale-cobrar" title="Cobrar" aria-label="Cobrar venta">💰</button>{% endif %}
             <a href="{{ url_for('albaran_pdf', id_venta=v.id) }}" target="_blank" class="btn btn-secondary btn-sm" title="Albarán">🖨️</a>
             <button type="button" onclick="duplicarVenta({{ v.id }})" class="btn btn-secondary btn-sm" title="Duplicar">📋</button>
             <form method="post" action="{{ url_for('seguimiento_reparaciones.crear_desde_venta', id_venta=v.id) }}"><button type="submit" class="btn btn-sale-follow" title="Crear enlace de seguimiento" onclick="return confirm('¿Crear un seguimiento privado para esta venta?')">🔗 Enlace</button></form>
