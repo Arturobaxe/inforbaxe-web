@@ -235,6 +235,35 @@ def admin_cliente(id_cliente):
     )
 
 
+@seguimiento_bp.route("/seguimientos/enlaces-activos")
+@_staff_required
+def enlaces_activos():
+    """Panel global de enlaces de seguimiento activos."""
+    rows = (_table()
+            .select("id,id_cliente,equipo,trabajo,estado,activo,fecha_creacion,fecha_actualizacion,fecha_finalizacion,fecha_caducidad,clientes(nombre)")
+            .eq("activo", True)
+            .order("fecha_creacion", desc=True)
+            .limit(500)
+            .execute().data or [])
+    enlaces = []
+    for row in rows:
+        cliente = row.pop("clientes", None) or {}
+        if isinstance(cliente, list):
+            cliente = cliente[0] if cliente else {}
+        row["nombre_cliente"] = cliente.get("nombre", "Cliente")
+        row["caducado"] = _is_expired(row)
+        enlaces.append(row)
+    disponibles = sum(1 for item in enlaces if not item["caducado"])
+    caducados = len(enlaces) - disponibles
+    return render_template(
+        "enlaces_activos.html",
+        enlaces=enlaces,
+        total=len(enlaces),
+        disponibles=disponibles,
+        caducados=caducados,
+    )
+
+
 @seguimiento_bp.route("/ventas/<int:id_venta>/seguimiento", methods=["POST"])
 @_staff_required
 def crear_desde_venta(id_venta):
@@ -396,6 +425,8 @@ def revocar_enlace(id_seguimiento):
     if path:
         _remove_photo(path)
     flash("Enlace desactivado. El cliente ya no puede consultar el seguimiento.", "success")
+    if request.form.get("origen") == "panel":
+        return redirect(url_for("seguimiento_reparaciones.enlaces_activos"))
     return redirect(url_for("seguimiento_reparaciones.admin_cliente", id_cliente=row["id_cliente"]))
 
 
