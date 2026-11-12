@@ -21,17 +21,30 @@
   .sales-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:19px;position:relative;z-index:1}
   .sales-summary .stat-card{min-width:0;border-radius:13px}
   .sales-desktop .table-wrap{overflow-x:auto;border-radius:12px}
-  .sales-table{width:100%;min-width:1240px;border-collapse:separate;border-spacing:0;table-layout:auto}
-  .sales-table thead th{padding:13px 12px;background:#f7f8fb;color:#8993a5;font-size:9px;letter-spacing:.09em}
-  .sales-table tbody td{padding:14px 12px;border-bottom:1px solid #edf0f4;background:#fff;font-size:12px}
-  .sales-table tbody tr:nth-child(even) td{background:#fcfcfe}
-  .sales-table tbody tr:hover td{background:#fff8ef}
-  .sales-table tbody tr:last-child td{border-bottom:0}
-  .sales-table .sale-customer{display:block;color:var(--t1);font-weight:750;font-size:12px}
-  .sales-table .sale-date{color:#8993a5;font-size:10px}
-  .sales-table .sale-amount{font-weight:800;color:var(--green);white-space:nowrap}
-  .sales-table .sale-profit{font-weight:750;color:#168c75;white-space:nowrap}
-  .sales-actions{display:flex;gap:5px;justify-content:flex-end;align-items:center;white-space:nowrap;min-width:220px}
+  .sales-table{width:100%;min-width:1050px;border-collapse:separate;border-spacing:0 7px;table-layout:fixed}
+  .sales-table thead th{padding:12px 9px;background:#edf2fb;color:#657590;font-size:9px;letter-spacing:.09em;font-weight:850;white-space:nowrap}
+  .sales-table thead th:first-child{border-radius:10px 0 0 10px}
+  .sales-table thead th:last-child{border-radius:0 10px 10px 0;text-align:center!important}
+  .sales-table tbody td{padding:12px 9px;border-top:1px solid #e7edf6;border-bottom:1px solid #e7edf6;background:#fff;font-size:11.5px;vertical-align:middle}
+  .sales-table tbody tr:nth-child(even) td{background:#f2f7ff}
+  .sales-table tbody tr:hover td{background:#fff4e5;border-color:#f4d7ad}
+  .sales-table tbody tr td:first-child{border-left:1px solid #e7edf6;border-radius:10px 0 0 10px;color:#7e8da5;font-weight:850}
+  .sales-table tbody tr td:last-child{border-right:1px solid #e7edf6;border-radius:0 10px 10px 0}
+  .sales-table .sale-customer{display:block;color:#243653;font-weight:850;font-size:11.5px;line-height:1.4}
+  .sales-table .sale-customer:hover{color:#d97706}
+  .sales-table .sale-date{color:#71809a;font-size:10.5px;font-weight:650;white-space:nowrap}
+  .sales-table .sale-amount{font-weight:900;color:#13834d;white-space:nowrap;background:#eef9f1!important}
+  .sales-table .sale-profit{font-weight:900;color:#078477;white-space:nowrap;background:#eaf8f6!important}
+  .sales-table tbody td:nth-child(4){color:#50617b;font-weight:600;line-height:1.5}
+  .sales-table tbody td:nth-child(7){color:#495d7a;font-weight:700}
+  .sales-table tbody td:nth-child(8){white-space:nowrap}
+  .sales-actions{display:flex;gap:4px;justify-content:center;align-items:center;white-space:nowrap;min-width:0}
+  .sales-actions form{display:inline-flex;margin:0}
+  .sales-actions .btn{width:30px;height:30px;min-width:30px;padding:0;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(25,45,75,.07)}
+  .sales-actions .btn-sale-follow{width:auto;min-width:66px;padding:0 7px;background:#eaf2ff;border:1px solid #cbdcff;color:#285da8;font-size:10px;font-weight:850}
+  .sales-actions .btn-sale-follow:hover{background:#dceaff;border-color:#a9c6ff}
+  .sales-actions .btn-danger{background:#fff0f0;border:1px solid #ffd4d4;color:#cc3d46}
+  .sales-actions .btn-danger:hover{background:#ffe2e2}
   .sales-mobile{display:none}
   .sale-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
   .sale-swipe{position:relative;overflow:hidden;border:1px solid #e4e9f1;border-left:4px solid #22a06b;border-radius:16px;background:#fff;box-shadow:0 5px 18px rgba(27,35,64,.055);touch-action:pan-y;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
@@ -66,7 +79,7 @@
   .sale-card-actions .btn-delete:hover{background:#ffe4e4}
   .sale-swipe-hint{margin-top:8px;color:#a4acb8;font-size:9px;text-align:right}
   .sales-empty{padding:35px 20px;text-align:center}
-  @media(max-width:1500px){
+  @media(max-width:900px){
     .sales-desktop{display:none!important}
     .sales-mobile{display:block}
     .sale-list{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -181,7 +194,7 @@
             {% if v.pagado == 'No' %}<button type="button" onclick="marcarPagado({{ v.id }},this.dataset.nombre)" data-nombre="{{ v.nombre_cliente|e }}" class="btn btn-green btn-sm" title="Cobrar">💰</button>{% endif %}
             <a href="{{ url_for('albaran_pdf', id_venta=v.id) }}" target="_blank" class="btn btn-secondary btn-sm" title="Albarán">🖨️</a>
             <button type="button" onclick="duplicarVenta({{ v.id }})" class="btn btn-secondary btn-sm" title="Duplicar">📋</button>
-            <form method="post" action="{{ url_for('seguimiento_reparaciones.crear_desde_venta', id_venta=v.id) }}" style="display:inline;margin:0"><button type="submit" class="btn btn-green btn-sm" title="Crear enlace de seguimiento" onclick="return confirm('¿Crear un seguimiento privado para esta venta?')">🔗</button></form>
+            <form method="post" action="{{ url_for('seguimiento_reparaciones.crear_desde_venta', id_venta=v.id) }}"><button type="submit" class="btn btn-sale-follow" title="Crear enlace de seguimiento" onclick="return confirm('¿Crear un seguimiento privado para esta venta?')">🔗 Enlace</button></form>
             <a href="{{ url_for('venta_editar', id_venta=v.id) }}" class="btn btn-blue btn-sm" title="Editar">✏️</a>
             <button type="button" onclick="confirmDelete('/api/ventas/{{ v.id }}','¿Eliminar venta #{{ v.id }}?')" class="btn btn-danger btn-sm" title="Eliminar">🗑️</button>
           </div></td>
