@@ -212,14 +212,14 @@ def averias_frecuentes():
     reglas = [
         ("Pantalla y táctil", ("pantalla", "display", "lcd", "oled", "tactil", "cristal roto", "vidrio roto", "sin imagen")),
         ("Batería", ("bateria", "autonomia", "se descarga", "hinchada", "no retiene carga")),
-        ("Carga y conector", ("no carga", "carga lenta", "conector", "usb-c", "usb c", "lightning", "pin de carga", "puerto de carga", "centro de carga", "cargador")),
+        ("Carga y conector", ("no carga", "carga lenta", "conector", "usb-c", "usb c", "lightning", "pin de carga", "puerto de carga", "centro de carga", "cargador", "problema de carga")),
         ("Encendido y reinicios", ("no enciende", "no prende", "no arranca", "reinicia", "reinicios", "bootloop", "no inicia", "se apaga")),
         ("Agua y humedad", ("mojado", "agua", "humedad", "sulfat", "oxidacion", "oxidado")),
         ("Placa base y electrónica", ("placa base", "placa", "microsoldadura", "cortocircuito", "corto", "pmic", "integrado de carga")),
-        ("Cámara", ("camara", "lente", "enfoque", " enfoque")),
+        ("Cámara", ("camara", "lente", "enfoque")),
         ("Audio y micrófono", ("microfono", "altavoz", "auricular", "audio", "sonido", "no se escucha")),
         ("Software", ("software", "actualizacion", "formateo", "sistema operativo", "virus", "bootloader", "bloqueo de sistema")),
-        ("Conectividad", ("wifi", "bluetooth", "cobertura", "sin señal", "antena", "no reconoce sim", "tarjeta sim")),
+        ("Conectividad", ("wifi", "bluetooth", "cobertura", "sin senal", "antena", "no reconoce sim", "tarjeta sim")),
         ("Datos y almacenamiento", ("recuperar datos", "recuperacion de datos", "perdida de datos", "memoria interna", "almacenamiento")),
     ]
 
@@ -255,13 +255,9 @@ def averias_frecuentes():
                 total_modelos += 1
                 clave_modelo = normalizar_texto(modelo)
                 modelo_item = modelos_stats.setdefault(clave_modelo, {
-                    "nombre": modelo, "registros": 0, "beneficio": 0.0,
+                    "nombre": modelo, "registros": 0,
                 })
                 modelo_item["registros"] += 1
-                try:
-                    modelo_item["beneficio"] += float(venta.get("total_benef") or 0)
-                except (TypeError, ValueError):
-                    pass
 
             if comentario:
                 total_notas += 1
@@ -278,11 +274,6 @@ def averias_frecuentes():
             if mes != "Sin fecha":
                 tendencia[mes] = tendencia.get(mes, 0) + 1
 
-            try:
-                beneficio_venta = float(venta.get("total_benef") or 0)
-            except (TypeError, ValueError):
-                beneficio_venta = 0.0
-
             for averia in detectadas:
                 item = averias_stats.setdefault(averia, {"nombre": averia, "registros": 0})
                 item["registros"] += 1
@@ -291,18 +282,16 @@ def averias_frecuentes():
                     clave = (normalizar_texto(modelo), averia)
                     combo = combinaciones.setdefault(clave, {
                         "modelo": modelo, "averia": averia, "registros": 0,
-                        "beneficio": 0.0,
                     })
                     combo["registros"] += 1
-                    combo["beneficio"] += beneficio_venta
 
         if len(lote) < page_size:
             break
         offset += page_size
 
     averias = sorted(averias_stats.values(), key=lambda x: x["registros"], reverse=True)
-    modelos = sorted(modelos_stats.values(), key=lambda x: (x["registros"], x["beneficio"]), reverse=True)
-    patrones = sorted(combinaciones.values(), key=lambda x: (x["registros"], x["beneficio"]), reverse=True)[:12]
+    modelos = sorted(modelos_stats.values(), key=lambda x: x["registros"], reverse=True)
+    patrones = sorted(combinaciones.values(), key=lambda x: x["registros"], reverse=True)[:12]
     max_averias = max([x["registros"] for x in averias] or [1])
     for item in averias:
         item["porcentaje"] = round(item["registros"] * 100 / max_averias)
