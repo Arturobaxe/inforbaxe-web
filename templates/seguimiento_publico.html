@@ -4,193 +4,435 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive">
-  <meta name="theme-color" content="#ffffff">
-  <title>Seguimiento · INFORBAXE</title>
+  <meta name="theme-color" content="#172440">
+  <title>Seguimiento de reparación · INFORBAXE</title>
   <link rel="icon" type="image/jpeg" href="{{ url_for('static', filename='logo.jpg') }}">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='logo.jpg') }}">
   <style>
     :root {
       color-scheme: light;
-      --ink: #252b35;
-      --muted: #737d8b;
-      --line: #e5e8ec;
+      --navy: #172440;
+      --navy-2: #263a60;
+      --orange: #ed8b27;
+      --orange-light: #fff2e2;
+      --green: #27966b;
+      --green-light: #eaf7f0;
+      --ink: #202a3b;
+      --muted: #718096;
+      --line: #e8edf4;
       --paper: #fff;
-      --page: #f5f6f7;
-      --accent: #e8820c;
-      --accent-soft: #fff5e9;
-      --green: #29845c;
+      --page: #f4f6fa;
     }
     * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
     body {
       margin: 0;
       min-height: 100vh;
       color: var(--ink);
-      background: var(--page);
-      font: 15px/1.55 Arial, Helvetica, sans-serif;
+      background:
+        radial-gradient(circle at 12% 8%, rgba(237,139,39,.075), transparent 24rem),
+        radial-gradient(circle at 92% 32%, rgba(57,91,145,.06), transparent 25rem),
+        var(--page);
+      font: 15px/1.55 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
     }
-    .page-wrap { width: min(100% - 32px, 690px); margin: 0 auto; padding: 27px 0 42px; }
+    .page-wrap { width: min(100% - 34px, 780px); margin: 0 auto; padding: 25px 0 42px; }
     .site-header {
       display: flex;
       align-items: center;
-      gap: 17px;
-      padding: 0 3px 21px;
-      border-bottom: 1px solid #dedfe2;
+      gap: 15px;
+      padding: 0 4px 19px;
+      animation: enter .55s ease both;
     }
     .brand-logo {
       display: block;
-      width: 76px;
-      height: 76px;
-      flex: 0 0 76px;
-      object-fit: contain;
+      width: 70px;
+      height: 70px;
+      flex: 0 0 70px;
       padding: 3px;
-      border: 1px solid #e5e5e5;
-      border-radius: 8px;
+      object-fit: contain;
+      border: 1px solid #e6eaf0;
+      border-radius: 17px;
       background: #fff;
+      box-shadow: 0 5px 16px rgba(25,39,67,.09);
     }
-    .brand-name {
-      margin: 0;
-      color: #222a36;
-      font-size: 23px;
-      font-weight: 800;
-      line-height: 1.2;
-      letter-spacing: .035em;
-    }
-    .brand-subtitle { margin: 5px 0 0; color: var(--muted); font-size: 13px; }
-    .main-card {
-      margin-top: 24px;
-      padding: 29px 30px;
-      border: 1px solid #e1e4e8;
-      border-radius: 10px;
-      background: var(--paper);
-    }
-    .section-label {
-      margin: 0 0 7px;
-      color: #9a641f;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: .08em;
-      text-transform: uppercase;
-    }
-    h1 { margin: 0; color: #242b36; font-size: 25px; line-height: 1.25; font-weight: 700; }
-    .intro { margin: 8px 0 22px; color: var(--muted); font-size: 13px; }
-    .device-block {
-      padding: 15px 17px;
-      border: 1px solid var(--line);
-      border-left: 3px solid var(--accent);
-      border-radius: 5px;
-      background: #fafafa;
-    }
-    .device-label {
-      display: block;
-      margin-bottom: 3px;
-      color: #818995;
+    .brand-name { margin: 0; color: var(--navy); font-size: 21px; font-weight: 850; letter-spacing: .045em; line-height: 1.2; }
+    .brand-subtitle { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+    .header-tag {
+      margin-left: auto;
+      padding: 7px 11px;
+      border: 1px solid #e5eaf1;
+      border-radius: 999px;
+      color: #5e6d82;
+      background: rgba(255,255,255,.8);
       font-size: 10px;
-      font-weight: 700;
+      font-weight: 750;
       letter-spacing: .07em;
       text-transform: uppercase;
+      white-space: nowrap;
     }
-    .device-name { display: block; color: #252b35; font-size: 17px; font-weight: 700; overflow-wrap: anywhere; }
-    .device-work { margin: 3px 0 0; color: var(--muted); font-size: 13px; }
-    .status-summary {
+    .hero {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(0,1.25fr) minmax(180px,.75fr);
+      gap: 18px;
+      align-items: center;
+      min-height: 235px;
+      overflow: hidden;
+      padding: 30px 34px;
+      border-radius: 24px;
+      color: #fff;
+      background: linear-gradient(118deg, #172440 0%, #22365a 62%, #30486e 100%);
+      box-shadow: 0 16px 36px rgba(23,36,64,.18);
+      isolation: isolate;
+      animation: enter .65s .06s ease both;
+    }
+    .hero:before, .hero:after {
+      content: "";
+      position: absolute;
+      z-index: -1;
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+    .hero:before { width: 360px; height: 360px; right: -120px; top: -230px; }
+    .hero:after { width: 270px; height: 270px; right: 5px; bottom: -215px; }
+    .hero-glow {
+      position: absolute;
+      z-index: -1;
+      width: 240px;
+      height: 240px;
+      right: 12%;
+      top: 2%;
+      border-radius: 50%;
+      background: rgba(237,139,39,.12);
+      filter: blur(48px);
+    }
+    .hero-copy { position: relative; z-index: 1; }
+    .hero-kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 13px;
+      color: #f7c58e;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    .hero-kicker:before { content: ""; width: 19px; height: 2px; border-radius: 2px; background: var(--orange); }
+    .hero h1 { max-width: 440px; margin: 0; color: #fff; font-size: clamp(27px,4.5vw,37px); line-height: 1.1; letter-spacing: -.9px; font-weight: 820; }
+    .hero-copy > p { max-width: 405px; margin: 12px 0 0; color: rgba(255,255,255,.76); font-size: 13px; line-height: 1.65; }
+    .hero-visual { position: relative; display: grid; place-items: center; min-height: 170px; }
+    .orbit {
+      position: absolute;
+      width: 175px;
+      height: 175px;
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 50%;
+      animation: orbit 22s linear infinite;
+    }
+    .orbit:before {
+      content: "";
+      position: absolute;
+      top: 17px;
+      left: 24px;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #f6aa56;
+      box-shadow: 0 0 16px rgba(246,170,86,.8);
+    }
+    .device-illustration {
+      position: relative;
+      display: grid;
+      place-items: center;
+      width: 102px;
+      height: 145px;
+      border: 5px solid rgba(255,255,255,.88);
+      border-radius: 20px;
+      background: linear-gradient(160deg, #f9fbff, #dfe8f5);
+      box-shadow: 0 16px 32px rgba(0,0,0,.24), inset 0 0 0 1px rgba(23,36,64,.1);
+      transform: rotate(7deg);
+      animation: float 4.2s ease-in-out infinite;
+    }
+    .device-illustration:before {
+      content: "";
+      position: absolute;
+      top: 7px;
+      width: 28px;
+      height: 4px;
+      border-radius: 5px;
+      background: #b6c2d3;
+    }
+    .device-screen {
+      display: grid;
+      place-items: center;
+      gap: 8px;
+      width: 67px;
+      height: 103px;
+      border-radius: 9px;
+      background: #f1f5fa;
+    }
+    .screen-check {
+      display: grid;
+      place-items: center;
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      color: #fff;
+      background: var(--green);
+      font-size: 21px;
+      font-weight: 800;
+      box-shadow: 0 5px 12px rgba(39,150,107,.25);
+    }
+    .screen-line { width: 38px; height: 5px; border-radius: 5px; background: #cbd6e5; }
+    .screen-line.short { width: 25px; }
+    .hero-caption {
+      position: absolute;
+      right: 0;
+      bottom: 2px;
+      padding: 7px 10px;
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 8px;
+      color: rgba(255,255,255,.9);
+      background: rgba(255,255,255,.09);
+      font-size: 10px;
+      font-weight: 650;
+      backdrop-filter: blur(8px);
+    }
+    .content { display: grid; gap: 16px; margin-top: 19px; }
+    .card {
+      border: 1px solid #e7ebf1;
+      border-radius: 17px;
+      background: var(--paper);
+      box-shadow: 0 7px 24px rgba(31,47,74,.045);
+      animation: enter .6s .12s ease both;
+    }
+    .status-card { padding: 24px 25px 22px; }
+    .card-eyebrow { margin: 0 0 6px; color: #9a6a35; font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+    .card-title { margin: 0; color: var(--navy); font-size: 21px; font-weight: 790; letter-spacing: -.35px; }
+    .card-intro { margin: 6px 0 18px; color: var(--muted); font-size: 12px; }
+    .device-row {
       display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      gap: 12px;
-      margin: 25px 0 9px;
+      align-items: center;
+      gap: 13px;
+      padding: 14px 15px;
+      border: 1px solid #edf0f4;
+      border-radius: 12px;
+      background: #fafbfd;
     }
-    .status-summary span:first-child { color: var(--muted); font-size: 12px; }
-    .current-status { color: #242b36; font-size: 14px; font-weight: 700; text-align: right; }
-    .progress-count { color: #87909c; font-size: 11px; white-space: nowrap; }
-    .progress-track { height: 5px; overflow: hidden; border-radius: 4px; background: #eceef0; }
-    .progress-fill { display: block; width: 33.333%; height: 100%; border-radius: 4px; background: var(--accent); transition: width .25s ease; }
-    .timeline { display: grid; margin-top: 20px; }
+    .device-symbol {
+      display: grid;
+      place-items: center;
+      flex: 0 0 43px;
+      width: 43px;
+      height: 43px;
+      border-radius: 12px;
+      color: #d97b1d;
+      background: #fff0dc;
+    }
+    .device-symbol svg { width: 21px; height: 21px; }
+    .device-meta { min-width: 0; }
+    .device-label { display: block; margin-bottom: 2px; color: #8b95a4; font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+    .device-name { display: block; color: #253149; font-size: 15px; font-weight: 750; overflow-wrap: anywhere; }
+    .device-work { margin: 2px 0 0; color: var(--muted); font-size: 11px; }
+    .status-head { display: flex; align-items: end; justify-content: space-between; gap: 12px; margin: 22px 0 10px; }
+    .status-label { display: block; margin-bottom: 3px; color: #8792a2; font-size: 10px; font-weight: 700; }
+    .current-status { color: var(--navy); font-size: 15px; font-weight: 800; }
+    .progress-count { color: #8792a2; font-size: 10px; font-weight: 700; white-space: nowrap; }
+    .progress-track { height: 8px; overflow: hidden; border-radius: 20px; background: #edf0f5; }
+    .progress-fill {
+      display: block;
+      width: 33.333%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #f5b45e, #ed8421);
+      transition: width .65s cubic-bezier(.2,.8,.2,1);
+      box-shadow: 0 0 10px rgba(237,132,33,.2);
+    }
+    .phase-explainer {
+      display: flex;
+      align-items: flex-start;
+      gap: 11px;
+      margin-top: 15px;
+      padding: 13px 14px;
+      border: 1px solid #f3e1ca;
+      border-radius: 11px;
+      background: #fffaf4;
+      animation: reveal .45s ease both;
+    }
+    .phase-explainer-icon {
+      display: grid;
+      place-items: center;
+      flex: 0 0 31px;
+      width: 31px;
+      height: 31px;
+      border-radius: 9px;
+      color: #a8641d;
+      background: #ffedd7;
+      font-size: 15px;
+      font-weight: 800;
+    }
+    .phase-explainer strong { display: block; margin-bottom: 3px; color: #76502b; font-size: 11px; }
+    .phase-explainer p { margin: 0; color: #806d58; font-size: 11px; line-height: 1.55; }
+    .timeline-card { padding: 22px 25px; }
+    .timeline-head { margin-bottom: 14px; }
+    .timeline-head h2, .info-card h2, .photo-heading h2 { margin: 0; color: var(--navy); font-size: 16px; font-weight: 780; }
+    .timeline-head p { margin: 4px 0 0; color: var(--muted); font-size: 11px; }
+    .timeline { display: grid; }
     .step {
       position: relative;
       display: grid;
-      grid-template-columns: 31px minmax(0,1fr);
-      gap: 11px;
+      grid-template-columns: 38px minmax(0,1fr);
+      gap: 12px;
       align-items: start;
-      min-height: 68px;
-      padding: 8px 0;
+      min-height: 75px;
+      padding: 9px 0;
       opacity: .55;
+      transition: opacity .3s ease, transform .3s ease;
     }
     .step:not(:last-child):after {
       content: "";
       position: absolute;
-      top: 34px;
-      bottom: -2px;
-      left: 14px;
-      width: 1px;
-      background: #dfe3e8;
+      top: 43px;
+      bottom: -3px;
+      left: 18px;
+      width: 2px;
+      border-radius: 3px;
+      background: #e3e8ef;
+      transition: background .3s ease;
     }
     .step-marker {
       position: relative;
       z-index: 1;
       display: grid;
       place-items: center;
-      width: 29px;
-      height: 29px;
-      border: 1px solid #d4d9df;
+      width: 37px;
+      height: 37px;
+      border: 1px solid #dfe5ed;
       border-radius: 50%;
-      color: #858e9a;
+      color: #8692a3;
       background: #fff;
       font-size: 12px;
-      font-weight: 700;
+      font-weight: 800;
+      transition: all .3s ease;
     }
-    .step-copy { padding-top: 2px; }
-    .step-copy strong { display: block; color: #515b68; font-size: 13px; font-weight: 700; }
-    .step-copy p { margin: 3px 0 0; color: #818995; font-size: 12px; }
+    .step-copy { padding-top: 1px; }
+    .step-copy strong { display: block; color: #526075; font-size: 13px; font-weight: 760; }
+    .step-copy p { margin: 3px 0 0; color: #8792a2; font-size: 11px; line-height: 1.5; }
     .step.done, .step.current { opacity: 1; }
-    .step.done .step-marker { border-color: var(--green); color: #fff; background: var(--green); }
-    .step.done .step-copy strong { color: #303944; }
-    .step.done:not(:last-child):after { background: #a9cbb9; }
-    .step.current .step-marker { border-color: var(--accent); color: #fff; background: var(--accent); }
-    .step.current .step-copy strong { color: #9a5b12; }
-    .photo-block {
-      margin-top: 20px;
-      padding-top: 20px;
-      border-top: 1px solid var(--line);
-    }
-    .photo-block h2 { margin: 0; color: #28313d; font-size: 16px; font-weight: 700; }
-    .photo-block p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
-    .photo { display: block; width: 100%; max-height: 470px; margin-top: 13px; border: 1px solid var(--line); border-radius: 6px; object-fit: contain; background: #f3f4f5; }
-    .updated { margin-top: 20px; padding-top: 13px; border-top: 1px solid var(--line); color: #808996; font-size: 11px; }
-    .expiry-note {
-      margin-top: 15px;
-      padding: 13px 15px;
-      border: 1px solid #eadcc9;
-      border-radius: 5px;
-      background: #fcf8f2;
-      color: #6e5a43;
-      font-size: 12px;
-      line-height: 1.55;
-    }
-    .expiry-note strong { display: block; margin-bottom: 3px; color: #59452e; font-size: 12px; }
-    .page-foot { margin: 15px 0 0; color: #89919b; font-size: 11px; text-align: center; }
-    .expired-card { padding: 35px 25px; text-align: center; }
-    .expired-card h1 { font-size: 23px; }
-    .expired-card p { max-width: 420px; margin: 10px auto 0; color: var(--muted); font-size: 13px; }
-    .expired-mark {
+    .step.done .step-marker { border-color: #b9e5d0; color: #fff; background: var(--green); }
+    .step.done:after { background: #b8dec9; }
+    .step.done .step-copy strong { color: #27364c; }
+    .step.current { transform: translateX(2px); }
+    .step.current .step-marker { border: 3px solid #ffdfbd; color: #fff; background: var(--orange); box-shadow: 0 0 0 4px rgba(237,139,39,.1); }
+    .step.current .step-copy strong { color: #a35c17; }
+    .photo-card { padding: 21px 25px; }
+    .photo-heading { display: flex; align-items: center; gap: 11px; }
+    .photo-symbol {
       display: grid;
       place-items: center;
-      width: 48px;
-      height: 48px;
-      margin: 0 auto 15px;
-      border: 1px solid #eadcc9;
-      border-radius: 50%;
-      color: #98652b;
-      background: #fcf8f2;
-      font-size: 22px;
+      flex: 0 0 39px;
+      width: 39px;
+      height: 39px;
+      border-radius: 11px;
+      color: #365b8c;
+      background: #edf3fb;
     }
-    @media (max-width: 540px) {
-      .page-wrap { width: min(100% - 22px, 690px); padding: 15px 0 28px; }
-      .site-header { gap: 13px; padding-bottom: 16px; }
-      .brand-logo { width: 64px; height: 64px; flex-basis: 64px; }
-      .brand-name { font-size: 20px; }
-      .brand-subtitle { font-size: 12px; }
-      .main-card { margin-top: 15px; padding: 21px 18px; }
-      h1 { font-size: 22px; }
-      .step { min-height: 66px; }
+    .photo-symbol svg { width: 19px; height: 19px; }
+    .photo-heading p { margin: 3px 0 0; color: var(--muted); font-size: 11px; }
+    .photo { display: block; width: 100%; max-height: 500px; margin-top: 15px; border: 1px solid #e5eaf0; border-radius: 11px; object-fit: contain; background: #f3f5f8; animation: reveal .45s ease both; }
+    .updated { display: flex; align-items: center; gap: 7px; margin-top: 20px; padding-top: 13px; border-top: 1px solid #edf0f4; color: #8993a1; font-size: 10px; }
+    .updated-dot { width: 7px; height: 7px; border-radius: 50%; background: #7caa91; box-shadow: 0 0 0 3px rgba(124,170,145,.13); }
+    .info-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+    .info-card { min-width: 0; padding: 16px 15px; border: 1px solid #e7ebf1; border-radius: 14px; background: rgba(255,255,255,.88); animation: enter .6s .2s ease both; }
+    .info-number { display: grid; place-items: center; width: 27px; height: 27px; margin-bottom: 10px; border-radius: 8px; color: #a66520; background: #fff1df; font-size: 11px; font-weight: 850; }
+    .info-card h2 { font-size: 12px; }
+    .info-card p { margin: 5px 0 0; color: var(--muted); font-size: 10px; line-height: 1.55; }
+    .expiry-note {
+      display: flex;
+      align-items: flex-start;
+      gap: 11px;
+      padding: 14px 16px;
+      border: 1px solid #f1dec6;
+      border-radius: 12px;
+      background: #fffaf4;
+    }
+    .expiry-icon {
+      display: grid;
+      place-items: center;
+      flex: 0 0 31px;
+      width: 31px;
+      height: 31px;
+      border-radius: 9px;
+      color: #a8641d;
+      background: #ffedd7;
+    }
+    .expiry-icon svg { width: 16px; height: 16px; }
+    .expiry-note strong { display: block; margin-bottom: 3px; color: #76502b; font-size: 11px; }
+    .expiry-note p { margin: 0; color: #806d58; font-size: 10px; line-height: 1.55; }
+    .page-foot { margin: 2px 0 0; color: #8b95a3; font-size: 10px; text-align: center; }
+    .expired-card { padding: 36px 25px; text-align: center; }
+    .expired-icon {
+      display: grid;
+      place-items: center;
+      width: 54px;
+      height: 54px;
+      margin: 0 auto 16px;
+      border-radius: 16px;
+      color: #a8641d;
+      background: #fff1df;
+    }
+    .expired-icon svg { width: 25px; height: 25px; }
+    .expired-card h1 { margin: 0; color: var(--navy); font-size: 24px; }
+    .expired-card p { max-width: 430px; margin: 9px auto 0; color: var(--muted); font-size: 12px; }
+    @keyframes enter {
+      from { opacity: 0; transform: translateY(13px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes reveal {
+      from { opacity: 0; transform: translateY(7px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes float {
+      0%,100% { transform: translateY(0) rotate(7deg); }
+      50% { transform: translateY(-9px) rotate(4deg); }
+    }
+    @keyframes orbit { to { transform: rotate(360deg); } }
+    @media (max-width: 620px) {
+      .page-wrap { width: min(100% - 22px, 780px); padding: 14px 0 27px; }
+      .site-header { gap: 11px; padding-bottom: 14px; }
+      .brand-logo { width: 59px; height: 59px; flex-basis: 59px; border-radius: 13px; }
+      .brand-name { font-size: 18px; }
+      .brand-subtitle { font-size: 10px; }
+      .header-tag { padding: 6px 8px; font-size: 8px; }
+      .hero { grid-template-columns: minmax(0,1fr) 125px; gap: 4px; min-height: 205px; padding: 24px 19px; border-radius: 19px; }
+      .hero h1 { font-size: 27px; }
+      .hero-copy > p { font-size: 11px; }
+      .hero-visual { min-height: 145px; transform: scale(.83); transform-origin: center; }
+      .hero-caption { right: -8px; bottom: -4px; }
+      .content { gap: 12px; margin-top: 13px; }
+      .status-card, .timeline-card, .photo-card { padding: 19px 17px; }
+      .card-title { font-size: 19px; }
+      .info-grid { gap: 7px; }
+      .info-card { padding: 12px 10px; }
+      .info-card h2 { font-size: 11px; }
+      .info-card p { font-size: 9px; }
+    }
+    @media (max-width: 420px) {
+      .header-tag { display: none; }
+      .hero { grid-template-columns: minmax(0,1fr) 90px; padding: 21px 15px; }
+      .hero h1 { font-size: 24px; }
+      .hero-visual { transform: scale(.68); margin-left: -20px; }
+      .hero-caption { right: -20px; white-space: nowrap; }
+      .info-grid { grid-template-columns: 1fr; }
+      .info-card { display: grid; grid-template-columns: 30px 1fr; column-gap: 9px; align-items: start; }
+      .info-number { grid-row: span 2; margin: 0; }
+      .info-card p { margin-top: 2px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *:before, *:after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
     }
   </style>
 </head>
@@ -200,72 +442,168 @@
       <img class="brand-logo" src="{{ url_for('static', filename='logo.jpg') }}" alt="Logo de INFORBAXE">
       <div>
         <p class="brand-name">INFORBAXE</p>
-        <p class="brand-subtitle">Servicio técnico y reparación</p>
+        <p class="brand-subtitle">Servicio técnico · Reparación de dispositivos</p>
       </div>
+      <span class="header-tag">Área de cliente</span>
     </header>
 
-    {% if expired %}
-    <section class="main-card expired-card">
-      <div class="expired-mark" aria-hidden="true">⌛</div>
-      <h1>Este seguimiento ha caducado</h1>
-      <p>El enlace ya no está disponible y la fotografía de la reparación tampoco se puede consultar. Si necesitas más información, ponte en contacto con nosotros.</p>
-    </section>
-    {% else %}
-    <section class="main-card">
-      <p class="section-label">Seguimiento de reparación</p>
-      <h1>Estado de tu reparación</h1>
-      <p class="intro">Consulta aquí la última actualización de tu dispositivo.</p>
-
-      <div class="device-block">
-        <span class="device-label">Dispositivo</span>
-        <strong class="device-name" id="device-name">{{ payload.equipo }}</strong>
-        {% if payload.trabajo %}<p class="device-work">{{ payload.trabajo }}</p>{% endif %}
-      </div>
-
-      <div class="status-summary">
-        <div><span>Estado actual</span><br><strong class="current-status" id="current-status">{{ states[state_index][1] }}</strong></div>
-        <span class="progress-count" id="progress-count">{{ state_index + 1 }} de 3</span>
-      </div>
-      <div class="progress-track"><span class="progress-fill" id="progress-fill" style="width:{{ ((state_index + 1) / 3 * 100)|round(0) }}%"></span></div>
-
-      <div class="timeline" id="tracking-steps">
-        {% for state,label in states %}
-        <div class="step {% if loop.index0 < state_index %}done{% elif loop.index0 == state_index %}current{% endif %}" data-step="{{ state }}">
-          <div class="step-marker">{% if loop.index0 < state_index %}✓{% else %}{{ loop.index }}{% endif %}</div>
-          <div class="step-copy">
-            <strong>{{ label }}</strong>
-            <p>{% if state == 'pieza_en_camino' %}La pieza necesaria está de camino.{% elif state == 'reparando' %}Estamos trabajando en tu dispositivo.{% else %}Tu dispositivo ya está reparado.{% endif %}</p>
-          </div>
-        </div>
-        {% endfor %}
-      </div>
-
-      <div class="photo-block" id="final-photo" {% if not payload.foto_disponible %}hidden{% endif %}>
-        <h2>Fotografía del interior del dispositivo</h2>
-        <p>Imagen compartida por el técnico al finalizar la reparación.</p>
-        {% if payload.foto_disponible %}
-        <img class="photo" src="{{ url_for('seguimiento_reparaciones.public_tracking_photo', token=token) }}" alt="Interior del dispositivo reparado">
+    <section class="hero">
+      <div class="hero-glow"></div>
+      <div class="hero-copy">
+        <span class="hero-kicker">Seguimiento de reparación</span>
+        {% if expired %}
+          <h1>Tu seguimiento ha terminado.</h1>
+          <p>Este enlace ha caducado. Gracias por haber confiado en INFORBAXE para la reparación de tu dispositivo.</p>
+        {% else %}
+          <h1>Tu reparación, paso a paso.</h1>
+          <p>Te contamos en qué punto estamos y qué ocurre en cada fase. Así sabes cómo avanza tu dispositivo sin tener que llamarnos.</p>
         {% endif %}
       </div>
-
-      <div class="updated">Última actualización: <span id="updated-at">{{ payload.fecha_actualizacion }}</span></div>
-      <div class="expiry-note">
-        <strong>Caducidad del enlace</strong>
-        Este enlace caducará automáticamente 5 días después de que el técnico marque la reparación como finalizada. A partir de ese momento, el seguimiento y la fotografía dejarán de estar disponibles.
+      <div class="hero-visual" aria-hidden="true">
+        <div class="orbit"></div>
+        <div class="device-illustration">
+          <div class="device-screen">
+            <div class="screen-check">✓</div>
+            <span class="screen-line"></span>
+            <span class="screen-line short"></span>
+          </div>
+        </div>
+        <span class="hero-caption">Cuidamos de tu equipo</span>
       </div>
     </section>
-    <p class="page-foot">Esta página se actualiza automáticamente cuando el técnico cambia el estado.</p>
+
+    {% if expired %}
+    <section class="card expired-card" style="margin-top:16px">
+      <div class="expired-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+      </div>
+      <h1>Este enlace ya no está disponible</h1>
+      <p>El plazo de consulta ha finalizado y la fotografía de la reparación ya no se puede ver desde este enlace. Para cualquier consulta, ponte en contacto con INFORBAXE.</p>
+    </section>
+    {% else %}
+    <div class="content">
+      <section class="card status-card">
+        <p class="card-eyebrow">Información de tu equipo</p>
+        <h2 class="card-title">¿Cómo va tu reparación?</h2>
+        <p class="card-intro">Este es el estado más reciente que ha registrado nuestro técnico.</p>
+
+        <div class="device-row">
+          <div class="device-symbol" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="2.2"/><path d="M10 18.5h4"/></svg>
+          </div>
+          <div class="device-meta">
+            <span class="device-label">Dispositivo</span>
+            <strong class="device-name" id="device-name">{{ payload.equipo }}</strong>
+            {% if payload.trabajo %}<p class="device-work">{{ payload.trabajo }}</p>{% endif %}
+          </div>
+        </div>
+
+        <div class="status-head">
+          <div>
+            <span class="status-label">Estado actual</span>
+            <strong class="current-status" id="current-status">{{ states[state_index][1] }}</strong>
+          </div>
+          <span class="progress-count" id="progress-count">{{ state_index + 1 }} de 3 fases</span>
+        </div>
+        <div class="progress-track" role="progressbar" aria-label="Progreso de la reparación" aria-valuemin="1" aria-valuemax="3" aria-valuenow="{{ state_index + 1 }}" id="progress-track">
+          <span class="progress-fill" id="progress-fill" style="width:{{ ((state_index + 1) / 3 * 100)|round(0) }}%"></span>
+        </div>
+        <div class="phase-explainer" aria-live="polite">
+          <div class="phase-explainer-icon" aria-hidden="true" id="phase-icon">{% if state_index == 0 %}1{% elif state_index == 1 %}2{% else %}✓{% endif %}</div>
+          <div>
+            <strong id="phase-title">{% if state_index == 0 %}¿Qué significa esta fase?{% elif state_index == 1 %}Tu dispositivo está en reparación{% else %}¡Tu reparación está terminada!{% endif %}</strong>
+            <p id="phase-description">{% if state_index == 0 %}La pieza que necesita tu dispositivo está en camino. En cuanto la recibamos y podamos comenzar el trabajo, actualizaremos este seguimiento.{% elif state_index == 1 %}Nuestro técnico está trabajando en tu dispositivo. Cuando termine la intervención, marcaremos la reparación como acabada y añadiremos una fotografía del interior.{% else %}Hemos terminado la reparación. Ya puedes consultar la fotografía que hemos añadido para mostrarte el interior del dispositivo.{% endif %}</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="card timeline-card">
+        <div class="timeline-head">
+          <h2>Las 3 fases de tu reparación</h2>
+          <p>Te explicamos qué sucede desde que llega la pieza hasta que terminamos.</p>
+        </div>
+        <div class="timeline" id="tracking-steps">
+          {% for state,label in states %}
+          <div class="step {% if loop.index0 < state_index %}done{% elif loop.index0 == state_index %}current{% endif %}" data-step="{{ state }}">
+            <div class="step-marker">{% if loop.index0 < state_index %}✓{% else %}{{ loop.index }}{% endif %}</div>
+            <div class="step-copy">
+              <strong>{{ label }}</strong>
+              <p>{% if state == 'pieza_en_camino' %}Solicitamos y esperamos la pieza necesaria para poder realizar el trabajo.{% elif state == 'reparando' %}Revisamos el dispositivo y realizamos la reparación correspondiente.{% else %}Terminamos el trabajo y compartimos una fotografía del interior del equipo.{% endif %}</p>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="card photo-card" id="final-photo" {% if not payload.foto_disponible %}hidden{% endif %}>
+        <div class="photo-heading">
+          <div class="photo-symbol" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="m21 15-5-5L5 20"/></svg>
+          </div>
+          <div>
+            <h2>La reparación por dentro</h2>
+            <p>Fotografía del interior de tu dispositivo compartida por nuestro técnico.</p>
+          </div>
+        </div>
+        {% if payload.foto_disponible %}
+        <img class="photo" src="{{ url_for('seguimiento_reparaciones.public_tracking_photo', token=token) }}" alt="Fotografía del interior del dispositivo reparado">
+        {% endif %}
+      </section>
+
+      <section class="info-grid" aria-label="Información sobre el seguimiento">
+        <article class="info-card">
+          <span class="info-number">01</span>
+          <h2>Se actualiza solo</h2>
+          <p>La página comprueba el estado automáticamente cada 20 segundos. No necesitas hacer nada.</p>
+        </article>
+        <article class="info-card">
+          <span class="info-number">02</span>
+          <h2>Sin registros</h2>
+          <p>Entra desde este enlace privado para consultar el avance. No tienes que crear una cuenta.</p>
+        </article>
+        <article class="info-card">
+          <span class="info-number">03</span>
+          <h2>Foto al terminar</h2>
+          <p>Cuando la reparación esté acabada, aquí aparecerá la fotografía del interior del dispositivo.</p>
+        </article>
+      </section>
+
+      <section class="expiry-note">
+        <div class="expiry-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        </div>
+        <div>
+          <strong>¿Durante cuánto tiempo estará disponible este enlace?</strong>
+          <p>El plazo de 5 días empieza cuando el técnico marca la reparación como finalizada, no cuando recibes el enlace. Pasados esos 5 días, el seguimiento y la fotografía dejarán de estar disponibles.</p>
+        </div>
+      </section>
+      <p class="page-foot">¿Tienes alguna duda? Contacta con INFORBAXE. Estaremos encantados de ayudarte.</p>
+    </div>
 
     <script>
       (() => {
         const labels = ['pieza_en_camino', 'reparando', 'reparacion_acabada'];
         const titles = ['Pieza en camino', 'Reparando', 'Reparación acabada'];
+        const phaseTitles = [
+          '¿Qué significa esta fase?',
+          'Tu dispositivo está en reparación',
+          '¡Tu reparación está terminada!'
+        ];
+        const phaseDescriptions = [
+          'La pieza que necesita tu dispositivo está en camino. En cuanto la recibamos y podamos comenzar el trabajo, actualizaremos este seguimiento.',
+          'Nuestro técnico está trabajando en tu dispositivo. Cuando termine la intervención, marcaremos la reparación como acabada y añadiremos una fotografía del interior.',
+          'Hemos terminado la reparación. Ya puedes consultar la fotografía que hemos añadido para mostrarte el interior del dispositivo.'
+        ];
         const steps = [...document.querySelectorAll('[data-step]')];
         const photo = document.getElementById('final-photo');
         const updated = document.getElementById('updated-at');
         const currentStatus = document.getElementById('current-status');
         const progressCount = document.getElementById('progress-count');
         const progressFill = document.getElementById('progress-fill');
+        const progressTrack = document.getElementById('progress-track');
+        const phaseTitle = document.getElementById('phase-title');
+        const phaseDescription = document.getElementById('phase-description');
+        const phaseIcon = document.getElementById('phase-icon');
         const photoUrl = {{ url_for('seguimiento_reparaciones.public_tracking_photo',token=token)|tojson }};
 
         function formatUpdated(value) {
@@ -282,27 +620,34 @@
               step.querySelector('.step-marker').textContent = i < index ? '✓' : String(i + 1);
             });
             currentStatus.textContent = titles[index];
-            progressCount.textContent = (index + 1) + ' de 3';
+            progressCount.textContent = (index + 1) + ' de 3 fases';
             progressFill.style.width = (((index + 1) / 3) * 100) + '%';
+            progressTrack.setAttribute('aria-valuenow', String(index + 1));
+            phaseTitle.textContent = phaseTitles[index];
+            phaseDescription.textContent = phaseDescriptions[index];
+            phaseIcon.textContent = index === 2 ? '✓' : String(index + 1);
           }
           if (data.equipo) document.getElementById('device-name').textContent = data.equipo;
           if (data.fecha_actualizacion) updated.textContent = formatUpdated(data.fecha_actualizacion);
           if (data.foto_disponible && photo.hidden) {
             const image = document.createElement('img');
             image.className = 'photo';
-            image.alt = 'Interior del dispositivo reparado';
+            image.alt = 'Fotografía del interior del dispositivo reparado';
             image.src = photoUrl;
             photo.appendChild(image);
             photo.hidden = false;
           }
         }
+
         updated.textContent = formatUpdated(updated.textContent);
         async function refresh() {
           try {
             const response = await fetch(location.pathname + '/estado', { cache: 'no-store' });
             if (response.status === 410 || response.status === 404) { location.reload(); return; }
             if (response.ok) apply(await response.json());
-          } catch (_) { /* Mantener el último estado visible si no hay conexión. */ }
+          } catch (_) {
+            /* Si no hay conexión, se conserva el último estado recibido. */
+          }
         }
         setInterval(refresh, 20000);
       })();
