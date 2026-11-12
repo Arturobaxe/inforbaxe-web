@@ -235,6 +235,64 @@ def admin_cliente(id_cliente):
     )
 
 
+@seguimiento_bp.route("/ventas/<int:id_venta>/seguimiento", methods=["POST"])
+@_staff_required
+def crear_desde_venta(id_venta):
+    """Crea y activa un seguimiento privado a partir del dispositivo de una venta."""
+    venta = db.get_venta(id_venta)
+    if not venta:
+        abort(404)
+
+    equipo = (venta.get("equipo_modelo") or "").strip()[:120]
+    if not equipo:
+        flash("Esta venta no tiene el modelo del dispositivo. Rellénalo en Editar y vuelve a pulsar Seguimiento.", "error")
+        return redirect(url_for("venta_editar", id_venta=id_venta))
+
+    id_cliente = int(venta["id_cliente"])
+    now = _iso(_utcnow())
+    tracking_id = None
+    try:
+        created = (_table().insert({
+            "id_cliente": id_cliente,
+            "equipo": equipo,
+            "trabajo": "Reparación del dispositivo",
+            "estado": "pieza_en_camino",
+            "activo": False,
+            "token_hash": None,
+            "foto_path": None,
+            "fecha_creacion": now,
+            "fecha_actualizacion": now,
+            "fecha_finalizacion": None,
+            "fecha_caducidad": None,
+            "fecha_foto_eliminada": None,
+        }).execute().data or [])
+        if not created or not created[0].get("id"):
+            raise RuntimeError("No se recibió el identificador del seguimiento.")
+        tracking_id = int(created[0]["id"])
+
+        token = secrets.token_urlsafe(32)
+        _table().update({
+            "token_hash": _token_hash(token),
+            "activo": True,
+            "fecha_actualizacion": now,
+        }).eq("id", tracking_id).execute()
+
+        share_url = f"{_public_base_url()}{url_for('seguimiento_reparaciones.public_tracking', token=token)}"
+        session["seguimiento_share_cliente"] = id_cliente
+        session["seguimiento_share_url"] = share_url
+        flash("Seguimiento creado para esta venta. Copia el enlace y envíaselo al cliente cuando quieras.", "success")
+    except Exception:
+        if tracking_id:
+            try:
+                _table().delete().eq("id", tracking_id).execute()
+            except Exception:
+                log.exception("No se pudo limpiar un seguimiento incompleto de la venta %s", id_venta)
+        log.exception("No se pudo crear el seguimiento desde la venta %s", id_venta)
+        flash("No se pudo crear el seguimiento. Comprueba la instalación de seguimientos en Supabase.", "error")
+
+    return redirect(url_for("seguimiento_reparaciones.admin_cliente", id_cliente=id_cliente))
+
+
 @seguimiento_bp.route("/seguimientos/<int:id_seguimiento>/enlace", methods=["POST"])
 @_staff_required
 def generar_enlace(id_seguimiento):
