@@ -8,6 +8,65 @@
     Nueva venta
   </a>
 {% endblock %}
+{% block extra_head %}
+<style>
+  .sales-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:19px}
+  .sales-summary .stat-card{min-width:0;border-radius:13px}
+  .sales-desktop .table-wrap{overflow-x:auto;border-radius:12px}
+  .sales-table{width:100%;min-width:1120px;border-collapse:separate;border-spacing:0}
+  .sales-table thead th{padding:13px 12px;background:#f7f8fb;color:#8993a5;font-size:9px;letter-spacing:.09em}
+  .sales-table tbody td{padding:14px 12px;border-bottom:1px solid #edf0f4;background:#fff;font-size:12px}
+  .sales-table tbody tr:nth-child(even) td{background:#fcfcfe}
+  .sales-table tbody tr:hover td{background:#fff8ef}
+  .sales-table tbody tr:last-child td{border-bottom:0}
+  .sales-table .sale-customer{display:block;color:var(--t1);font-weight:750;font-size:12px}
+  .sales-table .sale-date{color:#8993a5;font-size:10px}
+  .sales-table .sale-amount{font-weight:800;color:var(--green);white-space:nowrap}
+  .sales-table .sale-profit{font-weight:750;color:#168c75;white-space:nowrap}
+  .sales-actions{display:flex;gap:5px;justify-content:flex-end;align-items:center;white-space:nowrap}
+  .sales-mobile{display:none}
+  .sale-list{display:grid;gap:12px}
+  .sale-swipe{position:relative;overflow:hidden;border:1px solid #e8ebf0;border-radius:14px;background:#f8eeee;box-shadow:0 3px 12px rgba(27,35,64,.045);touch-action:pan-y}
+  .sale-delete-back{position:absolute;inset:0 0 0 auto;width:94px;display:grid;place-items:center;background:linear-gradient(145deg,#d94e4e,#b92f40)}
+  .sale-delete-back button{display:flex;flex-direction:column;align-items:center;gap:4px;border:0;background:transparent;color:#fff;font-size:11px;font-weight:800;cursor:pointer}
+  .sale-delete-back span{font-size:21px;line-height:1}
+  .sale-card-front{position:relative;z-index:1;padding:14px 14px 11px;background:#fff;transition:transform .22s ease;will-change:transform}
+  .sale-swipe.is-open .sale-card-front{transform:translateX(-94px)}
+  .sale-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+  .sale-client-link{display:block;color:var(--t1);font-size:14px;font-weight:800;text-decoration:none}
+  .sale-reference{margin-top:3px;color:var(--t3);font-size:10px}
+  .sale-date-chip{padding:5px 8px;border-radius:8px;background:#f3f5f8;color:#667389;font-size:10px;font-weight:700;white-space:nowrap}
+  .sale-products{margin-top:11px;padding:9px 10px;border-radius:9px;background:#f8f9fb;color:#586579;font-size:11px;line-height:1.45}
+  .sale-products-label{display:block;margin-bottom:3px;color:#98a1af;font-size:8px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+  .sale-values{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:11px}
+  .sale-value{padding:9px 10px;border-radius:9px;background:#f3f8f5}
+  .sale-value.profit{background:#edf8f5}
+  .sale-value span{display:block;color:#8b96a5;font-size:9px;font-weight:700}
+  .sale-value strong{display:block;margin-top:3px;color:#25875e;font-size:15px;font-weight:850}
+  .sale-value.profit strong{color:#168c75}
+  .sale-card-bottom{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:11px}
+  .sale-badges{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+  .sale-card-actions{display:flex;align-items:center;justify-content:flex-end;gap:5px;flex-wrap:wrap}
+  .sale-card-actions .btn{min-width:33px;padding:6px 8px}
+  .sale-swipe-hint{margin-top:8px;color:#a4acb8;font-size:9px;text-align:right}
+  .sales-empty{padding:35px 20px;text-align:center}
+  @media(max-width:900px){
+    .sales-desktop{display:none!important}
+    .sales-mobile{display:block}
+    .sales-summary{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+    .sales-summary .stat-card{padding:13px}
+    .sales-summary .stat-value{font-size:19px!important}
+  }
+  @media(max-width:480px){
+    .sale-card-front{padding:12px}
+    .sale-client-link{font-size:13px}
+    .sale-values{gap:6px}
+    .sale-value{padding:8px}
+    .sale-value strong{font-size:14px}
+    .sale-card-actions .btn{min-width:30px;padding:6px}
+  }
+</style>
+{% endblock %}
 {% block content %}
 
 <div class="card mb-4">
@@ -42,7 +101,7 @@
 </div>
 
 {% if ventas %}
-<div style="display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:20px;">
+<div class="sales-summary">
   <div class="stat-card green">
     <div class="stat-label">Total facturado</div>
     <div class="stat-value green" style="font-size:20px;">{{ "%.2f"|format(total_pvp) }}€</div>
@@ -63,52 +122,81 @@
 </div>
 {% endif %}
 
-<div class="card">
+<div class="card sales-desktop">
   <div class="table-wrap">
-    <table>
-      <thead>
-        <tr><th>#</th><th>Fecha</th><th>Cliente</th><th>Productos</th><th>Total PVP</th><th>Beneficio</th><th>Método</th><th>Pagado</th><th></th></tr>
-      </thead>
+    <table class="sales-table">
+      <thead><tr><th>#</th><th>Fecha</th><th>Cliente</th><th>Productos</th><th>Total PVP</th><th>Beneficio</th><th>Método</th><th>Pagado</th><th style="text-align:right">Acciones</th></tr></thead>
       <tbody>
         {% for v in ventas %}
         <tr id="venta-row-{{ v.id }}">
-          <td class="td-mono td-muted">{{ v.id }}</td>
-          <td class="td-mono">{{ v.fecha }}</td>
-          <td><a href="{{ url_for('cliente_historial', id_cliente=v.id_cliente) }}" style="font-weight:600;color:var(--t1);">{{ v.nombre_cliente }}</a></td>
-          <td style="max-width:180px;">
-            {% if v.productos %}
-              {% for p in v.productos[:2] %}<span style="font-size:12px;color:var(--t2);">{{ p.nombre }}</span>{% if not loop.last %}, {% endif %}{% endfor %}
-              {% if v.productos|length > 2 %}<span class="td-muted"> +{{ v.productos|length-2 }} más</span>{% endif %}
-            {% else %}<span class="td-muted">—</span>{% endif %}
+          <td class="td-mono td-muted">#{{ v.id }}</td>
+          <td class="sale-date">{{ v.fecha }}</td>
+          <td><a href="{{ url_for('cliente_historial', id_cliente=v.id_cliente) }}" class="sale-customer">{{ v.nombre_cliente }}</a></td>
+          <td style="max-width:190px">
+            {% if v.productos %}{% for p in v.productos[:2] %}<span style="font-size:11px;color:var(--t2)">{{ p.nombre }}</span>{% if not loop.last %}, {% endif %}{% endfor %}{% if v.productos|length > 2 %}<span class="td-muted"> +{{ v.productos|length-2 }} más</span>{% endif %}{% else %}<span class="td-muted">—</span>{% endif %}
           </td>
-          <td class="td-mono font-semibold" style="color:var(--green);">{{ "%.2f"|format(v.total_pvp|float) }}€</td>
-          <td class="td-mono" style="color:var(--cyan);">{{ "%.2f"|format(v.total_benef|float) }}€</td>
+          <td class="sale-amount">{{ "%.2f"|format(v.total_pvp|float) }} €</td>
+          <td class="sale-profit">{{ "%.2f"|format(v.total_benef|float) }} €</td>
           <td><span class="badge badge-blue">{{ v.metodo_pago }}</span></td>
-          <td>
-            {% if v.pagado == 'Sí' %}<span class="badge badge-green">✓ Sí</span>
-            {% else %}<span class="badge badge-red">✗ No</span>{% endif %}
-          </td>
-          <td>
-            <div style="display:flex;gap:4px;justify-content:flex-end;">
-              {% if v.pagado == 'No' %}
-              <button onclick="marcarPagado({{ v.id }},'{{ v.nombre_cliente }}')" class="btn btn-green btn-sm" title="Cobrar">💰</button>
-              {% endif %}
-              <a href="{{ url_for('albaran_pdf', id_venta=v.id) }}" target="_blank" class="btn btn-secondary btn-sm" title="Albarán">🖨️</a>
-              <button onclick="duplicarVenta({{ v.id }})" class="btn btn-secondary btn-sm" title="Duplicar">📋</button>
-              <form method="post" action="{{ url_for('seguimiento_reparaciones.crear_desde_venta', id_venta=v.id) }}" style="display:inline;margin:0;" title="Crear enlace privado de seguimiento">
-                <button type="submit" class="btn btn-green btn-sm" aria-label="Crear seguimiento de {{ v.nombre_cliente }}" title="Crear enlace de seguimiento" onclick="return confirm('¿Crear un seguimiento privado para esta venta?')">🔗</button>
-              </form>
-              <a href="{{ url_for('venta_editar', id_venta=v.id) }}" class="btn btn-blue btn-sm">✏️</a>
-              <button onclick="confirmDelete('/api/ventas/{{ v.id }}','¿Eliminar venta #{{ v.id }}?')" class="btn btn-danger btn-sm">🗑️</button>
-            </div>
-          </td>
+          <td>{% if v.pagado == 'Sí' %}<span class="badge badge-green">✓ Sí</span>{% else %}<span class="badge badge-red">✗ No</span>{% endif %}</td>
+          <td><div class="sales-actions">
+            {% if v.pagado == 'No' %}<button type="button" onclick="marcarPagado({{ v.id }},{{ v.nombre_cliente|tojson }})" class="btn btn-green btn-sm" title="Cobrar">💰</button>{% endif %}
+            <a href="{{ url_for('albaran_pdf', id_venta=v.id) }}" target="_blank" class="btn btn-secondary btn-sm" title="Albarán">🖨️</a>
+            <button type="button" onclick="duplicarVenta({{ v.id }})" class="btn btn-secondary btn-sm" title="Duplicar">📋</button>
+            <form method="post" action="{{ url_for('seguimiento_reparaciones.crear_desde_venta', id_venta=v.id) }}" style="display:inline;margin:0"><button type="submit" class="btn btn-green btn-sm" title="Crear enlace de seguimiento" onclick="return confirm('¿Crear un seguimiento privado para esta venta?')">🔗</button></form>
+            <a href="{{ url_for('venta_editar', id_venta=v.id) }}" class="btn btn-blue btn-sm" title="Editar">✏️</a>
+            <button type="button" onclick="confirmDelete('/api/ventas/{{ v.id }}','¿Eliminar venta #{{ v.id }}?')" class="btn btn-danger btn-sm" title="Eliminar">🗑️</button>
+          </div></td>
         </tr>
-        {% else %}
-        <tr><td colspan="9"><div class="empty-state"><div class="empty-state-icon">🛒</div><div class="empty-state-text">Sin ventas</div></div></td></tr>
-        {% endfor %}
+        {% else %}<tr><td colspan="9"><div class="empty-state"><div class="empty-state-icon">🛒</div><div class="empty-state-text">Sin ventas</div></div></td></tr>{% endfor %}
       </tbody>
     </table>
   </div>
+</div>
+
+<div class="sales-mobile">
+  {% if ventas %}
+  <div class="sale-list">
+    {% for v in ventas %}
+    <article class="sale-swipe" data-sale-swipe="{{ v.id }}">
+      <div class="sale-delete-back">
+        <button type="button" onclick="confirmDelete('/api/ventas/{{ v.id }}','¿Eliminar venta #{{ v.id }}?')"><span>🗑️</span>Eliminar</button>
+      </div>
+      <div class="sale-card-front">
+        <div class="sale-card-top">
+          <div style="min-width:0">
+            <a class="sale-client-link" href="{{ url_for('cliente_historial', id_cliente=v.id_cliente) }}">{{ v.nombre_cliente }}</a>
+            <div class="sale-reference">Venta #{{ v.id }} · {{ v.metodo_pago }}</div>
+          </div>
+          <span class="sale-date-chip">{{ v.fecha }}</span>
+        </div>
+        <div class="sale-products"><span class="sale-products-label">Productos / reparación</span>
+          {% if v.productos %}{% for p in v.productos[:3] %}{{ p.nombre }}{% if not loop.last %}, {% endif %}{% endfor %}{% if v.productos|length > 3 %} y {{ v.productos|length-3 }} más{% endif %}{% else %}Sin productos detallados{% endif %}
+        </div>
+        <div class="sale-values">
+          <div class="sale-value"><span>Total de la venta</span><strong>{{ "%.2f"|format(v.total_pvp|float) }} €</strong></div>
+          <div class="sale-value profit"><span>Beneficio</span><strong>{{ "%.2f"|format(v.total_benef|float) }} €</strong></div>
+        </div>
+        <div class="sale-card-bottom">
+          <div class="sale-badges">
+            {% if v.pagado == 'Sí' %}<span class="badge badge-green">✓ Cobrado</span>{% else %}<span class="badge badge-red">Pendiente</span>{% endif %}
+          </div>
+          <div class="sale-card-actions">
+            {% if v.pagado == 'No' %}<button type="button" onclick="marcarPagado({{ v.id }},{{ v.nombre_cliente|tojson }})" class="btn btn-green btn-sm" title="Cobrar">💰</button>{% endif %}
+            <a href="{{ url_for('albaran_pdf', id_venta=v.id) }}" target="_blank" class="btn btn-secondary btn-sm" title="Albarán">🖨️</a>
+            <button type="button" onclick="duplicarVenta({{ v.id }})" class="btn btn-secondary btn-sm" title="Duplicar">📋</button>
+            <form method="post" action="{{ url_for('seguimiento_reparaciones.crear_desde_venta', id_venta=v.id) }}" style="display:inline;margin:0"><button type="submit" class="btn btn-green btn-sm" title="Seguimiento" onclick="return confirm('¿Crear un seguimiento privado para esta venta?')">🔗</button></form>
+            <a href="{{ url_for('venta_editar', id_venta=v.id) }}" class="btn btn-blue btn-sm" title="Editar">✏️</a>
+          </div>
+        </div>
+        <div class="sale-swipe-hint">Desliza a la izquierda para eliminar</div>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card sales-empty"><div class="empty-state-icon">🛒</div><div class="empty-state-text">Sin ventas</div></div>
+  {% endif %}
 </div>
 
 {% if paginas > 1 %}
@@ -174,14 +262,33 @@ function duplicarVenta(id) {
     .then(r=>r.json()).then(d=>{ if(d.ok) location.reload(); });
 }
 
-if ('ontouchstart' in window) {
-  document.querySelectorAll('tr[id^="venta-row-"]').forEach(row => {
-    let sx = 0;
-    row.addEventListener('touchstart', e => sx = e.touches[0].clientX, {passive:true});
-    row.addEventListener('touchend', e => {
-      if (sx - e.changedTouches[0].clientX > 80) row.querySelector('.btn-danger')?.click();
-    }, {passive:true});
+(() => {
+  const cards = [...document.querySelectorAll('[data-sale-swipe]')];
+  cards.forEach(card => {
+    let startX = 0, startY = 0;
+    card.addEventListener('touchstart', event => {
+      if (event.target.closest('a,button,form,input,select')) return;
+      startX = event.changedTouches[0].clientX;
+      startY = event.changedTouches[0].clientY;
+    }, { passive: true });
+    card.addEventListener('touchend', event => {
+      if (!startX && !startY) return;
+      const dx = event.changedTouches[0].clientX - startX;
+      const dy = event.changedTouches[0].clientY - startY;
+      if (Math.abs(dx) > 58 && Math.abs(dx) > Math.abs(dy) * 1.25) {
+        if (dx < 0) {
+          cards.forEach(other => { if (other !== card) other.classList.remove('is-open'); });
+          card.classList.add('is-open');
+        } else {
+          card.classList.remove('is-open');
+        }
+      }
+      startX = 0; startY = 0;
+    }, { passive: true });
   });
-}
+  document.addEventListener('touchstart', event => {
+    if (!event.target.closest('[data-sale-swipe]')) cards.forEach(card => card.classList.remove('is-open'));
+  }, { passive: true });
+})();
 </script>
 {% endblock %}
