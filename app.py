@@ -190,6 +190,141 @@ def estadisticas():
     )
 
 
+@app.route("/averias-frecuentes")
+@login_required
+def averias_frecuentes():
+    """Detecta patrones de averías a partir de los modelos y comentarios ya guardados."""
+    from datetime import timedelta
+    import unicodedata
+
+    hoy = date.today()
+    periodo = request.args.get("periodo", "365")
+    if periodo not in {"30", "90", "365", "all"}:
+        periodo = "365"
+    fecha_inicio = (hoy - timedelta(days=int(periodo) - 1)).isoformat() if periodo != "all" else None
+
+    def normalizar_texto(valor):
+        texto = unicodedata.normalize("NFKD", str(valor or ""))
+        return texto.encode("ascii", "ignore").decode("ascii").casefold().strip()
+
+    # Coincidencias transparentes sobre las observaciones escritas por el técnico.
+    # Cada venta cuenta una sola vez por categoría aunque repita la palabra.
+    reglas = [
+        ("Pantalla y táctil", ("pantalla", "display", "lcd", "oled", "tactil", "cristal roto", "vidrio roto", "sin imagen")),
+        ("Batería", ("bateria", "autonomia", "se descarga", "hinchada", "no retiene carga")),
+        ("Carga y conector", ("no carga", "carga lenta", "conector", "usb-c", "usb c", "lightning", "pin de carga", "puerto de carga", "centro de carga", "cargador")),
+        ("Encendido y reinicios", ("no enciende", "no prende", "no arranca", "reinicia", "reinicios", "bootloop", "no inicia", "se apaga")),
+        ("Agua y humedad", ("mojado", "agua", "humedad", "sulfat", "oxidacion", "oxidado")),
+        ("Placa base y electrónica", ("placa base", "placa", "microsoldadura", "cortocircuito", "corto", "pmic", "integrado de carga")),
+        ("Cámara", ("camara", "lente", "enfoque", " enfoque")),
+        ("Audio y micrófono", ("microfono", "altavoz", "auricular", "audio", "sonido", "no se escucha")),
+        ("Software", ("software", "actualizacion", "formateo", "sistema operativo", "virus", "bootloader", "bloqueo de sistema")),
+        ("Conectividad", ("wifi", "bluetooth", "cobertura", "sin señal", "antena", "no reconoce sim", "tarjeta sim")),
+        ("Datos y almacenamiento", ("recuperar datos", "recuperacion de datos", "perdida de datos", "memoria interna", "almacenamiento")),
+    ]
+
+    averias_stats = {}
+    modelos_stats = {}
+    combinaciones = {}
+    tendencia = {}
+    total_modelos = 0
+    total_notas = 0
+    ventas_clasificadas = 0
+    offset = 0
+    page_size = 500
+
+    while True:
+        consulta = (db.get_db().table("ventas")
+                    .select("id,fecha,equipo_modelo,comentarios,total_benef")
+                    .order("fecha", desc=True)
+                    .order("id", desc=True))
+        if fecha_inicio:
+            consulta = consulta.gte("fecha", fecha_inicio)
+        consulta = consulta.lte("fecha", hoy.isoformat())
+        lote = (consulta.range(offset, offset + page_size - 1).execute().data or [])
+        if not lote:
+            break
+
+        for venta in lote:
+            modelo = (venta.get("equipo_modelo") or "").strip()
+            comentario = (venta.get("comentarios") or "").strip()
+            fecha_venta = str(venta.get("fecha") or "")
+            texto = normalizar_texto(comentario)
+
+            if modelo:
+                total_modelos += 1
+                clave_modelo = normalizar_texto(modelo)
+                modelo_item = modelos_stats.setdefault(clave_modelo, {
+                    "nombre": modelo, "registros": 0, "beneficio": 0.0,
+                })
+                modelo_item["registros"] += 1
+                try:
+                    modelo_item["beneficio"] += float(venta.get("total_benef") or 0)
+                except (TypeError, ValueError):
+                    pass
+
+            if comentario:
+                total_notas += 1
+
+            detectadas = [
+                nombre for nombre, palabras in reglas
+                if texto and any(palabra in texto for palabra in palabras)
+            ]
+            if not detectadas:
+                continue
+
+            ventas_clasificadas += 1
+            mes = fecha_venta[:7] if len(fecha_venta) >= 7 else "Sin fecha"
+            if mes != "Sin fecha":
+                tendencia[mes] = tendencia.get(mes, 0) + 1
+
+            try:
+                beneficio_venta = float(venta.get("total_benef") or 0)
+            except (TypeError, ValueError):
+                beneficio_venta = 0.0
+
+            for averia in detectadas:
+                item = averias_stats.setdefault(averia, {"nombre": averia, "registros": 0})
+                item["registros"] += 1
+
+                if modelo:
+                    clave = (normalizar_texto(modelo), averia)
+                    combo = combinaciones.setdefault(clave, {
+                        "modelo": modelo, "averia": averia, "registros": 0,
+                        "beneficio": 0.0,
+                    })
+                    combo["registros"] += 1
+                    combo["beneficio"] += beneficio_venta
+
+        if len(lote) < page_size:
+            break
+        offset += page_size
+
+    averias = sorted(averias_stats.values(), key=lambda x: x["registros"], reverse=True)
+    modelos = sorted(modelos_stats.values(), key=lambda x: (x["registros"], x["beneficio"]), reverse=True)
+    patrones = sorted(combinaciones.values(), key=lambda x: (x["registros"], x["beneficio"]), reverse=True)[:12]
+    max_averias = max([x["registros"] for x in averias] or [1])
+    for item in averias:
+        item["porcentaje"] = round(item["registros"] * 100 / max_averias)
+
+    meses_ordenados = sorted(tendencia.items())
+    return render_template(
+        "averias_frecuentes.html",
+        hoy=hoy,
+        periodo=periodo,
+        total_modelos=total_modelos,
+        total_notas=total_notas,
+        ventas_clasificadas=ventas_clasificadas,
+        modelos_distintos=len(modelos_stats),
+        averias=averias,
+        modelos=modelos[:10],
+        patrones=patrones,
+        meses_labels=[x[0] for x in meses_ordenados],
+        meses_valores=[x[1] for x in meses_ordenados],
+        max_averias=max_averias,
+    )
+
+
 @app.route("/buscar")
 @login_required
 def buscar():
