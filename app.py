@@ -451,7 +451,7 @@ def _generar_pdf_albaran(doc, cliente, tipo="Albarán"):
         from reportlab.lib.pagesizes import A4
         from reportlab.lib import colors
         from reportlab.lib.units import cm
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable, Image as PDFImage
         from reportlab.lib.styles import ParagraphStyle
         from reportlab.lib.enums import TA_RIGHT, TA_CENTER
 
@@ -472,11 +472,29 @@ def _generar_pdf_albaran(doc, cliente, tipo="Albarán"):
         s_foot  = ParagraphStyle('ft',  fontSize=8,  textColor=GRAY, fontName='Helvetica', alignment=TA_CENTER)
 
         story = []
+        # Cabecera en tres columnas para que el logotipo, la marca y el número
+        # del documento siempre tengan su propio espacio y nunca se solapen.
+        s_brand = ParagraphStyle('brand', fontSize=20, leading=23, textColor=BLUE, fontName='Helvetica-Bold')
+        s_doc_title = ParagraphStyle('doc_title', fontSize=13, leading=16, textColor=GRAY, fontName='Helvetica-Bold', alignment=TA_RIGHT)
+        s_doc_meta = ParagraphStyle('doc_meta', fontSize=9, leading=12, textColor=GRAY, fontName='Helvetica', alignment=TA_RIGHT)
+        s_logo_fallback = ParagraphStyle('logo_fallback', fontSize=15, textColor=WHITE, fontName='Helvetica-Bold', alignment=TA_CENTER)
+        logo_path = os.path.join(app.root_path, "static", "logo.jpg")
+        logo_cell = PDFImage(logo_path, width=1.45*cm, height=1.45*cm) if os.path.isfile(logo_path) else Paragraph("IB", s_logo_fallback)
         ht = Table([
-            [Paragraph("INFORBAXE", s_title), Paragraph(f"{tipo} #{doc.get('id','')}", s_h2)],
-            [Paragraph("Informática y Tecnología", s_sub), Paragraph(f"Fecha: {doc.get('fecha','')}", s_n)],
-        ], colWidths=[10*cm, 7*cm])
-        ht.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),('ALIGN',(1,0),(1,-1),'RIGHT')]))
+            [logo_cell, Paragraph("INFORBAXE", s_brand), Paragraph(f"{tipo} #{doc.get('id','')}", s_doc_title)],
+            ["", Paragraph("Informática y Tecnología", s_sub), Paragraph(f"Fecha: {doc.get('fecha','')}", s_doc_meta)],
+        ], colWidths=[1.8*cm, 8.2*cm, 7*cm])
+        ht.setStyle(TableStyle([
+            ('SPAN',(0,0),(0,1)),
+            ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+            ('ALIGN',(0,0),(0,1),'CENTER'),
+            ('ALIGN',(2,0),(2,-1),'RIGHT'),
+            ('BACKGROUND',(0,0),(0,1),BLUE),
+            ('LEFTPADDING',(0,0),(-1,-1),5),
+            ('RIGHTPADDING',(0,0),(-1,-1),7),
+            ('TOPPADDING',(0,0),(-1,-1),4),
+            ('BOTTOMPADDING',(0,0),(-1,-1),4),
+        ]))
         story += [ht, Spacer(1,0.4*cm), HRFlowable(width="100%",thickness=2,color=BLUE,spaceAfter=10)]
 
         if cliente:
