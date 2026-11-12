@@ -67,7 +67,7 @@
     {% if modelos %}
       <div class="fault-model-list">
       {% for item in modelos %}
-        <div class="fault-model-row"><span class="fault-model-rank">{{ loop.index }}</span><div style="min-width:0"><div class="fault-model-name">{{ item.nombre }}</div><div class="fault-model-meta">{{ item.registros }} registros · beneficio asociado {{ "%.2f"|format(item.beneficio) }} €</div></div><span class="fault-model-total">{{ item.registros }}</span></div>
+        <div class="fault-model-row"><span class="fault-model-rank">{{ loop.index }}</span><div style="min-width:0"><div class="fault-model-name">{{ item.nombre }}</div><div class="fault-model-meta">{{ item.registros }} registros</div></div><span class="fault-model-total">{{ item.registros }}</span></div>
       {% endfor %}
       </div>
     {% else %}
