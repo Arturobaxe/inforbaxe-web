@@ -4,278 +4,227 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive">
-  <meta name="theme-color" content="#17243f">
+  <meta name="theme-color" content="#ffffff">
   <title>Seguimiento · INFORBAXE</title>
   <link rel="icon" type="image/jpeg" href="{{ url_for('static', filename='logo.jpg') }}">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='logo.jpg') }}">
   <style>
     :root {
       color-scheme: light;
-      --navy: #17243f;
-      --navy-soft: #263654;
-      --orange: #ee8b22;
-      --orange-pale: #fff4e6;
-      --green: #219765;
-      --ink: #202b40;
-      --muted: #748096;
-      --line: #e8edf4;
-      --paper: #ffffff;
-      --page: #f3f6fb;
+      --ink: #252b35;
+      --muted: #737d8b;
+      --line: #e5e8ec;
+      --paper: #fff;
+      --page: #f5f6f7;
+      --accent: #e8820c;
+      --accent-soft: #fff5e9;
+      --green: #29845c;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       min-height: 100vh;
       color: var(--ink);
-      background:
-        radial-gradient(ellipse at 8% 8%, rgba(238,139,34,.11), transparent 30rem),
-        radial-gradient(ellipse at 95% 30%, rgba(68,102,154,.09), transparent 26rem),
-        var(--page);
-      font: 15px/1.55 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      -webkit-font-smoothing: antialiased;
+      background: var(--page);
+      font: 15px/1.55 Arial, Helvetica, sans-serif;
     }
-    .page-wrap { width: min(100% - 32px, 720px); margin: 0 auto; padding: 34px 0 44px; }
-    .brand-hero {
-      position: relative;
-      overflow: hidden;
-      min-height: 260px;
-      padding: 27px 24px 58px;
-      border-radius: 30px 30px 22px 22px;
-      text-align: center;
-      color: #fff;
-      background: linear-gradient(135deg, #17243f 0%, #253858 58%, #344665 100%);
-      box-shadow: 0 18px 45px rgba(23,36,63,.19);
-      isolation: isolate;
-    }
-    .brand-hero:before, .brand-hero:after {
-      content: "";
-      position: absolute;
-      z-index: -1;
-      border: 1px solid rgba(255,255,255,.09);
-      border-radius: 50%;
-    }
-    .brand-hero:before { width: 310px; height: 310px; top: -195px; right: -65px; }
-    .brand-hero:after { width: 220px; height: 220px; bottom: -160px; left: -55px; }
-    .hero-kicker {
-      display: inline-flex;
+    .page-wrap { width: min(100% - 32px, 690px); margin: 0 auto; padding: 27px 0 42px; }
+    .site-header {
+      display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 7px 12px;
-      border: 1px solid rgba(255,255,255,.18);
-      border-radius: 999px;
-      color: rgba(255,255,255,.88);
-      background: rgba(255,255,255,.08);
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: .11em;
-      text-transform: uppercase;
-    }
-    .hero-kicker:before {
-      content: "";
-      width: 7px; height: 7px;
-      border-radius: 50%;
-      background: #69d7a7;
-      box-shadow: 0 0 0 4px rgba(105,215,167,.13);
+      gap: 17px;
+      padding: 0 3px 21px;
+      border-bottom: 1px solid #dedfe2;
     }
     .brand-logo {
       display: block;
-      width: clamp(112px, 30vw, 152px);
-      height: clamp(112px, 30vw, 152px);
-      margin: 21px auto 12px;
-      padding: 8px;
+      width: 76px;
+      height: 76px;
+      flex: 0 0 76px;
       object-fit: contain;
-      border: 1px solid rgba(255,255,255,.72);
-      border-radius: 29px;
+      padding: 3px;
+      border: 1px solid #e5e5e5;
+      border-radius: 8px;
       background: #fff;
-      box-shadow: 0 12px 30px rgba(0,0,0,.24);
     }
     .brand-name {
       margin: 0;
-      color: #fff;
-      font-size: clamp(22px, 5vw, 28px);
-      font-weight: 850;
-      letter-spacing: .12em;
-      line-height: 1.2;
-    }
-    .brand-tagline { margin: 7px 0 0; color: rgba(255,255,255,.72); font-size: 13px; }
-    .tracking-card {
-      position: relative;
-      margin: -29px 13px 0;
-      padding: 28px;
-      border: 1px solid rgba(226,232,241,.9);
-      border-radius: 24px;
-      background: var(--paper);
-      box-shadow: 0 16px 48px rgba(30,48,78,.10);
-    }
-    .eyebrow {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin: 0 0 7px;
-      color: var(--orange);
-      font-size: 10px;
+      color: #222a36;
+      font-size: 23px;
       font-weight: 800;
-      letter-spacing: .13em;
+      line-height: 1.2;
+      letter-spacing: .035em;
+    }
+    .brand-subtitle { margin: 5px 0 0; color: var(--muted); font-size: 13px; }
+    .main-card {
+      margin-top: 24px;
+      padding: 29px 30px;
+      border: 1px solid #e1e4e8;
+      border-radius: 10px;
+      background: var(--paper);
+    }
+    .section-label {
+      margin: 0 0 7px;
+      color: #9a641f;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .08em;
       text-transform: uppercase;
     }
-    .eyebrow:before { content: ""; width: 18px; height: 2px; border-radius: 2px; background: var(--orange); }
-    h1 { margin: 0; color: var(--navy); font-size: clamp(23px, 4vw, 29px); font-weight: 800; letter-spacing: -.8px; line-height: 1.2; }
-    .intro { margin: 8px 0 20px; color: var(--muted); font-size: 13px; }
-    .device-panel {
-      display: flex;
-      align-items: center;
-      gap: 14px;
+    h1 { margin: 0; color: #242b36; font-size: 25px; line-height: 1.25; font-weight: 700; }
+    .intro { margin: 8px 0 22px; color: var(--muted); font-size: 13px; }
+    .device-block {
       padding: 15px 17px;
-      border: 1px solid #edf0f5;
-      border-radius: 16px;
-      background: #f8fafd;
+      border: 1px solid var(--line);
+      border-left: 3px solid var(--accent);
+      border-radius: 5px;
+      background: #fafafa;
     }
-    .device-icon {
-      display: grid;
-      place-items: center;
-      flex: 0 0 46px;
-      width: 46px; height: 46px;
-      border-radius: 14px;
-      color: var(--orange);
-      background: var(--orange-pale);
-      font-size: 23px;
+    .device-label {
+      display: block;
+      margin-bottom: 3px;
+      color: #818995;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .07em;
+      text-transform: uppercase;
     }
-    .device-copy { min-width: 0; }
-    .device-label { display: block; margin-bottom: 2px; color: #8994a7; font-size: 9px; font-weight: 800; letter-spacing: .12em; }
-    .device-name { display: block; overflow-wrap: anywhere; color: var(--navy); font-size: 16px; font-weight: 800; }
-    .device-work { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
-    .progress-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 25px 0 9px; }
-    .progress-heading span:first-child { color: #818ca0; font-size: 11px; font-weight: 700; }
-    .current-status { color: var(--navy); font-size: 13px; font-weight: 800; text-align: right; }
-    .progress-count { color: #929caf; font-size: 10px; font-weight: 700; white-space: nowrap; }
-    .progress-track { height: 7px; overflow: hidden; border-radius: 99px; background: #edf1f6; }
-    .progress-fill { display: block; width: 33.333%; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #f2a13f, #e77b17); transition: width .35s ease; }
-    .timeline { display: grid; gap: 9px; margin-top: 20px; }
+    .device-name { display: block; color: #252b35; font-size: 17px; font-weight: 700; overflow-wrap: anywhere; }
+    .device-work { margin: 3px 0 0; color: var(--muted); font-size: 13px; }
+    .status-summary {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      margin: 25px 0 9px;
+    }
+    .status-summary span:first-child { color: var(--muted); font-size: 12px; }
+    .current-status { color: #242b36; font-size: 14px; font-weight: 700; text-align: right; }
+    .progress-count { color: #87909c; font-size: 11px; white-space: nowrap; }
+    .progress-track { height: 5px; overflow: hidden; border-radius: 4px; background: #eceef0; }
+    .progress-fill { display: block; width: 33.333%; height: 100%; border-radius: 4px; background: var(--accent); transition: width .25s ease; }
+    .timeline { display: grid; margin-top: 20px; }
     .step {
       position: relative;
       display: grid;
-      grid-template-columns: 38px minmax(0,1fr);
-      gap: 12px;
-      align-items: center;
-      min-height: 70px;
-      padding: 10px 13px;
-      border: 1px solid transparent;
-      border-radius: 15px;
+      grid-template-columns: 31px minmax(0,1fr);
+      gap: 11px;
+      align-items: start;
+      min-height: 68px;
+      padding: 8px 0;
       opacity: .55;
-      transition: background .2s, border-color .2s, opacity .2s;
+    }
+    .step:not(:last-child):after {
+      content: "";
+      position: absolute;
+      top: 34px;
+      bottom: -2px;
+      left: 14px;
+      width: 1px;
+      background: #dfe3e8;
     }
     .step-marker {
       position: relative;
       z-index: 1;
       display: grid;
       place-items: center;
-      width: 36px; height: 36px;
-      border: 1px solid #dce3ec;
+      width: 29px;
+      height: 29px;
+      border: 1px solid #d4d9df;
       border-radius: 50%;
-      color: #9aa5b6;
+      color: #858e9a;
       background: #fff;
       font-size: 12px;
-      font-weight: 800;
+      font-weight: 700;
     }
-    .step-copy strong { display: block; color: #526078; font-size: 13px; font-weight: 750; }
-    .step-copy p { margin: 3px 0 0; color: #929caf; font-size: 11px; line-height: 1.4; }
-    .step.done { opacity: 1; }
-    .step.done .step-marker { border-color: #b9e4d0; color: #fff; background: var(--green); }
-    .step.done .step-copy strong { color: var(--navy); }
-    .step.current {
-      opacity: 1;
-      border-color: #f7d6ae;
-      background: linear-gradient(100deg, #fff8ef, #fffdf9);
-      box-shadow: 0 5px 15px rgba(238,139,34,.07);
+    .step-copy { padding-top: 2px; }
+    .step-copy strong { display: block; color: #515b68; font-size: 13px; font-weight: 700; }
+    .step-copy p { margin: 3px 0 0; color: #818995; font-size: 12px; }
+    .step.done, .step.current { opacity: 1; }
+    .step.done .step-marker { border-color: var(--green); color: #fff; background: var(--green); }
+    .step.done .step-copy strong { color: #303944; }
+    .step.done:not(:last-child):after { background: #a9cbb9; }
+    .step.current .step-marker { border-color: var(--accent); color: #fff; background: var(--accent); }
+    .step.current .step-copy strong { color: #9a5b12; }
+    .photo-block {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid var(--line);
     }
-    .step.current .step-marker { border-color: var(--orange); color: #fff; background: var(--orange); box-shadow: 0 0 0 5px rgba(238,139,34,.12); }
-    .step.current .step-copy strong { color: #9a5716; }
-    .photo-panel {
-      margin-top: 22px;
-      padding: 17px;
-      border: 1px solid #e8edf4;
-      border-radius: 17px;
-      background: #f9fbfd;
-    }
-    .photo-heading { display: flex; align-items: center; gap: 11px; }
-    .photo-icon { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: #eaf2ff; font-size: 19px; }
-    .photo-heading strong { display: block; color: var(--navy); font-size: 13px; }
-    .photo-heading p { margin: 2px 0 0; color: var(--muted); font-size: 11px; }
-    .photo { display: block; width: 100%; max-height: 480px; margin-top: 14px; border: 1px solid #e4eaf2; border-radius: 13px; object-fit: contain; background: #eef2f7; }
-    .updated { display: flex; align-items: center; gap: 7px; margin-top: 22px; padding-top: 15px; border-top: 1px solid #edf0f5; color: #8994a7; font-size: 11px; }
-    .updated:before { content: ""; width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: #8fa0b8; }
+    .photo-block h2 { margin: 0; color: #28313d; font-size: 16px; font-weight: 700; }
+    .photo-block p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+    .photo { display: block; width: 100%; max-height: 470px; margin-top: 13px; border: 1px solid var(--line); border-radius: 6px; object-fit: contain; background: #f3f4f5; }
+    .updated { margin-top: 20px; padding-top: 13px; border-top: 1px solid var(--line); color: #808996; font-size: 11px; }
     .expiry-note {
-      display: flex;
-      gap: 12px;
-      align-items: flex-start;
-      margin-top: 16px;
-      padding: 14px 15px;
-      border: 1px solid #f3d7b5;
-      border-radius: 14px;
-      color: #87531c;
-      background: #fff8ef;
-      font-size: 11px;
+      margin-top: 15px;
+      padding: 13px 15px;
+      border: 1px solid #eadcc9;
+      border-radius: 5px;
+      background: #fcf8f2;
+      color: #6e5a43;
+      font-size: 12px;
       line-height: 1.55;
     }
-    .expiry-icon { display: grid; place-items: center; flex: 0 0 30px; width: 30px; height: 30px; border-radius: 10px; color: #a8641b; background: #ffecd4; font-size: 16px; }
-    .expiry-note strong { display: block; margin-bottom: 3px; color: #75440f; font-size: 12px; }
-    .page-foot { margin: 20px 0 0; color: #8e99aa; font-size: 11px; text-align: center; }
-    .expired-card {
-      margin: -29px 13px 0;
-      padding: 42px 28px;
-      border: 1px solid #e5eaf1;
-      border-radius: 24px;
-      background: #fff;
-      box-shadow: 0 16px 48px rgba(30,48,78,.10);
-      text-align: center;
+    .expiry-note strong { display: block; margin-bottom: 3px; color: #59452e; font-size: 12px; }
+    .page-foot { margin: 15px 0 0; color: #89919b; font-size: 11px; text-align: center; }
+    .expired-card { padding: 35px 25px; text-align: center; }
+    .expired-card h1 { font-size: 23px; }
+    .expired-card p { max-width: 420px; margin: 10px auto 0; color: var(--muted); font-size: 13px; }
+    .expired-mark {
+      display: grid;
+      place-items: center;
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 15px;
+      border: 1px solid #eadcc9;
+      border-radius: 50%;
+      color: #98652b;
+      background: #fcf8f2;
+      font-size: 22px;
     }
-    .expired-icon { display: grid; place-items: center; width: 66px; height: 66px; margin: 0 auto 17px; border-radius: 21px; color: #a36b2c; background: #fff2df; font-size: 30px; }
-    .expired-card h1 { font-size: 24px; }
-    .expired-card p { max-width: 390px; margin: 10px auto 0; color: var(--muted); font-size: 13px; }
     @media (max-width: 540px) {
-      .page-wrap { width: min(100% - 20px, 720px); padding: 15px 0 28px; }
-      .brand-hero { min-height: 242px; padding: 21px 16px 49px; border-radius: 23px 23px 17px 17px; }
-      .brand-logo { margin-top: 17px; border-radius: 23px; }
-      .tracking-card { margin-right: 5px; margin-left: 5px; padding: 21px 17px; border-radius: 20px; }
-      .expired-card { margin-right: 5px; margin-left: 5px; padding: 35px 20px; border-radius: 20px; }
-      .step { grid-template-columns: 35px minmax(0,1fr); gap: 10px; padding: 9px; }
-      .step-marker { width: 34px; height: 34px; }
+      .page-wrap { width: min(100% - 22px, 690px); padding: 15px 0 28px; }
+      .site-header { gap: 13px; padding-bottom: 16px; }
+      .brand-logo { width: 64px; height: 64px; flex-basis: 64px; }
+      .brand-name { font-size: 20px; }
+      .brand-subtitle { font-size: 12px; }
+      .main-card { margin-top: 15px; padding: 21px 18px; }
+      h1 { font-size: 22px; }
+      .step { min-height: 66px; }
     }
   </style>
 </head>
 <body>
   <main class="page-wrap">
-    <header class="brand-hero">
-      <div class="hero-kicker">Seguimiento online</div>
+    <header class="site-header">
       <img class="brand-logo" src="{{ url_for('static', filename='logo.jpg') }}" alt="Logo de INFORBAXE">
-      <p class="brand-name">INFORBAXE</p>
-      <p class="brand-tagline">Tu reparación, siempre al día</p>
+      <div>
+        <p class="brand-name">INFORBAXE</p>
+        <p class="brand-subtitle">Servicio técnico y reparación</p>
+      </div>
     </header>
 
     {% if expired %}
-    <section class="expired-card">
-      <div class="expired-icon" aria-hidden="true">⌛</div>
+    <section class="main-card expired-card">
+      <div class="expired-mark" aria-hidden="true">⌛</div>
       <h1>Este seguimiento ha caducado</h1>
       <p>El enlace ya no está disponible y la fotografía de la reparación tampoco se puede consultar. Si necesitas más información, ponte en contacto con nosotros.</p>
     </section>
     {% else %}
-    <section class="tracking-card">
-      <p class="eyebrow">Seguimiento de reparación</p>
-      <h1>El estado de tu dispositivo</h1>
-      <p class="intro">Aquí puedes consultar cómo avanza tu reparación.</p>
+    <section class="main-card">
+      <p class="section-label">Seguimiento de reparación</p>
+      <h1>Estado de tu reparación</h1>
+      <p class="intro">Consulta aquí la última actualización de tu dispositivo.</p>
 
-      <div class="device-panel">
-        <div class="device-icon" aria-hidden="true">📱</div>
-        <div class="device-copy">
-          <span class="device-label">TU DISPOSITIVO</span>
-          <strong class="device-name" id="device-name">{{ payload.equipo }}</strong>
-          {% if payload.trabajo %}<p class="device-work">{{ payload.trabajo }}</p>{% endif %}
-        </div>
+      <div class="device-block">
+        <span class="device-label">Dispositivo</span>
+        <strong class="device-name" id="device-name">{{ payload.equipo }}</strong>
+        {% if payload.trabajo %}<p class="device-work">{{ payload.trabajo }}</p>{% endif %}
       </div>
 
-      <div class="progress-heading">
+      <div class="status-summary">
         <div><span>Estado actual</span><br><strong class="current-status" id="current-status">{{ states[state_index][1] }}</strong></div>
-        <span class="progress-count" id="progress-count">{{ state_index + 1 }} de 3 etapas</span>
+        <span class="progress-count" id="progress-count">{{ state_index + 1 }} de 3</span>
       </div>
       <div class="progress-track"><span class="progress-fill" id="progress-fill" style="width:{{ ((state_index + 1) / 3 * 100)|round(0) }}%"></span></div>
 
@@ -291,24 +240,18 @@
         {% endfor %}
       </div>
 
-      <div class="photo-panel" id="final-photo" {% if not payload.foto_disponible %}hidden{% endif %}>
-        <div class="photo-heading">
-          <div class="photo-icon" aria-hidden="true">📷</div>
-          <div>
-            <strong>Así ha quedado tu dispositivo</strong>
-            <p>Fotografía del interior después de la reparación.</p>
-          </div>
-        </div>
+      <div class="photo-block" id="final-photo" {% if not payload.foto_disponible %}hidden{% endif %}>
+        <h2>Fotografía del interior del dispositivo</h2>
+        <p>Imagen compartida por el técnico al finalizar la reparación.</p>
         {% if payload.foto_disponible %}
         <img class="photo" src="{{ url_for('seguimiento_reparaciones.public_tracking_photo', token=token) }}" alt="Interior del dispositivo reparado">
         {% endif %}
       </div>
 
       <div class="updated">Última actualización: <span id="updated-at">{{ payload.fecha_actualizacion }}</span></div>
-
       <div class="expiry-note">
-        <div class="expiry-icon" aria-hidden="true">⌛</div>
-        <div><strong>Este enlace es temporal</strong>El enlace caducará automáticamente 5 días después de que el técnico marque la reparación como finalizada. A partir de ese momento, el seguimiento y la fotografía dejarán de estar disponibles.</div>
+        <strong>Caducidad del enlace</strong>
+        Este enlace caducará automáticamente 5 días después de que el técnico marque la reparación como finalizada. A partir de ese momento, el seguimiento y la fotografía dejarán de estar disponibles.
       </div>
     </section>
     <p class="page-foot">Esta página se actualiza automáticamente cuando el técnico cambia el estado.</p>
@@ -329,7 +272,6 @@
           const date = new Date(value);
           return Number.isNaN(date.getTime()) ? value : date.toLocaleString('es-ES');
         }
-
         function apply(data) {
           if (data.expired) { location.reload(); return; }
           const index = labels.indexOf(data.estado);
@@ -340,12 +282,11 @@
               step.querySelector('.step-marker').textContent = i < index ? '✓' : String(i + 1);
             });
             currentStatus.textContent = titles[index];
-            progressCount.textContent = (index + 1) + ' de 3 etapas';
+            progressCount.textContent = (index + 1) + ' de 3';
             progressFill.style.width = (((index + 1) / 3) * 100) + '%';
           }
           if (data.equipo) document.getElementById('device-name').textContent = data.equipo;
           if (data.fecha_actualizacion) updated.textContent = formatUpdated(data.fecha_actualizacion);
-
           if (data.foto_disponible && photo.hidden) {
             const image = document.createElement('img');
             image.className = 'photo';
@@ -355,14 +296,13 @@
             photo.hidden = false;
           }
         }
-
         updated.textContent = formatUpdated(updated.textContent);
         async function refresh() {
           try {
             const response = await fetch(location.pathname + '/estado', { cache: 'no-store' });
             if (response.status === 410 || response.status === 404) { location.reload(); return; }
             if (response.ok) apply(await response.json());
-          } catch (_) { /* Mantener visible el último estado conocido si no hay conexión. */ }
+          } catch (_) { /* Mantener el último estado visible si no hay conexión. */ }
         }
         setInterval(refresh, 20000);
       })();
