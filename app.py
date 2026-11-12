@@ -8,7 +8,7 @@ import time
 import re
 import uuid
 import auth as auth_module
-from datetime import date, datetime, timezone
+from datetime import date
 from functools import wraps
 
 from flask import (
@@ -115,8 +115,6 @@ def dashboard():
 def estadisticas():
     """Beneficio por cliente y coste total registrado en ventas, últimos 12 meses."""
     hoy = date.today()
-    meses_nombre = ["Ene", "Feb", "Mar", "Abr", "May", "Jun",
-                    "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
     indice_actual = hoy.year * 12 + hoy.month - 1
     primer_indice = indice_actual - 11
     año_inicio, mes_inicio_cero = divmod(primer_indice, 12)
