@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Averías frecuentes — INFORBAXE{% endblock %}
+{% block page_title %}🧠 Averías frecuentes{% endblock %}
+{% block page_sub %}Patrones detectados en las observaciones del taller{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">← Dashboard</a>
+{% endblock %}
+{% block extra_head %}
+<style>
+.fault-hero{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:17px;padding:23px 25px;border-radius:17px;color:#fff;background:linear-gradient(115deg,#172440 0%,#26557a 58%,#397d79 100%);box-shadow:0 10px 28px rgba(32,63,91,.17)}
+.fault-hero:after{content:"";position:absolute;right:-45px;top:-115px;width:270px;height:270px;border:32px solid rgba(255,255,255,.07);border-radius:50%;pointer-events:none}
+.fault-hero-copy{position:relative;z-index:1;max-width:650px}.fault-hero h2{margin:0;font-size:20px;font-weight:850}.fault-hero p{margin:6px 0 0;color:rgba(255,255,255,.78);font-size:12px;line-height:1.6}
+.fault-period{position:relative;z-index:2;display:flex;align-items:center;gap:7px;flex-wrap:wrap}.fault-period select{min-height:38px;padding:7px 11px;border:1px solid rgba(255,255,255,.3);border-radius:9px;background:rgba(255,255,255,.13);color:#fff;font:700 11px 'Sora',sans-serif}.fault-period select option{color:#24334c;background:#fff}.fault-period button{min-height:38px;padding:7px 12px;border:0;border-radius:9px;background:#fff;color:#243b57;font:800 11px 'Sora',sans-serif;cursor:pointer}
+.fault-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:15px}.fault-kpi{position:relative;overflow:hidden;min-width:0;padding:17px;border:1px solid var(--border);border-radius:14px;background:var(--bg1);box-shadow:0 4px 17px rgba(27,35,64,.05)}.fault-kpi:after{content:"";position:absolute;right:-24px;bottom:-48px;width:115px;height:115px;border-radius:50%;background:var(--fault-color);opacity:.11}.fault-kpi-top{display:flex;justify-content:space-between;align-items:center;gap:8px}.fault-kpi-icon{display:grid;place-items:center;width:36px;height:36px;border-radius:11px;background:var(--fault-bg);font-size:18px}.fault-kpi-label{color:var(--t3);font-size:9px;font-weight:800;letter-spacing:.07em;text-transform:uppercase}.fault-kpi-value{display:block;position:relative;z-index:1;margin-top:10px;color:var(--t1);font-size:27px;font-weight:900;letter-spacing:-.6px}.fault-kpi-note{display:block;position:relative;z-index:1;margin-top:3px;color:var(--t3);font-size:9px}
+.fault-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(300px,.85fr);gap:14px;margin-bottom:14px}.fault-card{min-width:0;padding:18px;border:1px solid var(--border);border-radius:15px;background:var(--bg1);box-shadow:0 4px 17px rgba(27,35,64,.045)}.fault-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:15px}.fault-title{margin:0;color:var(--t1);font-size:14px;font-weight:850}.fault-sub{margin:4px 0 0;color:var(--t3);font-size:10px;line-height:1.5}.fault-count{padding:5px 8px;border-radius:8px;background:#edf3fc;color:#52709a;font-size:10px;font-weight:850;white-space:nowrap}
+.fault-list{display:grid;gap:13px}.fault-line-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:6px}.fault-line-name{color:var(--t1);font-size:11px;font-weight:800}.fault-line-count{color:#697994;font-size:10px;font-weight:850}.fault-track{height:9px;overflow:hidden;border-radius:20px;background:#edf1f7}.fault-track span{display:block;height:100%;border-radius:20px;background:linear-gradient(90deg,#e88a2c,#edb64a)}.fault-empty{display:grid;place-items:center;min-height:175px;padding:20px;color:var(--t3);font-size:12px;text-align:center;line-height:1.7}.fault-empty strong{display:block;margin-bottom:4px;color:var(--t1);font-size:13px}
+.fault-model-list{display:grid;gap:8px}.fault-model-row{display:grid;grid-template-columns:30px minmax(0,1fr) auto;align-items:center;gap:9px;padding:9px 10px;border:1px solid #edf0f5;border-radius:10px;background:#fafbfd}.fault-model-rank{display:grid;place-items:center;width:28px;height:28px;border-radius:9px;background:#eaf2ff;color:#3c68a8;font-size:10px;font-weight:900}.fault-model-name{overflow:hidden;color:#283852;font-size:11px;font-weight:800;text-overflow:ellipsis;white-space:nowrap}.fault-model-meta{margin-top:2px;color:#8b96a8;font-size:9px}.fault-model-total{color:#27815f;font-size:11px;font-weight:900;white-space:nowrap}
+.fault-chart{position:relative;width:100%;height:255px}.fault-patterns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.fault-pattern{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px;border:1px solid #e8edf5;border-radius:10px;background:linear-gradient(145deg,#fff,#f8faff)}.fault-pattern-copy{min-width:0}.fault-pattern-model{overflow:hidden;color:#263751;font-size:11px;font-weight:850;text-overflow:ellipsis;white-space:nowrap}.fault-pattern-issue{margin-top:3px;color:#7c899d;font-size:9px}.fault-pattern-count{display:grid;place-items:center;min-width:30px;height:30px;padding:0 7px;border-radius:9px;background:#e8f6f0;color:#16815c;font-size:11px;font-weight:900}
+.fault-note{margin-top:14px;padding:12px 14px;border:1px solid #e5eaf2;border-radius:10px;background:#f7f9fc;color:#758198;font-size:10px;line-height:1.7}.fault-note strong{color:#455570}
+@media(max-width:1050px){.fault-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.fault-grid{grid-template-columns:1fr}}
+@media(max-width:600px){.fault-hero{padding:17px}.fault-hero h2{font-size:17px}.fault-period{width:100%}.fault-period select{flex:1;min-width:0}.fault-kpi{padding:13px}.fault-kpi-value{font-size:22px}.fault-kpi-label{font-size:8px}.fault-card{padding:14px}.fault-patterns{grid-template-columns:1fr}.fault-chart{height:230px}}
+</style>
+{% endblock %}
+{% block content %}
+<section class="fault-hero">
+  <div class="fault-hero-copy">
+    <h2>¿Qué está fallando más en el taller?</h2>
+    <p>INFORBAXE repasa los modelos y las observaciones guardadas para encontrar averías que se repiten, descubrir qué equipos llegan más y ver cómo evoluciona el trabajo.</p>
+  </div>
+  <form method="get" class="fault-period">
+    <select name="periodo" aria-label="Periodo de análisis">
+      <option value="30" {% if periodo == '30' %}selected{% endif %}>Últimos 30 días</option>
+      <option value="90" {% if periodo == '90' %}selected{% endif %}>Últimos 90 días</option>
+      <option value="365" {% if periodo == '365' %}selected{% endif %}>Últimos 12 meses</option>
+      <option value="all" {% if periodo == 'all' %}selected{% endif %}>Todo el histórico</option>
+    </select>
+    <button type="submit">Analizar</button>
+  </form>
+</section>
+
+<div class="fault-kpis">
+  <div class="fault-kpi" style="--fault-color:#3978c5;--fault-bg:#eaf2ff"><div class="fault-kpi-top"><span class="fault-kpi-label">Equipos registrados</span><span class="fault-kpi-icon">📱</span></div><strong class="fault-kpi-value">{{ total_modelos }}</strong><span class="fault-kpi-note">Registros que incluyen modelo</span></div>
+  <div class="fault-kpi" style="--fault-color:#e48b2d;--fault-bg:#fff2df"><div class="fault-kpi-top"><span class="fault-kpi-label">Averías detectadas</span><span class="fault-kpi-icon">🔎</span></div><strong class="fault-kpi-value">{{ ventas_clasificadas }}</strong><span class="fault-kpi-note">Registros con alguna coincidencia</span></div>
+  <div class="fault-kpi" style="--fault-color:#21966a;--fault-bg:#e5f7ee"><div class="fault-kpi-top"><span class="fault-kpi-label">Modelos diferentes</span><span class="fault-kpi-icon">🧩</span></div><strong class="fault-kpi-value">{{ modelos_distintos }}</strong><span class="fault-kpi-note">Modelos distintos normalizados</span></div>
+  <div class="fault-kpi" style="--fault-color:#9a70c7;--fault-bg:#f1eafe"><div class="fault-kpi-top"><span class="fault-kpi-label">Notas revisadas</span><span class="fault-kpi-icon">📝</span></div><strong class="fault-kpi-value">{{ total_notas }}</strong><span class="fault-kpi-note">Observaciones de ventas y taller</span></div>
+</div>
+
+<div class="fault-grid">
+  <section class="fault-card">
+    <div class="fault-card-head"><div><h3 class="fault-title">Averías más repetidas</h3><p class="fault-sub">Clasificación automática de las observaciones</p></div><span class="fault-count">{{ averias|length }} categorías</span></div>
+    {% if averias %}
+      <div class="fault-list">
+      {% for item in averias %}
+        <div>
+          <div class="fault-line-head"><span class="fault-line-name">{{ item.nombre }}</span><span class="fault-line-count">{{ item.registros }} registros</span></div>
+          <div class="fault-track"><span style="width:{{ item.porcentaje }}%"></span></div>
+        </div>
+      {% endfor %}
+      </div>
+    {% else %}
+      <div class="fault-empty"><div><strong>Aún no hay averías que podamos agrupar.</strong>Cuando las observaciones incluyan detalles como «pantalla rota», «no carga» o «batería», aparecerán aquí.</div></div>
+    {% endif %}
+  </section>
+
+  <section class="fault-card">
+    <div class="fault-card-head"><div><h3 class="fault-title">Modelos que más se repiten</h3><p class="fault-sub">Según el campo «Modelo» de las ventas</p></div><span class="fault-count">Top 10</span></div>
+    {% if modelos %}
+      <div class="fault-model-list">
+      {% for item in modelos %}
+        <div class="fault-model-row"><span class="fault-model-rank">{{ loop.index }}</span><div style="min-width:0"><div class="fault-model-name">{{ item.nombre }}</div><div class="fault-model-meta">{{ item.registros }} registros · beneficio asociado {{ "%.2f"|format(item.beneficio) }} €</div></div><span class="fault-model-total">{{ item.registros }}</span></div>
+      {% endfor %}
+      </div>
+    {% else %}
+      <div class="fault-empty"><div><strong>No hay modelos registrados en este periodo.</strong>Al indicar el modelo del dispositivo en una venta o reparación, empezará a aparecer este ranking.</div></div>
+    {% endif %}
+  </section>
+</div>
+
+<div class="fault-grid">
+  <section class="fault-card">
+    <div class="fault-card-head"><div><h3 class="fault-title">Evolución mensual</h3><p class="fault-sub">Registros en los que se ha detectado alguna avería</p></div></div>
+    {% if meses_labels %}<div class="fault-chart"><canvas id="fault-trend-chart" aria-label="Evolución mensual de averías detectadas"></canvas></div>{% else %}<div class="fault-empty">Todavía no hay datos suficientes para mostrar una evolución.</div>{% endif %}
+  </section>
+  <section class="fault-card">
+    <div class="fault-card-head"><div><h3 class="fault-title">Modelo + avería</h3><p class="fault-sub">Combinaciones que aparecen más veces</p></div><span class="fault-count">{{ patrones|length }} patrones</span></div>
+    {% if patrones %}
+      <div class="fault-patterns">
+      {% for item in patrones %}
+        <div class="fault-pattern"><div class="fault-pattern-copy"><div class="fault-pattern-model">{{ item.modelo }}</div><div class="fault-pattern-issue">{{ item.averia }}</div></div><span class="fault-pattern-count">{{ item.registros }}</span></div>
+      {% endfor %}
+      </div>
+    {% else %}
+      <div class="fault-empty"><div><strong>Falta relacionar modelos y averías.</strong>Guarda el modelo y describe el problema en las observaciones para descubrir patrones por dispositivo.</div></div>
+    {% endif %}
+  </section>
+</div>
+
+<div class="fault-note"><strong>Cómo funciona:</strong> el detector revisa el modelo y las observaciones que ya guardas en cada venta. Agrupa coincidencias de palabras relacionadas con pantalla, batería, carga, encendido, humedad, placa, cámara, audio, software, conectividad y datos. Una misma reparación puede aparecer en varias categorías. No modifica ventas ni datos y no utiliza inteligencia artificial: son coincidencias automáticas, por lo que cuanto más claras sean las observaciones, más útiles serán los resultados.</div>
+{% endblock %}
+{% block scripts %}
+{% if meses_labels %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(() => {
+  if (typeof Chart === 'undefined') return;
+  Chart.defaults.font.family = "'Sora',system-ui,sans-serif";
+  Chart.defaults.color = '#7d879e';
+  const canvas = document.getElementById('fault-trend-chart');
+  if (!canvas) return;
+  const labels = {{ meses_labels|tojson }};
+  const values = {{ meses_valores|tojson }};
+  new Chart(canvas, {
+    type: 'line',
+    data: {labels, datasets: [{label: 'Averías detectadas', data: values, borderColor: '#269a78', backgroundColor: 'rgba(38,154,120,.13)', fill: true, tension: .32, pointRadius: 4, pointHoverRadius: 6, pointBackgroundColor: '#269a78'}]},
+    options: {responsive: true, maintainAspectRatio: false, plugins: {legend: {display: false}}, scales: {x: {grid: {display: false}}, y: {beginAtZero: true, ticks: {precision: 0}, grid: {color: 'rgba(120,130,150,.12)'}}}}
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}
