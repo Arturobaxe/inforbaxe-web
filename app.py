@@ -235,7 +235,7 @@ def averias_frecuentes():
 
     while True:
         consulta = (db.get_db().table("ventas")
-                    .select("id,fecha,equipo_modelo,comentarios,total_benef")
+                    .select("id,fecha,equipo_modelo,comentarios")
                     .order("fecha", desc=True)
                     .order("id", desc=True))
         if fecha_inicio:
