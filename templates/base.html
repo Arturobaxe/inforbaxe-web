@@ -746,7 +746,7 @@ tbody tr:nth-child(7){animation-delay:0.28s} tbody tr:nth-child(8){animation-del
 		<span>Propinas</span>
 	  </a>
 
-      <details class="nav-other" {% if request.endpoint == 'estadisticas' or request.endpoint == 'seguimiento_reparaciones.enlaces_activos' or 'despiece' in (request.endpoint or '') %}open{% endif %}>
+      <details class="nav-other" {% if request.endpoint == 'estadisticas' or request.endpoint == 'averias_frecuentes' or request.endpoint == 'seguimiento_reparaciones.enlaces_activos' or 'despiece' in (request.endpoint or '') %}open{% endif %}>
         <summary class="nav-other-summary">
           <span>Otros</span>
           <svg class="nav-other-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
@@ -759,6 +759,10 @@ tbody tr:nth-child(7){animation-delay:0.28s} tbody tr:nth-child(8){animation-del
           <a href="{{ url_for('estadisticas') }}" class="nav-item {% if request.endpoint == 'estadisticas' %}active{% endif %}">
             <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-5 5"/></svg>
             <span>Estadísticas</span>
+          </a>
+          <a href="{{ url_for('averias_frecuentes') }}" class="nav-item {% if request.endpoint == 'averias_frecuentes' %}active{% endif %}">
+            <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2v4"/><path d="M12 18v4"/><path d="m4.93 4.93 2.83 2.83"/><path d="m16.24 16.24 2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="m4.93 19.07 2.83-2.83"/><path d="m16.24 7.76 2.83-2.83"/><circle cx="12" cy="12" r="4"/></svg>
+            <span>Averías frecuentes</span>
           </a>
           <a href="{{ url_for('seguimiento_reparaciones.enlaces_activos') }}" class="nav-item {% if request.endpoint == 'seguimiento_reparaciones.enlaces_activos' %}active{% endif %}">
             <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3A5 5 0 0 0 12 21.07l1.71-1.71"/></svg>
