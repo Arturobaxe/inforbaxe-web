@@ -258,6 +258,7 @@ def enlaces_activos():
     return render_template(
         "enlaces_activos.html",
         enlaces=enlaces,
+        state_labels=STATE_LABELS,
         total=len(enlaces),
         disponibles=disponibles,
         caducados=caducados,
