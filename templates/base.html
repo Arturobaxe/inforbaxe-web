@@ -691,6 +691,10 @@ tbody tr:nth-child(7){animation-delay:0.28s} tbody tr:nth-child(8){animation-del
         <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
         <span>Búsqueda global</span>
       </a>
+      <a href="{{ url_for('estadisticas') }}" class="nav-item {% if request.endpoint == 'estadisticas' %}active{% endif %}">
+        <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-5 5"/></svg>
+        <span>Estadísticas</span>
+      </a>
 
       <div class="nav-section-label">Gestión</div>
       <a href="{{ url_for('clientes') }}" class="nav-item {% if 'cliente' in request.endpoint %}active{% endif %}">
@@ -700,6 +704,10 @@ tbody tr:nth-child(7){animation-delay:0.28s} tbody tr:nth-child(8){animation-del
       <a href="{{ url_for('ventas') }}" class="nav-item {% if 'venta' in request.endpoint %}active{% endif %}">
         <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
         <span>Ventas</span>
+      </a>
+      <a href="{{ url_for('seguimiento_reparaciones.enlaces_activos') }}" class="nav-item {% if request.endpoint == 'seguimiento_reparaciones.enlaces_activos' %}active{% endif %}">
+        <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3A5 5 0 0 0 12 21.07l1.71-1.71"/></svg>
+        <span>Enlaces activos</span>
       </a>
       <a href="{{ url_for('mensualidades') }}" class="nav-item {% if 'mensualidad' in request.endpoint %}active{% endif %}">
         <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
