@@ -239,20 +239,26 @@ def admin_cliente(id_cliente):
 @_staff_required
 def enlaces_activos():
     """Panel global de enlaces de seguimiento activos."""
-    rows = (_table()
-            .select("id,id_cliente,equipo,trabajo,estado,activo,fecha_creacion,fecha_actualizacion,fecha_finalizacion,fecha_caducidad,clientes(nombre)")
-            .eq("activo", True)
-            .order("fecha_creacion", desc=True)
-            .limit(500)
-            .execute().data or [])
     enlaces = []
-    for row in rows:
+    offset = 0
+    page_size = 500
+    while True:
+        rows = (_table()
+                .select("id,id_cliente,equipo,trabajo,estado,activo,fecha_creacion,fecha_actualizacion,fecha_finalizacion,fecha_caducidad,clientes(nombre)")
+                .eq("activo", True)
+                .order("fecha_creacion", desc=True)
+                .range(offset, offset + page_size - 1)
+                .execute().data or [])
+        for row in rows:
         cliente = row.pop("clientes", None) or {}
         if isinstance(cliente, list):
             cliente = cliente[0] if cliente else {}
-        row["nombre_cliente"] = cliente.get("nombre", "Cliente")
-        row["caducado"] = _is_expired(row)
-        enlaces.append(row)
+            row["nombre_cliente"] = cliente.get("nombre", "Cliente")
+            row["caducado"] = _is_expired(row)
+            enlaces.append(row)
+        if len(rows) < page_size:
+            break
+        offset += page_size
     disponibles = sum(1 for item in enlaces if not item["caducado"])
     caducados = len(enlaces) - disponibles
     return render_template(
