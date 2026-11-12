@@ -8,7 +8,7 @@ import time
 import re
 import uuid
 import auth as auth_module
-from datetime import date
+from datetime import date, datetime, timezone
 from functools import wraps
 
 from flask import (
@@ -109,6 +109,168 @@ def logout():
 def dashboard():
     stats = db.get_dashboard_stats()
     return render_template("dashboard.html", stats=stats, today=date.today())
+
+@app.route("/estadisticas")
+@login_required
+def estadisticas():
+    """Panel analítico de ventas y actividad de INFORBAXE (últimos 12 meses)."""
+    hoy = date.today()
+    meses_nombre = ["Ene", "Feb", "Mar", "Abr", "May", "Jun",
+                    "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+    meses = {}
+    indice_actual = hoy.year * 12 + hoy.month - 1
+    for desplazamiento in range(11, -1, -1):
+        indice = indice_actual - desplazamiento
+        año, mes_cero = divmod(indice, 12)
+        mes = mes_cero + 1
+        clave = f"{año:04d}-{mes:02d}"
+        meses[clave] = {
+            "label": f"{meses_nombre[mes - 1]} {str(año)[-2:]}",
+            "facturacion": 0.0,
+            "beneficio": 0.0,
+            "ventas": 0,
+        }
+
+    primer_mes = next(iter(meses))
+    primer_dia = f"{primer_mes}-01"
+    total_facturacion = 0.0
+    total_beneficio = 0.0
+    total_pendiente = 0.0
+    ventas_pagadas = 0
+    clientes_stats = {}
+    metodos_stats = {}
+    ventas_recientes = []
+    total_ventas = 0
+
+    # Leer únicamente columnas necesarias y paginar para evitar límites silenciosos.
+    offset = 0
+    page_size = 500
+    while True:
+        lote = (db.get_db().table("ventas")
+                .select("id,id_cliente,fecha,total_pvp,total_benef,metodo_pago,pagado,clientes(nombre)")
+                .gte("fecha", primer_dia)
+                .lte("fecha", hoy.isoformat())
+                .order("fecha", desc=True)
+                .order("id", desc=True)
+                .range(offset, offset + page_size - 1)
+                .execute().data or [])
+        if not lote:
+            break
+
+        for venta in lote:
+            try:
+                importe = float(venta.get("total_pvp") or 0)
+            except (TypeError, ValueError):
+                importe = 0.0
+            try:
+                beneficio = float(venta.get("total_benef") or 0)
+            except (TypeError, ValueError):
+                beneficio = 0.0
+            fecha_venta = str(venta.get("fecha") or "")[:7]
+            total_ventas += 1
+            total_facturacion += importe
+            total_beneficio += beneficio
+            if venta.get("pagado") == "Sí":
+                ventas_pagadas += 1
+            else:
+                total_pendiente += importe
+
+            if fecha_venta in meses:
+                meses[fecha_venta]["facturacion"] += importe
+                meses[fecha_venta]["beneficio"] += beneficio
+                meses[fecha_venta]["ventas"] += 1
+
+            relacion = venta.get("clientes") or {}
+            if isinstance(relacion, list):
+                relacion = relacion[0] if relacion else {}
+            nombre = relacion.get("nombre", "Cliente")
+            cliente_id = str(venta.get("id_cliente") or "sin-cliente")
+            cliente = clientes_stats.setdefault(cliente_id, {
+                "nombre": nombre, "ventas": 0, "facturacion": 0.0, "beneficio": 0.0,
+            })
+            cliente["ventas"] += 1
+            cliente["facturacion"] += importe
+            cliente["beneficio"] += beneficio
+
+            metodo = venta.get("metodo_pago") or "Sin especificar"
+            metodo_item = metodos_stats.setdefault(metodo, {"nombre": metodo, "ventas": 0, "total": 0.0})
+            metodo_item["ventas"] += 1
+            metodo_item["total"] += importe
+
+            if len(ventas_recientes) < 8:
+                ventas_recientes.append({
+                    "fecha": venta.get("fecha") or "—",
+                    "cliente": nombre,
+                    "total": importe,
+                    "pagado": venta.get("pagado") == "Sí",
+                })
+
+        if len(lote) < page_size:
+            break
+        offset += page_size
+
+    clientes_lista = db.get_clientes()
+    clientes_activos = sum(1 for cliente in clientes_lista if cliente.get("activo", True))
+    clientes_recurrentes = sum(1 for cliente in clientes_stats.values() if cliente["ventas"] > 1)
+    mejores_clientes = sorted(
+        clientes_stats.values(),
+        key=lambda item: item["facturacion"],
+        reverse=True,
+    )[:8]
+    metodos_lista = sorted(metodos_stats.values(), key=lambda item: item["total"], reverse=True)
+
+    seguimientos_abiertos = 0
+    seguimientos_finalizados = 0
+    enlaces_disponibles = 0
+    try:
+        seguimientos = (db.get_db().table("seguimientos_reparacion")
+                        .select("estado,activo,fecha_caducidad")
+                        .limit(1000).execute().data or [])
+        ahora = datetime.now(timezone.utc)
+        for seguimiento in seguimientos:
+            if seguimiento.get("estado") == "reparacion_acabada":
+                seguimientos_finalizados += 1
+            else:
+                seguimientos_abiertos += 1
+            if seguimiento.get("activo"):
+                caducidad = seguimiento.get("fecha_caducidad")
+                if not caducidad:
+                    enlaces_disponibles += 1
+                else:
+                    try:
+                        vence = datetime.fromisoformat(str(caducidad).replace("Z", "+00:00"))
+                        if vence.tzinfo is None:
+                            vence = vence.replace(tzinfo=timezone.utc)
+                        if vence > ahora:
+                            enlaces_disponibles += 1
+                    except ValueError:
+                        pass
+    except Exception:
+        # Las estadísticas económicas siguen disponibles aunque el módulo de seguimiento no esté instalado.
+        pass
+
+    datos_meses = list(meses.values())
+    return render_template(
+        "estadisticas.html",
+        hoy=hoy,
+        meses=datos_meses,
+        total_ventas=total_ventas,
+        total_facturacion=round(total_facturacion, 2),
+        total_beneficio=round(total_beneficio, 2),
+        total_pendiente=round(total_pendiente, 2),
+        ticket_medio=round(total_facturacion / total_ventas, 2) if total_ventas else 0,
+        ventas_pagadas=ventas_pagadas,
+        clientes_total=len(clientes_lista),
+        clientes_activos=clientes_activos,
+        clientes_recurrentes=clientes_recurrentes,
+        mejores_clientes=mejores_clientes,
+        metodos=metodos_lista,
+        ventas_recientes=ventas_recientes,
+        seguimientos_abiertos=seguimientos_abiertos,
+        seguimientos_finalizados=seguimientos_finalizados,
+        enlaces_disponibles=enlaces_disponibles,
+    )
+
 
 @app.route("/buscar")
 @login_required
