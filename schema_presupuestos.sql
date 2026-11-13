@@ -20,7 +20,7 @@ CREATE INDEX IF NOT EXISTS idx_presup_cliente ON presupuestos(id_cliente);
 CREATE INDEX IF NOT EXISTS idx_presup_fecha   ON presupuestos(fecha DESC);
 
 ALTER TABLE presupuestos ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "service_role_all" ON presupuestos FOR ALL USING (true);
+CREATE POLICY "service_role_all" ON presupuestos FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 
 -- ================================================================
