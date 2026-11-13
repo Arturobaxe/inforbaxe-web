@@ -9,6 +9,7 @@ import re
 import uuid
 import secrets
 import hmac
+import hashlib
 import auth as auth_module
 from datetime import date, timedelta
 from functools import wraps
@@ -78,16 +79,61 @@ def _rate_bucket(key, window_seconds):
     return bucket
 
 
+def _rate_key(scope, ip):
+    # Guarda solo una huella HMAC, nunca la IP del visitante en la base de datos.
+    secret = app.secret_key
+    if isinstance(secret, str):
+        secret = secret.encode("utf-8")
+    raw = f"{scope}:{ip or 'unknown'}".encode("utf-8")
+    return hmac.new(secret, raw, hashlib.sha256).hexdigest()
+
+
+def _persistent_rate_limit(key, limit, window_seconds, increment=False, reset=False):
+    result = db.get_db().rpc("inforbaxe_rate_limit", {
+        "p_rate_key": key,
+        "p_limit": limit,
+        "p_window_seconds": window_seconds,
+        "p_increment": increment,
+        "p_reset": reset,
+    }).execute()
+    rows = result.data or []
+    if isinstance(rows, dict):
+        return rows
+    if not rows:
+        raise RuntimeError("El limitador persistente no devolvió resultado.")
+    return rows[0]
+
+
 def _is_rate_limited(key, limit, window_seconds):
-    bucket = _rate_bucket(key, window_seconds)
-    retry_after = max(1, int(bucket["expires"] - time.monotonic() + 0.999))
-    return bucket["count"] >= limit, retry_after, bucket["count"]
+    try:
+        row = _persistent_rate_limit(key, limit, window_seconds)
+        return bool(row["blocked"]), max(1, int(row["retry_after"])), int(row["attempt_count"])
+    except Exception:
+        # La copia local mantiene protección básica si Supabase no responde.
+        app.logger.warning("Limitador persistente no disponible; se usa el respaldo local.")
+        bucket = _rate_bucket(key, window_seconds)
+        retry_after = max(1, int(bucket["expires"] - time.monotonic() + 0.999))
+        return bucket["count"] >= limit, retry_after, bucket["count"]
 
 
 def _record_rate_attempt(key, window_seconds):
-    bucket = _rate_bucket(key, window_seconds)
-    bucket["count"] += 1
-    return bucket["count"]
+    try:
+        row = _persistent_rate_limit(key, 1000, window_seconds, increment=True)
+        return int(row["attempt_count"])
+    except Exception:
+        app.logger.warning("No se pudo guardar el intento en Supabase; se usa el respaldo local.")
+        bucket = _rate_bucket(key, window_seconds)
+        bucket["count"] += 1
+        return bucket["count"]
+
+
+def _clear_rate_attempts(key):
+    try:
+        _persistent_rate_limit(key, 1000, 86400, reset=True)
+    except Exception:
+        app.logger.warning("No se pudo limpiar el contador persistente de intentos.")
+    finally:
+        _RATE_LIMITS.pop(key, None)
 
 
 def _csrf_token():
@@ -156,7 +202,7 @@ def login():
         return redirect(url_for("dashboard"))
 
     ip = request.remote_addr or "unknown"
-    rate_key = f"login:{ip}"
+    rate_key = _rate_key("login", ip)
     if request.method == "POST":
         blocked, retry_after, _ = _is_rate_limited(rate_key, MAX_ATTEMPTS, BLOCK_SECONDS)
         if blocked:
@@ -175,7 +221,7 @@ def login():
         valid_password = _constant_time_equal(password, ADMIN_PASS)
 
         if valid_user and valid_password:
-            otp_rate_key = f"2fa-send:{ip}"
+            otp_rate_key = _rate_key("2fa-send", ip)
             otp_blocked, otp_retry_after, _ = _is_rate_limited(otp_rate_key, 5, 600)
             if otp_blocked:
                 return _rate_limited_response(1, otp_retry_after)
@@ -197,7 +243,7 @@ def login():
                     error="No se ha podido enviar el código. Comprueba la configuración del correo e inténtalo de nuevo.",
                 ), 503
 
-            _RATE_LIMITS.pop(rate_key, None)
+            _clear_rate_attempts(rate_key)
             destino = f"{ADMIN_EMAIL[:2]}***" if ADMIN_EMAIL else "tu correo"
             return render_template("login.html", step=2, msg=f"Código enviado a {destino}")
 
@@ -226,7 +272,7 @@ def login_verificar():
         return redirect(url_for("login"))
 
     ip = request.remote_addr or "unknown"
-    rate_key = f"2fa-verify:{ip}"
+    rate_key = _rate_key("2fa-verify", ip)
     blocked, retry_after, _ = _is_rate_limited(rate_key, 15, BLOCK_SECONDS)
     if blocked:
         return _rate_limited_response(2, retry_after)
@@ -243,7 +289,7 @@ def login_verificar():
         session.permanent = True
         session["logged_in"] = True
         session["username"] = username
-        _RATE_LIMITS.pop(rate_key, None)
+        _clear_rate_attempts(rate_key)
         return redirect(url_for("dashboard"))
 
     _record_rate_attempt(rate_key, BLOCK_SECONDS)
@@ -260,12 +306,12 @@ def login_reenviar():
         return redirect(url_for("login"))
 
     ip = request.remote_addr or "unknown"
-    rate_key = f"2fa-resend:{ip}"
+    rate_key = _rate_key("2fa-resend", ip)
     blocked, retry_after, _ = _is_rate_limited(rate_key, 3, 600)
     if blocked:
         return _rate_limited_response(2, retry_after)
 
-    send_key = f"2fa-send:{ip}"
+    send_key = _rate_key("2fa-send", ip)
     send_blocked, send_retry_after, _ = _is_rate_limited(send_key, 5, 600)
     if send_blocked:
         return _rate_limited_response(2, send_retry_after)
