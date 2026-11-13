@@ -876,7 +876,7 @@ function renderSearchResults(data) {
     searchResults.appendChild(heading);
 
     records.forEach(record => {
-      if (!record || !/^\\d+$/.test(String(record.id ?? ''))) return;
+      if (!record || !Number.isSafeInteger(Number(record.id)) || Number(record.id) <= 0) return;
 
       const details = buildItem(record);
       const link = document.createElement('a');
