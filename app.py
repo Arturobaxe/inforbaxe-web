@@ -7,8 +7,10 @@ import io
 import time
 import re
 import uuid
+import secrets
+import hmac
 import auth as auth_module
-from datetime import date
+from datetime import date, timedelta
 from functools import wraps
 
 from flask import (
@@ -16,6 +18,7 @@ from flask import (
     session, jsonify, flash, abort, make_response
 )
 from dotenv import load_dotenv
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 load_dotenv()
 import database as db
@@ -23,17 +26,95 @@ from despiece_inteligente import despiece_bp
 from seguimiento_reparaciones import seguimiento_bp
 
 
+IS_RENDER = bool(os.environ.get("RENDER_SERVICE_ID") or os.environ.get("RENDER"))
 app = Flask(__name__)
-app.secret_key  = os.environ.get("SECRET_KEY", "dev-secret-change-me")
-ADMIN_USER      = os.environ.get("ADMIN_USER",  "admin")
-ADMIN_PASS      = os.environ.get("ADMIN_PASS",  "inforbaxe2025")
-ADMIN_EMAIL     = os.environ.get("ADMIN_EMAIL", "inforbaxe@gmail.com")
+app.config.update(
+    SECRET_KEY=os.environ.get("SECRET_KEY") or secrets.token_hex(32),
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=IS_RENDER,
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
+)
+# Render termina TLS delante de Gunicorn y reenvía la IP/protocolo originales.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+
+# En producción no se permiten las credenciales conocidas que antes se usaban
+# como valores por defecto. Configura ADMIN_USER y ADMIN_PASS en Render.
+ADMIN_USER      = os.environ.get("ADMIN_USER", "").strip()
+ADMIN_PASS      = os.environ.get("ADMIN_PASS", "")
+ADMIN_EMAIL     = os.environ.get("ADMIN_EMAIL", "inforbaxe@gmail.com").strip()
 METODOS_PAGO    = ["Efectivo", "Tarjeta", "Bizum", "Transferencia", "Otro"]
-_login_attempts = {}
-MAX_ATTEMPTS    = 5
-BLOCK_SECONDS   = 300
+
+MAX_ATTEMPTS  = 5
+BLOCK_SECONDS = 300
+_RATE_LIMITS  = {}
+
 app.register_blueprint(despiece_bp)
 app.register_blueprint(seguimiento_bp)
+
+
+def _constant_time_equal(left, right):
+    return hmac.compare_digest(str(left).encode("utf-8"), str(right).encode("utf-8"))
+
+
+def _rate_bucket(key, window_seconds):
+    now = time.monotonic()
+    bucket = _RATE_LIMITS.get(key)
+    if bucket is None or now >= bucket["expires"]:
+        bucket = {"count": 0, "expires": now + window_seconds}
+        _RATE_LIMITS[key] = bucket
+    return bucket
+
+
+def _is_rate_limited(key, limit, window_seconds):
+    bucket = _rate_bucket(key, window_seconds)
+    retry_after = max(1, int(bucket["expires"] - time.monotonic() + 0.999))
+    return bucket["count"] >= limit, retry_after, bucket["count"]
+
+
+def _record_rate_attempt(key, window_seconds):
+    bucket = _rate_bucket(key, window_seconds)
+    bucket["count"] += 1
+    return bucket["count"]
+
+
+def _csrf_token():
+    token = session.get("_csrf_token")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session["_csrf_token"] = token
+    return token
+
+
+@app.context_processor
+def inject_csrf_token():
+    return {"csrf_token": _csrf_token}
+
+
+@app.before_request
+def enforce_csrf():
+    if request.method not in {"POST", "PUT", "PATCH", "DELETE"}:
+        return
+    login_flow = request.path in {"/login", "/login/verificar", "/login/reenviar"}
+    if not session.get("logged_in") and not login_flow:
+        return
+
+    expected = session.get("_csrf_token", "")
+    supplied = request.headers.get("X-CSRF-Token") or request.form.get("_csrf_token", "")
+    if not expected or not supplied or not _constant_time_equal(expected, supplied):
+        abort(400, description="Token de seguridad inválido. Recarga la página e inténtalo de nuevo.")
+
+
+@app.after_request
+def add_security_headers(response):
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    if request.is_secure:
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
+    if request.path.startswith("/login"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 def login_required(f):
@@ -44,55 +125,133 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated
 
+def _rate_limited_response(step, retry_after):
+    response = make_response(
+        render_template("login.html", step=step, error="Demasiados intentos. Espera antes de volver a probar."),
+        429,
+    )
+    response.headers["Retry-After"] = str(retry_after)
+    return response
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if session.get("logged_in"):
         return redirect(url_for("dashboard"))
-    ip = request.remote_addr
-    _login_attempts.setdefault(ip, {"c": 0, "r": time.time() + BLOCK_SECONDS})
-    if time.time() < _login_attempts[ip]["r"] and _login_attempts[ip]["c"] >= MAX_ATTEMPTS:
-        return render_template("login.html", step=1, error="Demasiados intentos. Espera 5 min."), 429
+
+    ip = request.remote_addr or "unknown"
+    rate_key = f"login:{ip}"
     if request.method == "POST":
-        u = re.sub(r'[<>"\';\\]', '', request.form.get("username", ""))[:50]
-        p = request.form.get("password", "")
-        if u == ADMIN_USER and p == ADMIN_PASS:
+        blocked, retry_after, _ = _is_rate_limited(rate_key, MAX_ATTEMPTS, BLOCK_SECONDS)
+        if blocked:
+            return _rate_limited_response(1, retry_after)
+
+        if not ADMIN_USER or not ADMIN_PASS:
+            return render_template(
+                "login.html",
+                step=1,
+                error="El acceso no está configurado. Revisa ADMIN_USER y ADMIN_PASS en Render.",
+            ), 503
+
+        username = request.form.get("username", "").strip()[:128]
+        password = request.form.get("password", "")
+        valid_user = _constant_time_equal(username, ADMIN_USER)
+        valid_password = _constant_time_equal(password, ADMIN_PASS)
+
+        if valid_user and valid_password:
+            sid = secrets.token_urlsafe(32)
             codigo = auth_module.generar_codigo()
-            sid    = str(abs(hash(u + str(time.time()))))
+            session.clear()
             session["2fa_pending"] = True
-            session["2fa_sid"]     = sid
-            session["pre_user"]    = u
+            session["2fa_sid"] = sid
+            session["pre_user"] = username
             auth_module.guardar_codigo(sid, codigo)
-            auth_module.enviar_codigo_2fa(ADMIN_EMAIL, codigo)
-            _login_attempts.pop(ip, None)
-            return render_template("login.html", step=2,
-                msg=f"Código enviado a {ADMIN_EMAIL[:4]}***@gmail.com")
-        _login_attempts[ip]["c"] += 1
-        rem = MAX_ATTEMPTS - _login_attempts[ip]["c"]
-        return render_template("login.html", step=1,
-            error=f"Credenciales incorrectas. Intentos restantes: {max(rem, 0)}")
+
+            if not auth_module.enviar_codigo_2fa(ADMIN_EMAIL, codigo):
+                session.clear()
+                return render_template(
+                    "login.html",
+                    step=1,
+                    error="No se ha podido enviar el código. Comprueba la configuración del correo e inténtalo de nuevo.",
+                ), 503
+
+            _RATE_LIMITS.pop(rate_key, None)
+            destino = f"{ADMIN_EMAIL[:2]}***" if ADMIN_EMAIL else "tu correo"
+            return render_template("login.html", step=2, msg=f"Código enviado a {destino}")
+
+        _record_rate_attempt(rate_key, BLOCK_SECONDS)
+        blocked, retry_after, count = _is_rate_limited(rate_key, MAX_ATTEMPTS, BLOCK_SECONDS)
+        restantes = max(MAX_ATTEMPTS - count, 0)
+        response = make_response(
+            render_template(
+                "login.html",
+                step=1,
+                error="Credenciales incorrectas." if blocked else
+                      f"Credenciales incorrectas. Intentos restantes: {restantes}",
+            ),
+            429 if blocked else 401,
+        )
+        if blocked:
+            response.headers["Retry-After"] = str(retry_after)
+        return response
+
     return render_template("login.html", step=1, error=None)
+
 
 @app.route("/login/verificar", methods=["POST"])
 def login_verificar():
-    if not session.get("2fa_pending"):
+    if not session.get("2fa_pending") or not session.get("2fa_sid"):
         return redirect(url_for("login"))
-    codigo = re.sub(r'[^0-9]', '', request.form.get("codigo", ""))[:6]
-    ok, msg = auth_module.verificar_codigo(session.get("2fa_sid", ""), codigo)
+
+    ip = request.remote_addr or "unknown"
+    rate_key = f"2fa-verify:{ip}"
+    blocked, retry_after, _ = _is_rate_limited(rate_key, 15, BLOCK_SECONDS)
+    if blocked:
+        return _rate_limited_response(2, retry_after)
+
+    codigo = request.form.get("codigo", "").strip()
+    if re.fullmatch(r"\d{6}", codigo):
+        ok, msg = auth_module.verificar_codigo(session["2fa_sid"], codigo)
+    else:
+        ok, msg = False, "Código incorrecto"
+
     if ok:
-        u = session.get("pre_user", ADMIN_USER)
+        username = session.get("pre_user", ADMIN_USER)
         session.clear()
+        session.permanent = True
         session["logged_in"] = True
-        session["username"]  = u
+        session["username"] = username
+        _RATE_LIMITS.pop(rate_key, None)
         return redirect(url_for("dashboard"))
-    return render_template("login.html", step=2, error=msg)
+
+    _record_rate_attempt(rate_key, BLOCK_SECONDS)
+    blocked, retry_after, _ = _is_rate_limited(rate_key, 15, BLOCK_SECONDS)
+    response = make_response(render_template("login.html", step=2, error=msg), 429 if blocked else 401)
+    if blocked:
+        response.headers["Retry-After"] = str(retry_after)
+    return response
+
 
 @app.route("/login/reenviar", methods=["POST"])
 def login_reenviar():
-    if not session.get("2fa_pending"):
+    if not session.get("2fa_pending") or not session.get("2fa_sid"):
         return redirect(url_for("login"))
+
+    ip = request.remote_addr or "unknown"
+    rate_key = f"2fa-resend:{ip}"
+    blocked, retry_after, _ = _is_rate_limited(rate_key, 3, 600)
+    if blocked:
+        return _rate_limited_response(2, retry_after)
+
     codigo = auth_module.generar_codigo()
-    auth_module.guardar_codigo(session.get("2fa_sid", ""), codigo)
-    auth_module.enviar_codigo_2fa(ADMIN_EMAIL, codigo)
+    auth_module.guardar_codigo(session["2fa_sid"], codigo)
+    _record_rate_attempt(rate_key, 600)
+    if not auth_module.enviar_codigo_2fa(ADMIN_EMAIL, codigo):
+        return render_template(
+            "login.html",
+            step=2,
+            error="No se ha podido reenviar el código. Inténtalo más tarde.",
+        ), 503
     return render_template("login.html", step=2, msg="Nuevo código enviado.")
 
 @app.route("/sw.js")

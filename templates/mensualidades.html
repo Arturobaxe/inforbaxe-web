@@ -113,7 +113,7 @@
                 <button class="cell-unpaid" onclick="togglePago({{ m.id }},'Sí',this)">✗ {{ m.importe }}€</button>
               {% endif %}
               <button class="cell-menu-btn"
-                onclick="openMenu(event, {{ m.id }}, '{{ m.concepto|replace("'","\\'")|safe }}', {{ m.importe }}, '{{ m.mes }}', '{{ m.pagado }}', '{{ c.nombre|replace("'","\\'")|safe }}')">···</button>
+                onclick='openMenu(event, {{ m.id|tojson }}, {{ m.concepto|tojson }}, {{ m.importe|tojson }}, {{ m.mes|tojson }}, {{ m.pagado|tojson }}, {{ c.nombre|tojson }})'>···</button>
             {% else %}
               <span class="cell-empty">—</span>
             {% endif %}

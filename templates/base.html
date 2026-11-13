@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>{% block title %}INFORBAXE{% endblock %}</title>
 <link rel="icon" type="image/jpeg" href="{{ url_for('static', filename='logo.jpg') }}">
@@ -921,6 +922,49 @@ document.querySelectorAll('.stat-value').forEach(el => {
   };
   requestAnimationFrame(step);
 });
+</script>
+<script>
+// Token CSRF para los formularios clásicos y las llamadas fetch de la aplicación.
+(() => {
+  const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = (input, init = {}) => {
+    let url;
+    try {
+      const requestUrl = (typeof Request !== 'undefined' && input instanceof Request) ? input.url : input;
+      url = new URL(requestUrl, window.location.href);
+    } catch (_) {
+      return originalFetch(input, init);
+    }
+
+    const requestMethod = (init.method || (
+      typeof Request !== 'undefined' && input instanceof Request ? input.method : 'GET'
+    )).toUpperCase();
+
+    if (url.origin === window.location.origin &&
+        !['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(requestMethod)) {
+      const headers = new Headers(
+        typeof Request !== 'undefined' && input instanceof Request ? input.headers : undefined
+      );
+      new Headers(init.headers || undefined).forEach((value, key) => headers.set(key, value));
+      headers.set('X-CSRF-Token', token);
+      return originalFetch(input, {...init, headers});
+    }
+    return originalFetch(input, init);
+  };
+
+  function addFormToken(form) {
+    if (!form || form.method.toUpperCase() === 'GET' || form.querySelector('input[name="_csrf_token"]')) return;
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = '_csrf_token';
+    input.value = token;
+    form.appendChild(input);
+  }
+
+  document.querySelectorAll('form').forEach(addFormToken);
+  document.addEventListener('submit', event => addFormToken(event.target), true);
+})();
 </script>
 {% block scripts %}{% endblock %}
 

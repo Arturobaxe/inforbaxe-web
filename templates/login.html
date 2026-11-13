@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>INFORBAXE — Acceso</title>
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -70,6 +71,7 @@
     {% if error %}<div class="error">{{ error }}</div>{% endif %}
 
     <form method="POST" action="/login">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="step" value="1">
       <div class="form-group">
         <label class="form-label">Usuario</label>
@@ -95,6 +97,7 @@
     {% if msg %}<div class="success">{{ msg }}</div>{% endif %}
 
     <form method="POST" action="/login/verificar">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <div class="form-group">
         <label class="form-label">Código de verificación</label>
         <input class="form-control code-input" type="text" name="codigo"
@@ -104,6 +107,7 @@
       <button type="submit" class="btn">✓ Verificar acceso</button>
     </form>
     <form method="POST" action="/login/reenviar">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="back-btn">¿No llegó? Reenviar código</button>
     </form>
     <form method="GET" action="/login">

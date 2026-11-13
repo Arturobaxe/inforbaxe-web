@@ -2,8 +2,8 @@
 auth.py - 2FA por email + seguridad para INFORBAXE
 """
 import os
-import random
-import string
+import hmac
+import secrets
 import time
 import json
 import urllib.request
@@ -11,7 +11,7 @@ import urllib.request
 _codigos = {}
 
 def generar_codigo():
-    return ''.join(random.choices(string.digits, k=6))
+    return f"{secrets.randbelow(1_000_000):06d}"
 
 def enviar_codigo_2fa(email_destino, codigo):
     api_key = os.environ.get("BREVO_API_KEY", "")
@@ -56,7 +56,7 @@ def verificar_codigo(session_id, codigo_usuario):
     if entry["attempts"] > 5:
         del _codigos[session_id]
         return False, "Demasiados intentos"
-    if entry["code"] != codigo_usuario.strip():
+    if not hmac.compare_digest(entry["code"], codigo_usuario.strip()):
         return False, "Código incorrecto"
     del _codigos[session_id]
     return True, "ok"
