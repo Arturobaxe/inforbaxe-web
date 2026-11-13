@@ -69,7 +69,7 @@ CREATE INDEX IF NOT EXISTS idx_mensual_mes       ON mensualidades(mes);
 CREATE INDEX IF NOT EXISTS idx_citas_fecha       ON citas(fecha);
 CREATE INDEX IF NOT EXISTS idx_citas_cliente     ON citas(id_cliente);
 
--- Habilitar Row Level Security (opcional pero recomendado)
+-- Habilitar Row Level Security (obligatorio)
 ALTER TABLE clientes      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ventas        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE mensualidades ENABLE ROW LEVEL SECURITY;
@@ -77,8 +77,8 @@ ALTER TABLE citas         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE productos     ENABLE ROW LEVEL SECURITY;
 
 -- Políticas permisivas para service_role (el backend usa service_role key)
-CREATE POLICY "service_role_all" ON clientes      FOR ALL USING (true);
-CREATE POLICY "service_role_all" ON ventas        FOR ALL USING (true);
-CREATE POLICY "service_role_all" ON mensualidades FOR ALL USING (true);
-CREATE POLICY "service_role_all" ON citas         FOR ALL USING (true);
-CREATE POLICY "service_role_all" ON productos     FOR ALL USING (true);
+CREATE POLICY "service_role_all" ON clientes      FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "service_role_all" ON ventas        FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "service_role_all" ON mensualidades FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "service_role_all" ON citas         FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "service_role_all" ON productos     FOR ALL TO service_role USING (true) WITH CHECK (true);
