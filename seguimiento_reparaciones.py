@@ -7,6 +7,7 @@ import os
 import secrets
 from datetime import datetime, timedelta, timezone
 from functools import wraps
+from urllib.parse import urlsplit
 
 from flask import (
     Blueprint, abort, flash, jsonify, make_response,
@@ -155,14 +156,34 @@ def _prepare_photo(upload):
 
 
 def _public_base_url():
-    configured = (os.environ.get("PUBLIC_BASE_URL") or "").strip().rstrip("/")
+    # En producción usa exclusivamente URLs de configuración de confianza.
+    # No construyas enlaces a partir de Host/X-Forwarded-Host: pueden falsificarse.
+    is_render = bool(os.environ.get("RENDER_SERVICE_ID") or os.environ.get("RENDER"))
+    configured = (
+        os.environ.get("PUBLIC_BASE_URL")
+        or os.environ.get("RENDER_EXTERNAL_URL")
+        or ""
+    ).strip().rstrip("/")
+
     if configured:
-        return configured
-    host = request.headers.get("X-Forwarded-Host") or request.host
-    scheme = (request.headers.get("X-Forwarded-Proto") or request.scheme).split(",")[0].strip()
-    if scheme not in {"http", "https"}:
-        scheme = "https"
-    return f"{scheme}://{host}"
+        parsed = urlsplit(configured)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.netloc
+            or parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
+            or (is_render and parsed.scheme != "https")
+        ):
+            raise RuntimeError("PUBLIC_BASE_URL debe ser una URL pública HTTPS válida.")
+        return f"{parsed.scheme}://{parsed.netloc}{parsed.path.rstrip('/')}"
+
+    if is_render:
+        raise RuntimeError("Render no ha proporcionado RENDER_EXTERNAL_URL; configura PUBLIC_BASE_URL.")
+
+    # Solo en desarrollo local se permite usar la URL de la propia petición.
+    return request.url_root.rstrip("/")
 
 
 def _public_payload(row):
