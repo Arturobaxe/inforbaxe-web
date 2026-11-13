@@ -777,9 +777,11 @@ tbody tr:nth-child(7){animation-delay:0.28s} tbody tr:nth-child(8){animation-del
       <div class="sidebar-user">
         <div class="sidebar-avatar">{{ session.get('username', 'A')[0].upper() }}</div>
         <span>{{ session.get('username', 'Admin') }}</span>
-        <a href="{{ url_for('logout') }}" class="btn-logout" title="Cerrar sesión">
-          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-        </a>
+        <form method="POST" action="{{ url_for('logout') }}" style="display:inline;margin-left:auto;">
+          <button type="submit" class="btn-logout" title="Cerrar sesión" aria-label="Cerrar sesión">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          </button>
+        </form>
       </div>
       <div style="display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--sidebar-border);opacity:0.6;">
         <img src="{{ url_for('static', filename='logo.jpg') }}" style="width:20px;height:20px;border-radius:4px;object-fit:cover;">
@@ -862,33 +864,62 @@ document.addEventListener('click', e => {
   }
 });
 function renderSearchResults(data) {
-  let html = '';
-  if (data.clientes && data.clientes.length) {
-    html += '<div class="search-group-label">Clientes</div>';
-    data.clientes.forEach(c => {
-      html += `<a href="/clientes/${c.id}/historial" class="search-result-item">
-        <div class="search-result-name">${c.nombre}</div>
-        <div class="search-result-sub">${c.email||''} ${c.telefono||''}</div></a>`;
+  const payload = data && typeof data === 'object' ? data : {};
+  searchResults.replaceChildren();
+
+  function appendGroup(label, records, buildItem) {
+    if (!Array.isArray(records) || !records.length) return;
+
+    const heading = document.createElement('div');
+    heading.className = 'search-group-label';
+    heading.textContent = label;
+    searchResults.appendChild(heading);
+
+    records.forEach(record => {
+      if (!record || !/^\\d+$/.test(String(record.id ?? ''))) return;
+
+      const details = buildItem(record);
+      const link = document.createElement('a');
+      link.href = details.href;
+      link.className = 'search-result-item';
+
+      const title = document.createElement('div');
+      title.className = 'search-result-name';
+      title.textContent = details.title;
+
+      const subtitle = document.createElement('div');
+      subtitle.className = 'search-result-sub';
+      subtitle.textContent = details.subtitle;
+
+      link.append(title, subtitle);
+      searchResults.appendChild(link);
     });
   }
-  if (data.ventas && data.ventas.length) {
-    html += '<div class="search-group-label">Ventas</div>';
-    data.ventas.forEach(v => {
-      html += `<a href="/ventas/${v.id}/editar" class="search-result-item">
-        <div class="search-result-name">${v.nombre_cliente} — ${v.total_pvp}€</div>
-        <div class="search-result-sub">${v.fecha} · ${v.comentarios||''}</div></a>`;
-    });
+
+  appendGroup('Clientes', payload.clientes, c => ({
+    href: `/clientes/${encodeURIComponent(String(c.id))}/historial`,
+    title: String(c.nombre || ''),
+    subtitle: `${c.email || ''} ${c.telefono || ''}`
+  }));
+
+  appendGroup('Ventas', payload.ventas, v => ({
+    href: `/ventas/${encodeURIComponent(String(v.id))}/editar`,
+    title: `${v.nombre_cliente || ''} — ${v.total_pvp ?? ''}€`,
+    subtitle: `${v.fecha || ''} · ${v.comentarios || ''}`
+  }));
+
+  appendGroup('Citas', payload.citas, c => ({
+    href: `/citas/${encodeURIComponent(String(c.id))}/editar`,
+    title: String(c.nombre_cliente || ''),
+    subtitle: `${c.fecha || ''} ${c.hora || ''}`
+  }));
+
+  if (!searchResults.hasChildNodes()) {
+    const empty = document.createElement('div');
+    empty.style.cssText = 'padding:14px;color:var(--t3);font-size:13px;';
+    empty.textContent = 'Sin resultados';
+    searchResults.appendChild(empty);
   }
-  if (data.citas && data.citas.length) {
-    html += '<div class="search-group-label">Citas</div>';
-    data.citas.forEach(c => {
-      html += `<a href="/citas/${c.id}/editar" class="search-result-item">
-        <div class="search-result-name">${c.nombre_cliente}</div>
-        <div class="search-result-sub">${c.fecha} ${c.hora||''}</div></a>`;
-    });
-  }
-  if (!html) html = '<div style="padding:14px;color:var(--t3);font-size:13px;">Sin resultados</div>';
-  searchResults.innerHTML = html;
   searchResults.style.display = 'block';
 }
 

@@ -27,9 +27,13 @@ from seguimiento_reparaciones import seguimiento_bp
 
 
 IS_RENDER = bool(os.environ.get("RENDER_SERVICE_ID") or os.environ.get("RENDER"))
+SECRET_KEY = os.environ.get("SECRET_KEY")
+if IS_RENDER and not SECRET_KEY:
+    raise RuntimeError("Falta SECRET_KEY: configura una clave persistente en el entorno de Render.")
+
 app = Flask(__name__)
 app.config.update(
-    SECRET_KEY=os.environ.get("SECRET_KEY") or secrets.token_hex(32),
+    SECRET_KEY=SECRET_KEY or secrets.token_hex(32),
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=IS_RENDER,
@@ -61,6 +65,13 @@ def _rate_bucket(key, window_seconds):
     now = time.monotonic()
     bucket = _RATE_LIMITS.get(key)
     if bucket is None or now >= bucket["expires"]:
+        if bucket is None and len(_RATE_LIMITS) >= 5000:
+            for old_key, old_bucket in list(_RATE_LIMITS.items()):
+                if now >= old_bucket["expires"]:
+                    _RATE_LIMITS.pop(old_key, None)
+            if len(_RATE_LIMITS) >= 5000:
+                # Keep memory bounded if many distinct client IPs are seen.
+                _RATE_LIMITS.pop(next(iter(_RATE_LIMITS)), None)
         bucket = {"count": 0, "expires": now + window_seconds}
         _RATE_LIMITS[key] = bucket
     return bucket
@@ -159,6 +170,11 @@ def login():
         valid_password = _constant_time_equal(password, ADMIN_PASS)
 
         if valid_user and valid_password:
+            otp_rate_key = f"2fa-send:{ip}"
+            otp_blocked, otp_retry_after, _ = _is_rate_limited(otp_rate_key, 5, 600)
+            if otp_blocked:
+                return _rate_limited_response(1, otp_retry_after)
+
             sid = secrets.token_urlsafe(32)
             codigo = auth_module.generar_codigo()
             session.clear()
@@ -166,6 +182,7 @@ def login():
             session["2fa_sid"] = sid
             session["pre_user"] = username
             auth_module.guardar_codigo(sid, codigo)
+            _record_rate_attempt(otp_rate_key, 600)
 
             if not auth_module.enviar_codigo_2fa(ADMIN_EMAIL, codigo):
                 session.clear()
@@ -243,22 +260,28 @@ def login_reenviar():
     if blocked:
         return _rate_limited_response(2, retry_after)
 
+    send_key = f"2fa-send:{ip}"
+    send_blocked, send_retry_after, _ = _is_rate_limited(send_key, 5, 600)
+    if send_blocked:
+        return _rate_limited_response(2, send_retry_after)
+
     codigo = auth_module.generar_codigo()
-    auth_module.guardar_codigo(session["2fa_sid"], codigo)
     _record_rate_attempt(rate_key, 600)
+    _record_rate_attempt(send_key, 600)
     if not auth_module.enviar_codigo_2fa(ADMIN_EMAIL, codigo):
         return render_template(
             "login.html",
             step=2,
             error="No se ha podido reenviar el código. Inténtalo más tarde.",
         ), 503
+    auth_module.guardar_codigo(session["2fa_sid"], codigo)
     return render_template("login.html", step=2, msg="Nuevo código enviado.")
 
 @app.route("/sw.js")
 def sw():
     return app.send_static_file("sw.js")
 
-@app.route("/logout")
+@app.route("/logout", methods=["POST"])
 def logout():
     session.clear()
     return redirect(url_for("login"))

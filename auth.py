@@ -39,9 +39,18 @@ def enviar_codigo_2fa(email_destino, codigo):
         return False
 
 def guardar_codigo(session_id, codigo):
+    now = time.time()
+    if len(_codigos) >= 1000:
+        for old_session_id, entry in list(_codigos.items()):
+            if now > entry.get("expires", 0):
+                _codigos.pop(old_session_id, None)
+        if len(_codigos) >= 1000:
+            oldest_id = min(_codigos, key=lambda key: _codigos[key].get("expires", 0))
+            _codigos.pop(oldest_id, None)
+
     _codigos[session_id] = {
         "code":     codigo,
-        "expires":  time.time() + 600,
+        "expires":  now + 600,
         "attempts": 0,
     }
 
