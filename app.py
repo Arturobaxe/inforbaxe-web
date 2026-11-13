@@ -38,6 +38,7 @@ app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=IS_RENDER,
     PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
+    SESSION_REFRESH_EACH_REQUEST=False,
 )
 # Render termina TLS delante de Gunicorn y reenvía la IP/protocolo originales.
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
@@ -125,6 +126,10 @@ def add_security_headers(response):
         response.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
     if request.path.startswith("/login"):
         response.headers["Cache-Control"] = "no-store"
+    if session.get("logged_in"):
+        # Evita que el navegador o un proxy conserve datos de clientes y ventas.
+        response.headers["Cache-Control"] = "no-store, private"
+        response.headers["Pragma"] = "no-cache"
     return response
 
 
