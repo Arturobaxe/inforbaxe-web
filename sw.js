@@ -1,13 +1,9 @@
-const CACHE_NAME = 'inforbaxe-v1';
+const CACHE_NAME = 'inforbaxe-static-v2';
 const ASSETS = [
-  '/',
-  '/index.html',
   '/static/logo-192.png',
   '/static/logo-512.png',
-  // Añade aquí tus CSS, JS, etc.
 ];
 
-// Instalación: guarda los archivos en caché
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
@@ -15,7 +11,6 @@ self.addEventListener('install', event => {
   self.skipWaiting();
 });
 
-// Activación: elimina cachés antiguas
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys =>
@@ -27,9 +22,21 @@ self.addEventListener('activate', event => {
   self.clients.claim();
 });
 
-// Fetch: sirve desde caché, si falla va a la red
 self.addEventListener('fetch', event => {
+  const request = event.request;
+  const url = new URL(request.url);
+
+  // Never cache authenticated pages, navigation, forms, APIs or cross-origin requests.
+  if (
+    request.method !== 'GET' ||
+    url.origin !== self.location.origin ||
+    request.mode === 'navigate' ||
+    !url.pathname.startsWith('/static/')
+  ) {
+    return;
+  }
+
   event.respondWith(
-    caches.match(event.request).then(cached => cached || fetch(event.request))
+    caches.match(request).then(cached => cached || fetch(request))
   );
 });
