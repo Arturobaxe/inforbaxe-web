@@ -383,7 +383,17 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
   } catch(e) {
     console.error('Chart error:', e);
-    statusEl.innerHTML = `⚠️ <span style="color:var(--red); font-weight:600;">No se pudo cargar el gráfico</span><br><small style="color:var(--t3); display:block; margin-top:4px;">${e.message}</small>`;
+    statusEl.replaceChildren();
+    const title = document.createElement('span');
+    title.style.color = 'var(--red)';
+    title.style.fontWeight = '600';
+    title.textContent = '⚠️ No se pudo cargar el gráfico';
+    const detail = document.createElement('small');
+    detail.style.color = 'var(--t3)';
+    detail.style.display = 'block';
+    detail.style.marginTop = '4px';
+    detail.textContent = String(e?.message || 'Error desconocido');
+    statusEl.append(title, document.createElement('br'), detail);
   }
 });
 </script>
