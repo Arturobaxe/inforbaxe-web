@@ -166,13 +166,19 @@ async function crearClientePresupuesto() {
   }
 }
 
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, char => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[char]);
+}
+
 function renderProductos() {
   const list = document.getElementById('productos-list');
   let pvpT=0, benT=0, costeT=0;
   list.innerHTML = productos.map((p,i)=>{
     pvpT += p.pvp*p.cantidad; benT += p.beneficio*p.cantidad; costeT += (p.coste||0)*p.cantidad;
     return `<div class="prod-row" style="flex-wrap:wrap;">
-      <div class="prod-row-name" style="width:100%;margin-bottom:4px;">${p.nombre}</div>
+      <div class="prod-row-name" style="width:100%;margin-bottom:4px;">${escapeHtml(p.nombre)}</div>
       <div class="prod-row-nums" style="flex:1;">
         <span style="color:var(--t3)">coste:${parseFloat(p.coste||0).toFixed(2)}€</span>
         <span style="color:var(--green)">+${parseFloat(p.beneficio).toFixed(2)}€</span>
