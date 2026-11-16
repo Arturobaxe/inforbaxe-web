@@ -284,6 +284,12 @@ function calcPVP() {
   document.getElementById('pvp-display').textContent = (c+b).toFixed(2) + ' €';
 }
 
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, char => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[char]);
+}
+
 function renderProductos() {
   const list = document.getElementById('productos-list');
   let pvpTotal=0, benefTotal=0, costeTotal=0;
@@ -293,7 +299,7 @@ function renderProductos() {
     benefTotal += p.beneficio * p.cantidad;
     costeTotal += (p.coste||0) * p.cantidad;
     return `<div class="prod-row">
-      <div class="prod-row-name">${p.nombre}</div>
+      <div class="prod-row-name">${escapeHtml(p.nombre)}</div>
       <div class="prod-row-nums">
         <span style="color:var(--t3)">coste:${parseFloat(p.coste||0).toFixed(2)}€</span>
         <span style="color:var(--green)">+${parseFloat(p.beneficio).toFixed(2)}€</span>
