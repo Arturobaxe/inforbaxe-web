@@ -22,7 +22,12 @@ jobs:
             echo "Faltan INFORBAXE_RENDER_URL o SEGUIMIENTOS_CLEANUP_TOKEN."
             exit 1
           fi
-          case "$APP_URL" in https://*) ;; *) echo "La URL debe usar HTTPS"; exit 1 ;; esac
+          APP_URL="${APP_URL%/}"
+          case "$APP_URL" in
+            https://*) ;;
+            http://*) echo "La URL debe usar HTTPS"; exit 1 ;;
+            *) APP_URL="https://$APP_URL" ;;
+          esac
           curl --fail-with-body --silent --show-error --max-time 45 \
             --request POST "${APP_URL%/}/interno/seguimientos/limpiar" \
             --header "Authorization: Bearer ${CLEANUP_TOKEN}" \
