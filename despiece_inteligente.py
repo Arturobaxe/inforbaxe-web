@@ -9,10 +9,12 @@ import json
 import logging
 import os
 import re
+import ipaddress
+import socket
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from urllib.parse import parse_qsl, urlencode, quote_plus, urlparse, parse_qs, unquote, urljoin
-from urllib.request import Request, urlopen
+from urllib.request import Request, urlopen, HTTPRedirectHandler, build_opener
 from urllib.error import HTTPError, URLError
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from html import unescape
@@ -955,35 +957,88 @@ class _VisibleText(HTMLParser):
         return out
 
 
-def _http_text(url, limit=1_200_000, timeout=7):
-    req=Request(url, headers={
-        "User-Agent":"INFORBAXE-CompatibilityResearch/1.0 (+public-catalog-search)",
-        "Accept":"text/html,application/xhtml+xml,application/rss+xml,application/xml;q=0.9,*/*;q=0.5",
-        "Accept-Language":"es-ES,es;q=0.9,en;q=0.8",
-    })
-    with urlopen(req, timeout=timeout) as response:
-        data=response.read(limit)
-        charset=response.headers.get_content_charset() or "utf-8"
-        return data.decode(charset, errors="replace"), response.geturl(), response.status
-
 def _domain_host(url):
-    return (urlparse(url).hostname or "").lower().split(":")[0]
+    return (urlparse(url).hostname or "").lower().rstrip(".")
+
 
 def _domain_allowed(url):
-    host=_domain_host(url)
-    return any(host == d or host.endswith("."+d) for d in _REFERENCE_SOURCES)
+    host = _domain_host(url)
+    return bool(host) and any(host == domain or host.endswith("." + domain) for domain in _REFERENCE_SOURCES)
+
+
+def _validate_external_target(url):
+    """Acepta solo HTTPS en catálogos permitidos y con resolución DNS pública."""
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or not parsed.hostname:
+        raise ValueError("Solo se permiten destinos HTTPS de catálogos autorizados.")
+    if parsed.username or parsed.password or not _domain_allowed(url):
+        raise ValueError("El destino externo no pertenece a un catálogo autorizado.")
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError("Puerto externo no válido.") from exc
+    if port not in (None, 443):
+        raise ValueError("No se permiten puertos externos alternativos.")
+
+    host = _domain_host(url)
+    try:
+        resolved = socket.getaddrinfo(host, port or 443, type=socket.SOCK_STREAM)
+    except OSError as exc:
+        raise ValueError("No se pudo resolver el catálogo externo.") from exc
+
+    addresses = set()
+    for item in resolved:
+        try:
+            address = ipaddress.ip_address(item[4][0].split("%", 1)[0])
+        except ValueError as exc:
+            raise ValueError("El catálogo devolvió una dirección IP no válida.") from exc
+        if not address.is_global:
+            raise ValueError("El destino externo resuelve a una dirección no pública.")
+        addresses.add(address)
+    if not addresses:
+        raise ValueError("El catálogo no tiene direcciones públicas.")
+
+
+class _SafeCatalogRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        _validate_external_target(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def _safe_catalog_open(req, timeout):
+    _validate_external_target(req.full_url)
+    opener = build_opener(_SafeCatalogRedirectHandler())
+    return opener.open(req, timeout=timeout)
+
+
+def _http_text(url, limit=1_200_000, timeout=7):
+    req = Request(url, headers={
+        "User-Agent": "INFORBAXE-CompatibilityResearch/1.0 (+public-catalog-search)",
+        "Accept": "text/html,application/xhtml+xml,application/rss+xml,application/xml;q=0.9,*/*;q=0.5",
+        "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+    })
+    with _safe_catalog_open(req, timeout=timeout) as response:
+        data = response.read(limit)
+        charset = response.headers.get_content_charset() or "utf-8"
+        return data.decode(charset, errors="replace"), response.geturl(), response.status
 
 def _robots_can_fetch(url):
     """Respeta robots.txt: ante bloqueo o fallo de red no fuerza el rastreo."""
-    parsed=urlparse(url); origin=f"{parsed.scheme}://{parsed.netloc}"; now=time.time()
-    cached=_ROBOTS_CACHE.get(origin)
+    try:
+        _validate_external_target(url)
+    except ValueError:
+        return False
+    parsed = urlparse(url)
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    now = time.time()
+    cached = _ROBOTS_CACHE.get(origin)
     if cached and now-cached[0] < 12*60*60:
         parser, allowed=cached[1], cached[2]
         return allowed if parser is None else parser.can_fetch("INFORBAXE-CompatibilityResearch", url)
     robots_url=origin+"/robots.txt"
     try:
         req=Request(robots_url,headers={"User-Agent":"INFORBAXE-CompatibilityResearch/1.0"})
-        with urlopen(req,timeout=4) as response:
+        with _safe_catalog_open(req, timeout=4) as response:
             text=response.read(256_000).decode(response.headers.get_content_charset() or "utf-8",errors="replace")
         parser=__import__("urllib.robotparser",fromlist=["RobotFileParser"]).RobotFileParser()
         parser.set_url(robots_url); parser.parse(text.splitlines())
