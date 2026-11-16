@@ -150,6 +150,30 @@ def inject_csrf_token():
 
 
 @app.before_request
+def enforce_session_timeouts():
+    """Cierra sesiones tras 2 h inactivas o 8 h desde el inicio."""
+    if not session.get("logged_in"):
+        return
+
+    now = time.time()
+    created = session.get("_session_created_at")
+    last_activity = session.get("_last_activity")
+    try:
+        created = float(created) if created is not None else now
+        last_activity = float(last_activity) if last_activity is not None else now
+    except (TypeError, ValueError):
+        session.clear()
+        return redirect(url_for("login"))
+
+    if now - last_activity > 2 * 60 * 60 or now - created > 8 * 60 * 60:
+        session.clear()
+        return redirect(url_for("login"))
+
+    session["_session_created_at"] = created
+    session["_last_activity"] = now
+
+
+@app.before_request
 def enforce_csrf():
     if request.method not in {"POST", "PUT", "PATCH", "DELETE"}:
         return
@@ -168,6 +192,25 @@ def add_security_headers(response):
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault(
+        "Permissions-Policy",
+        "geolocation=(), microphone=(), payment=(), usb=()",
+    )
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; "
+        "base-uri 'self'; "
+        "form-action 'self'; "
+        "frame-ancestors 'none'; "
+        "object-src 'none'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+        "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+        "img-src 'self' data: blob: https:; "
+        "connect-src 'self'; "
+        "worker-src 'self'; "
+        "manifest-src 'self'",
+    )
     if request.is_secure:
         response.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
     if request.path.startswith("/login"):
@@ -273,6 +316,11 @@ def login_verificar():
 
     ip = request.remote_addr or "unknown"
     rate_key = _rate_key("2fa-verify", ip)
+    global_rate_key = _rate_key("2fa-verify-global", "all")
+    global_blocked, global_retry_after, _ = _is_rate_limited(global_rate_key, 40, 3600)
+    if global_blocked:
+        return _rate_limited_response(2, global_retry_after)
+
     blocked, retry_after, _ = _is_rate_limited(rate_key, 15, BLOCK_SECONDS)
     if blocked:
         return _rate_limited_response(2, retry_after)
@@ -289,11 +337,17 @@ def login_verificar():
         session.permanent = True
         session["logged_in"] = True
         session["username"] = username
+        session["_session_created_at"] = time.time()
+        session["_last_activity"] = session["_session_created_at"]
         _clear_rate_attempts(rate_key)
         return redirect(url_for("dashboard"))
 
     _record_rate_attempt(rate_key, BLOCK_SECONDS)
+    _record_rate_attempt(global_rate_key, 3600)
+    global_blocked, global_retry_after, _ = _is_rate_limited(global_rate_key, 40, 3600)
     blocked, retry_after, _ = _is_rate_limited(rate_key, 15, BLOCK_SECONDS)
+    if global_blocked:
+        blocked, retry_after = True, global_retry_after
     response = make_response(render_template("login.html", step=2, error=msg), 429 if blocked else 401)
     if blocked:
         response.headers["Retry-After"] = str(retry_after)
@@ -1007,9 +1061,16 @@ def api_delete_mensualidad(id_mens):
 @app.route("/citas")
 @login_required
 def citas():
-    hoy         = date.today()
-    fecha_desde = request.args.get("desde", hoy.isoformat())
-    buscar_str  = request.args.get("buscar", "").strip().lower()
+    hoy = date.today()
+    fecha_desde = request.args.get("desde", hoy.isoformat()).strip()
+    if fecha_desde:
+        try:
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", fecha_desde):
+                raise ValueError("Formato de fecha no válido")
+            fecha_desde = date.fromisoformat(fecha_desde).isoformat()
+        except ValueError:
+            abort(400, description="La fecha desde no es válida.")
+    buscar_str = request.args.get("buscar", "").strip().lower()
     estado      = request.args.get("estado", "")
     # Al filtrar por un estado resuelto, incluir también el histórico.
     lista       = db.get_citas(fecha_desde=None if estado else (fecha_desde or None))
