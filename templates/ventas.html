@@ -90,11 +90,11 @@
   .sale-swipe-hint{margin-top:8px;color:#a4acb8;font-size:9px;text-align:right}
   .sales-empty{padding:35px 20px;text-align:center}
 
-  /* Celebración visual al registrar un cobro: euros y monedas que salen volando. */
+  /* Celebración visual al registrar un cobro: billetes, euros y monedas volando. */
   @keyframes moneyFloat {
-    0% { opacity:0; transform:translate3d(0,18px,0) rotate(-18deg) scale(.55); }
-    12% { opacity:1; }
-    100% { opacity:0; transform:translate3d(var(--money-drift),-245px,0) rotate(var(--money-spin)) scale(.9); }
+    0% { opacity:0; transform:translate3d(0,24px,0) rotate(-18deg) scale(.55); }
+    10% { opacity:1; }
+    100% { opacity:0; transform:translate3d(var(--money-drift),-330px,0) rotate(var(--money-spin)) scale(1); }
   }
   .payment-celebration{
     position:fixed; inset:0; z-index:1200; pointer-events:none;
@@ -120,12 +120,21 @@
     color:#16834b; text-shadow:0 3px 9px rgba(22,131,75,.22);
     filter:drop-shadow(0 3px 4px rgba(22,101,52,.14));
   }
-  .payment-celebration.is-active .payment-coin{
-    animation:moneyFloat 1.8s cubic-bezier(.16,.72,.28,1) forwards;
+  .payment-celebration.is-active .payment-coin,
+  .payment-celebration.is-active .payment-note{
+    animation:moneyFloat 3s cubic-bezier(.16,.72,.28,1) forwards;
+  }
+  .payment-note{
+    position:absolute; display:flex; align-items:center; justify-content:center;
+    width:70px; height:36px; border:2px solid #b7791f; border-radius:7px;
+    color:#6b470c; font-size:15px; font-weight:900; letter-spacing:.02em;
+    background:linear-gradient(145deg,#fff7c2 0%,#f5d76e 48%,#e9bd4d 100%);
+    box-shadow:0 5px 13px rgba(90,61,12,.25),inset 0 0 0 2px rgba(255,255,255,.42);
+    text-shadow:0 1px rgba(255,255,255,.5);
   }
   @media(prefers-reduced-motion:reduce){
     .payment-celebration,.payment-toast{transition:none}
-    .payment-celebration.is-active .payment-coin{display:none}
+    .payment-celebration.is-active .payment-coin,.payment-celebration.is-active .payment-note{display:none}
     .payment-celebration.is-active .payment-toast{transform:translate(-50%,-50%);opacity:1}
   }
 
@@ -363,19 +372,32 @@ function celebrarPago() {
   const reduceMotion = window.matchMedia &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (!reduceMotion) {
-    const symbols = ['€', '💶', '€', '🪙', '€', '€', '💶', '€'];
-    for (let i = 0; i < 22; i++) {
+    const symbols = ['€', '💶', '🪙', '💸', '€', '💶', '🪙', '€'];
+    for (let i = 0; i < 30; i++) {
       const coin = document.createElement('span');
       coin.className = 'payment-coin';
       coin.textContent = symbols[i % symbols.length];
-      coin.style.left = (37 + Math.random() * 26) + '%';
-      coin.style.top = (49 + Math.random() * 13) + '%';
-      coin.style.fontSize = (19 + Math.random() * 18) + 'px';
-      coin.style.setProperty('--money-drift', ((Math.random() - .5) * 390) + 'px');
-      coin.style.setProperty('--money-spin', ((Math.random() - .5) * 620) + 'deg');
-      coin.style.animationDelay = (Math.random() * 240) + 'ms';
+      coin.style.left = (24 + Math.random() * 52) + '%';
+      coin.style.top = (51 + Math.random() * 15) + '%';
+      coin.style.fontSize = (22 + Math.random() * 21) + 'px';
+      coin.style.setProperty('--money-drift', ((Math.random() - .5) * 520) + 'px');
+      coin.style.setProperty('--money-spin', ((Math.random() - .5) * 760) + 'deg');
+      coin.style.animationDelay = (Math.random() * 280) + 'ms';
       overlay.appendChild(coin);
     }
+
+    const notes = ['€5', '€10', '€20', '€50', '€100', '€20', '€50', '€10', '€100', '€20', '€50', '€10'];
+    notes.forEach((amount, index) => {
+      const note = document.createElement('span');
+      note.className = 'payment-note';
+      note.textContent = amount;
+      note.style.left = (20 + Math.random() * 60) + '%';
+      note.style.top = (52 + Math.random() * 13) + '%';
+      note.style.setProperty('--money-drift', ((Math.random() - .5) * 620) + 'px');
+      note.style.setProperty('--money-spin', ((Math.random() - .5) * 680) + 'deg');
+      note.style.animationDelay = (Math.random() * 280) + 'ms';
+      overlay.appendChild(note);
+    });
   }
 
   document.body.appendChild(overlay);
@@ -392,7 +414,7 @@ function celebrarPago() {
   window.setTimeout(() => {
     overlay.classList.remove('is-active');
     window.setTimeout(() => overlay.remove(), 350);
-  }, 2050);
+  }, 3450);
 }
 
 function confirmarCobro() {
@@ -410,7 +432,7 @@ function confirmarCobro() {
     if (!result || result.ok !== true) throw new Error('El servidor no ha confirmado el cobro.');
     cerrarModal();
     celebrarPago();
-    window.setTimeout(() => location.reload(), 2350);
+    window.setTimeout(() => location.reload(), 3650);
   }).catch(error => {
     if (button) { button.disabled = false; button.textContent = '✓ Cobrado'; }
     alert(error.message || 'No se ha podido registrar el cobro. Inténtalo de nuevo.');
