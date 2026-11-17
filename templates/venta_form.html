@@ -482,8 +482,6 @@ document.getElementById('venta-form').addEventListener('submit', () => {
   if (paymentField && paymentField.value === 'Sí' && (!isEditingSale || !wasAlreadyPaid)) {
     try { sessionStorage.setItem('inforbaxe:celebrate-payment', '1'); } catch (_) {}
   }
-  // El confeti de creación se dispara tras la confirmación del servidor en la pantalla de ventas.
-  try { sessionStorage.setItem('inforbaxe:celebrate-sale', '1'); } catch (_) {}
   if (draftStatus) {
     guardarBorrador();
     enviandoVenta = true;
