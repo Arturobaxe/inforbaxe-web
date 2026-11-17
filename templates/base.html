@@ -546,6 +546,55 @@ tbody tr:nth-child(7){animation-delay:0.28s} tbody tr:nth-child(8){animation-del
   opacity:0; transition:opacity 0.2s; pointer-events:none; }
 .stat-card:hover::after { opacity:1; }
 
+/* Movimiento adicional, manteniendo la interfaz ligera y accesible. */
+@keyframes pageReveal {
+  from { opacity: 0; transform: translateY(9px) scale(.997); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes toastPop {
+  0%   { opacity: 0; transform: translateY(-12px) scale(.97); }
+  70%  { opacity: 1; transform: translateY(2px) scale(1.01); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes navSelect {
+  0%   { transform: translateX(-5px); }
+  65%  { transform: translateX(2px); }
+  100% { transform: translateX(0); }
+}
+@keyframes iconFloat {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50%      { transform: translateY(-6px) rotate(2deg); }
+}
+@keyframes badgePop {
+  0% { opacity: 0; transform: scale(.75); }
+  70% { opacity: 1; transform: scale(1.08); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.content { animation: pageReveal .42s cubic-bezier(.2,.75,.25,1) both; }
+.nav-item { transition: transform .2s ease, background .2s ease, color .2s ease; }
+.nav-item:hover { transform: translateX(3px); }
+.nav-item.active { animation: navSelect .32s ease both; }
+.search-result-item { transition: background .16s ease, transform .16s ease; }
+.search-result-item:hover { transform: translateX(3px); }
+.flash { animation: toastPop .42s cubic-bezier(.2,.8,.25,1) both; }
+.flash-success { box-shadow: 0 7px 22px rgba(28,158,90,.09); }
+.badge { animation: badgePop .3s ease both; }
+.btn { transition: transform .18s ease, box-shadow .18s ease, background .18s ease; }
+.btn:hover:not(:disabled) { transform: translateY(-2px); }
+.btn:active { transform: translateY(0) scale(.96); }
+.stat-card:hover { transform: translateY(-4px) scale(1.01); }
+.empty-state-icon { display: inline-block; animation: iconFloat 3s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+
     /* ── UTILS ───────────────────────────────────────── */
     .flex { display: flex; }
     .items-center { align-items: center; }
@@ -1037,6 +1086,26 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 });
+</script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+<script>
+// Celebra una venta solo cuando el servidor la ha guardado y muestra el aviso de éxito.
+(() => {
+  let pending = false;
+  try {
+    pending = sessionStorage.getItem('inforbaxe:celebrate-sale') === '1';
+    if (pending) sessionStorage.removeItem('inforbaxe:celebrate-sale');
+  } catch (_) {}
+  if (!pending || !document.querySelector('.flash-success')) return;
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if (typeof window.confetti !== 'function') return;
+
+  window.confetti({ particleCount: 105, spread: 78, startVelocity: 42, origin: { y: 0.62 } });
+  window.setTimeout(() => {
+    window.confetti({ particleCount: 48, angle: 60, spread: 58, origin: { x: 0.08, y: 0.68 } });
+    window.confetti({ particleCount: 48, angle: 120, spread: 58, origin: { x: 0.92, y: 0.68 } });
+  }, 180);
+})();
 </script>
 </body>
 </html>
