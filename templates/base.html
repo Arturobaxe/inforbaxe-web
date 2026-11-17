@@ -586,6 +586,21 @@ tbody tr:nth-child(7){animation-delay:0.28s} tbody tr:nth-child(8){animation-del
 .stat-card:hover { transform: translateY(-4px) scale(1.01); }
 .empty-state-icon { display: inline-block; animation: iconFloat 3s ease-in-out infinite; }
 
+/* Confeti propio: no depende de que cargue un script externo. */
+@keyframes saleConfettiFall {
+  0% { opacity:0; transform:translate3d(0,-5vh,0) rotate(0deg); }
+  9% { opacity:1; }
+  100% { opacity:0; transform:translate3d(var(--confetti-drift),110vh,0) rotate(var(--confetti-spin)); }
+}
+.sale-confetti-layer {
+  position:fixed; inset:0; z-index:1500; overflow:hidden; pointer-events:none;
+}
+.sale-confetti-piece {
+  position:absolute; top:-18px; opacity:0; will-change:transform,opacity;
+  animation-name:saleConfettiFall; animation-timing-function:cubic-bezier(.18,.62,.35,1);
+  animation-fill-mode:forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     scroll-behavior: auto !important;
@@ -1087,24 +1102,36 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 </script>
-<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
 <script>
-// Celebra una venta solo cuando el servidor la ha guardado y muestra el aviso de éxito.
+// La ruta solo añade venta_guardada=1 después de confirmar que la venta se ha guardado.
 (() => {
-  let pending = false;
-  try {
-    pending = sessionStorage.getItem('inforbaxe:celebrate-sale') === '1';
-    if (pending) sessionStorage.removeItem('inforbaxe:celebrate-sale');
-  } catch (_) {}
-  if (!pending || !document.querySelector('.flash-success')) return;
-  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  if (typeof window.confetti !== 'function') return;
+  const saleCreated = new URLSearchParams(window.location.search).get('venta_guardada') === '1';
+  const reduceMotion = window.matchMedia &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!saleCreated || reduceMotion) return;
 
-  window.confetti({ particleCount: 105, spread: 78, startVelocity: 42, origin: { y: 0.62 } });
-  window.setTimeout(() => {
-    window.confetti({ particleCount: 48, angle: 60, spread: 58, origin: { x: 0.08, y: 0.68 } });
-    window.confetti({ particleCount: 48, angle: 120, spread: 58, origin: { x: 0.92, y: 0.68 } });
-  }, 180);
+  const layer = document.createElement('div');
+  layer.className = 'sale-confetti-layer';
+  layer.setAttribute('aria-hidden', 'true');
+  const colors = ['#f97316', '#facc15', '#22c55e', '#3b82f6', '#ec4899', '#a855f7', '#ffffff'];
+
+  for (let i = 0; i < 90; i++) {
+    const piece = document.createElement('span');
+    piece.className = 'sale-confetti-piece';
+    piece.style.left = (Math.random() * 100) + '%';
+    piece.style.width = (6 + Math.random() * 7) + 'px';
+    piece.style.height = (9 + Math.random() * 10) + 'px';
+    piece.style.backgroundColor = colors[i % colors.length];
+    if (i % 4 === 0) piece.style.borderRadius = '50%';
+    piece.style.setProperty('--confetti-drift', ((Math.random() - .5) * 260) + 'px');
+    piece.style.setProperty('--confetti-spin', ((Math.random() - .5) * 1100) + 'deg');
+    piece.style.animationDuration = (2.7 + Math.random() * .55) + 's';
+    piece.style.animationDelay = (Math.random() * .28) + 's';
+    layer.appendChild(piece);
+  }
+
+  document.body.appendChild(layer);
+  window.setTimeout(() => layer.remove(), 3900);
 })();
 </script>
 </body>
