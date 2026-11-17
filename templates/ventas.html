@@ -89,6 +89,46 @@
   .sale-card-actions .btn-delete:hover{background:#ffe4e4}
   .sale-swipe-hint{margin-top:8px;color:#a4acb8;font-size:9px;text-align:right}
   .sales-empty{padding:35px 20px;text-align:center}
+
+  /* Celebración visual al registrar un cobro: euros y monedas que salen volando. */
+  @keyframes moneyFloat {
+    0% { opacity:0; transform:translate3d(0,18px,0) rotate(-18deg) scale(.55); }
+    12% { opacity:1; }
+    100% { opacity:0; transform:translate3d(var(--money-drift),-245px,0) rotate(var(--money-spin)) scale(.9); }
+  }
+  .payment-celebration{
+    position:fixed; inset:0; z-index:1200; pointer-events:none;
+    overflow:hidden; opacity:0; transition:opacity .18s ease;
+  }
+  .payment-celebration.is-active{opacity:1}
+  .payment-toast{
+    position:absolute; left:50%; top:51%; min-width:230px;
+    padding:17px 24px; border-radius:18px; text-align:center;
+    color:#14532d; background:linear-gradient(145deg,#ffffff,#ecfdf3);
+    border:1px solid rgba(34,197,94,.28);
+    box-shadow:0 18px 55px rgba(22,101,52,.22);
+    transform:translate(-50%,-50%) scale(.82); opacity:0;
+    transition:transform .38s cubic-bezier(.2,.9,.25,1.25),opacity .22s ease;
+  }
+  .payment-celebration.is-active .payment-toast{
+    transform:translate(-50%,-50%) scale(1); opacity:1;
+  }
+  .payment-toast strong{display:block;font-size:19px;font-weight:900;letter-spacing:.02em}
+  .payment-toast span{display:block;margin-top:4px;font-size:11px;font-weight:700;color:#4b8061}
+  .payment-coin{
+    position:absolute; font-weight:900; line-height:1;
+    color:#16834b; text-shadow:0 3px 9px rgba(22,131,75,.22);
+    filter:drop-shadow(0 3px 4px rgba(22,101,52,.14));
+  }
+  .payment-celebration.is-active .payment-coin{
+    animation:moneyFloat 1.8s cubic-bezier(.16,.72,.28,1) forwards;
+  }
+  @media(prefers-reduced-motion:reduce){
+    .payment-celebration,.payment-toast{transition:none}
+    .payment-celebration.is-active .payment-coin{display:none}
+    .payment-celebration.is-active .payment-toast{transform:translate(-50%,-50%);opacity:1}
+  }
+
   @media(max-width:900px){
     .sales-desktop{display:none!important}
     .sales-mobile{display:block}
@@ -282,7 +322,7 @@
     </div>
     <div style="display:flex;gap:10px;margin-top:16px;">
       <button onclick="cerrarModal()" class="btn btn-secondary" style="flex:1;">Cancelar</button>
-      <button onclick="confirmarCobro()" class="btn btn-primary" style="flex:1;">✓ Cobrado</button>
+      <button id="btn-confirmar-cobro" onclick="confirmarCobro()" class="btn btn-primary" style="flex:1;">✓ Cobrado</button>
     </div>
   </div>
 </div>
@@ -304,19 +344,91 @@ function cerrarModal() {
   document.getElementById('modal-cobro').style.display = 'none';
   ventaIdCobro = null;
 }
+
+function celebrarPago() {
+  const overlay = document.createElement('div');
+  overlay.className = 'payment-celebration';
+  overlay.setAttribute('aria-live', 'polite');
+  overlay.setAttribute('aria-atomic', 'true');
+
+  const toast = document.createElement('div');
+  toast.className = 'payment-toast';
+  const title = document.createElement('strong');
+  title.textContent = '¡PAGO RECIBIDO!';
+  const subtitle = document.createElement('span');
+  subtitle.textContent = 'Cobro registrado correctamente';
+  toast.append(title, subtitle);
+  overlay.appendChild(toast);
+
+  const reduceMotion = window.matchMedia &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!reduceMotion) {
+    const symbols = ['€', '💶', '€', '🪙', '€', '€', '💶', '€'];
+    for (let i = 0; i < 22; i++) {
+      const coin = document.createElement('span');
+      coin.className = 'payment-coin';
+      coin.textContent = symbols[i % symbols.length];
+      coin.style.left = (37 + Math.random() * 26) + '%';
+      coin.style.top = (49 + Math.random() * 13) + '%';
+      coin.style.fontSize = (19 + Math.random() * 18) + 'px';
+      coin.style.setProperty('--money-drift', ((Math.random() - .5) * 390) + 'px');
+      coin.style.setProperty('--money-spin', ((Math.random() - .5) * 620) + 'deg');
+      coin.style.animationDelay = (Math.random() * 240) + 'ms';
+      overlay.appendChild(coin);
+    }
+  }
+
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add('is-active'));
+
+  if (!reduceMotion && typeof window.confetti === 'function') {
+    window.confetti({
+      particleCount: 78, spread: 74, startVelocity: 38,
+      origin: { x: .5, y: .58 },
+      colors: ['#16a34a', '#facc15', '#0ea5e9', '#ffffff']
+    });
+  }
+
+  window.setTimeout(() => {
+    overlay.classList.remove('is-active');
+    window.setTimeout(() => overlay.remove(), 350);
+  }, 2050);
+}
+
 function confirmarCobro() {
+  if (!ventaIdCobro) return;
+  const button = document.getElementById('btn-confirmar-cobro');
   const metodo = document.getElementById('modal-metodo').value;
+  if (button) { button.disabled = true; button.textContent = 'Registrando…'; }
+
   fetch(`/api/ventas/${ventaIdCobro}/cobrar`, {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({metodo})
-  }).then(() => {
-    confetti({ particleCount:120, spread:70, origin:{y:0.6} });
-    setTimeout(() => location.reload(), 1200);
-  }).catch(() => alert('Error'));
+  }).then(async response => {
+    if (!response.ok) throw new Error('No se pudo registrar el cobro.');
+    const result = await response.json();
+    if (!result || result.ok !== true) throw new Error('El servidor no ha confirmado el cobro.');
+    cerrarModal();
+    celebrarPago();
+    window.setTimeout(() => location.reload(), 2350);
+  }).catch(error => {
+    if (button) { button.disabled = false; button.textContent = '✓ Cobrado'; }
+    alert(error.message || 'No se ha podido registrar el cobro. Inténtalo de nuevo.');
+  });
 }
 document.getElementById('modal-cobro').addEventListener('click', e => {
   if(e.target===document.getElementById('modal-cobro')) cerrarModal();
 });
+
+// Si se cambió una venta de pendiente a pagada desde su ficha, celebrar al volver al listado.
+(() => {
+  let pending = false;
+  try {
+    pending = sessionStorage.getItem('inforbaxe:celebrate-payment') === '1';
+    if (pending) sessionStorage.removeItem('inforbaxe:celebrate-payment');
+  } catch (_) {}
+  if (pending) window.setTimeout(celebrarPago, 180);
+})();
 
 function duplicarVenta(id) {
   if (!confirm('¿Duplicar esta venta con fecha de hoy?')) return;
