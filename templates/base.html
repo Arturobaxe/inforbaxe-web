@@ -608,6 +608,11 @@ tbody tr:nth-child(7){animation-delay:0.28s} tbody tr:nth-child(8){animation-del
     animation-iteration-count: 1 !important;
     transition-duration: .01ms !important;
   }
+  /* El confeti de venta se mantiene visible aunque el sistema reduzca otras animaciones. */
+  .sale-confetti-layer .sale-confetti-piece {
+    animation-duration: 3.1s !important;
+    animation-iteration-count: 1 !important;
+  }
 }
 
     /* ── UTILS ───────────────────────────────────────── */
@@ -1105,10 +1110,9 @@ document.addEventListener('DOMContentLoaded', () => {
 <script>
 // La ruta solo añade venta_guardada=1 después de confirmar que la venta se ha guardado.
 (() => {
-  const saleCreated = new URLSearchParams(window.location.search).get('venta_guardada') === '1';
-  const reduceMotion = window.matchMedia &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (!saleCreated || reduceMotion) return;
+  // Flask marca la petición de la lista de ventas después de guardar correctamente.
+  const saleCreated = {{ 'true' if request.endpoint == 'ventas' and request.args.get('venta_guardada') == '1' else 'false' }};
+  if (!saleCreated) return;
 
   const layer = document.createElement('div');
   layer.className = 'sale-confetti-layer';
