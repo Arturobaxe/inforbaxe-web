@@ -67,8 +67,8 @@
             <div class="form-group">
               <label class="form-label">Pagado</label>
               <select name="pagado" class="form-control">
-                <option value="Sí" {% if not venta or venta.pagado=='Sí' %}selected{% endif %}>Sí</option>
-                <option value="No" {% if venta and venta.pagado=='No' %}selected{% endif %}>No</option>
+                <option value="Sí" {% if venta and venta.pagado=='Sí' %}selected{% endif %}>Sí</option>
+                <option value="No" {% if not venta or venta.pagado!='Sí' %}selected{% endif %}>No</option>
               </select>
             </div>
           </div>
@@ -186,7 +186,6 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
 <script>
 // --- CÓDIGO DEL PATRÓN DE DESBLOQUEO ---
 const pContainer = document.getElementById('pattern-container');
@@ -475,6 +474,8 @@ if (draftStatus) {
 
 document.getElementById('venta-form').addEventListener('submit', () => {
   document.getElementById('productos-json').value = JSON.stringify(productos);
+  // El confeti se dispara tras la confirmación del servidor en la pantalla de ventas.
+  try { sessionStorage.setItem('inforbaxe:celebrate-sale', '1'); } catch (_) {}
   if (draftStatus) {
     guardarBorrador();
     enviandoVenta = true;
@@ -482,7 +483,7 @@ document.getElementById('venta-form').addEventListener('submit', () => {
     const submit = document.getElementById('venta-submit');
     if (submit) { submit.disabled = true; submit.textContent = 'Guardando…'; }
   }
-  if (typeof confetti === 'function') confetti({ particleCount:120, spread:70, origin:{y:0.6} });
+
 });
 
 renderProductos();
