@@ -781,7 +781,7 @@ def venta_nueva():
             productos = []
         db.add_venta(id_cliente, request.form.get("fecha", date.today().isoformat()),
                      productos, request.form.get("metodo_pago", "Efectivo"),
-                     request.form.get("pagado", "Sí"), request.form.get("comentarios", ""),
+                     request.form.get("pagado", "No"), request.form.get("comentarios", ""),
                      request.form.get("equipo_modelo", ""), request.form.get("equipo_imei", ""),
                      request.form.get("equipo_contrasena", ""), request.form.get("equipo_patron", ""),
                      creation_token=creation_token)
@@ -804,7 +804,7 @@ def venta_editar(id_venta):
         db.update_venta(id_venta, request.form.get("id_cliente"),
                         request.form.get("fecha"), productos,
                         request.form.get("metodo_pago", "Efectivo"),
-                        request.form.get("pagado", "Sí"),
+                        request.form.get("pagado", "No"),
                         request.form.get("comentarios", ""),
                         request.form.get("equipo_modelo", ""), request.form.get("equipo_imei", ""), 
                         request.form.get("equipo_contrasena", ""), request.form.get("equipo_patron", ""))
