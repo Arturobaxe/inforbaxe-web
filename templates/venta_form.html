@@ -472,9 +472,17 @@ if (draftStatus) {
   window.addEventListener('pagehide', guardarBorrador);
 }
 
+const wasAlreadyPaid = {{ 'true' if venta and venta.pagado == 'Sí' else 'false' }};
+const isEditingSale = {{ 'true' if venta else 'false' }};
+
 document.getElementById('venta-form').addEventListener('submit', () => {
   document.getElementById('productos-json').value = JSON.stringify(productos);
-  // El confeti se dispara tras la confirmación del servidor en la pantalla de ventas.
+  // Solo celebrar si el cliente pasa de pendiente a pagado (o crea una venta ya cobrada).
+  const paymentField = document.getElementById('venta-form').elements.namedItem('pagado');
+  if (paymentField && paymentField.value === 'Sí' && (!isEditingSale || !wasAlreadyPaid)) {
+    try { sessionStorage.setItem('inforbaxe:celebrate-payment', '1'); } catch (_) {}
+  }
+  // El confeti de creación se dispara tras la confirmación del servidor en la pantalla de ventas.
   try { sessionStorage.setItem('inforbaxe:celebrate-sale', '1'); } catch (_) {}
   if (draftStatus) {
     guardarBorrador();
