@@ -136,9 +136,9 @@ class AuthMemoryFallbackTests(unittest.TestCase):
             for _ in range(4):
                 auth.verificar_codigo("sid-test", "000000")
             auth.guardar_codigo("sid-test", "654321")
-            for _ in range(3):
+            for _ in range(4):
                 auth.verificar_codigo("sid-test", "000000")
-            self.assertEqual(auth.verificar_codigo("sid-test", "654321"), (False, "Demasiados intentos"))
+            self.assertEqual(auth.verificar_codigo("sid-test", "654321"), (False, "Código no encontrado o expirado"))
             auth.guardar_codigo("sid-second", "222222")
             self.assertEqual(auth.verificar_codigo("sid-second", "222222"), (True, "ok"))
             self.assertFalse(auth.verificar_codigo("sid-second", "222222")[0])
