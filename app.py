@@ -46,7 +46,7 @@ app.config.update(
     SESSION_COOKIE_SECURE=IS_RENDER,
     PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
     SESSION_REFRESH_EACH_REQUEST=False,
-    MAX_CONTENT_LENGTH=2 * 1024 * 1024,
+    MAX_CONTENT_LENGTH=10 * 1024 * 1024,
 )
 # Render termina TLS delante de Gunicorn y reenvía la IP/protocolo originales.
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
