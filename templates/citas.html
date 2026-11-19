@@ -66,7 +66,7 @@
               <button onclick="resolverCita({{ c.id }}, 'no_asistio')" class="btn btn-danger btn-sm" title="No ha asistido">✕ No</button>
               {% endif %}
               <a href="{{ url_for('cita_editar', id_cita=c.id) }}" class="btn btn-blue btn-sm">✏️</a>
-              <button onclick="confirmDelete('/api/citas/{{ c.id }}', '¿Eliminar cita de {{ c.nombre_cliente }}?')" class="btn btn-danger btn-sm delete-cita">🗑️</button>
+              <button data-url="/api/citas/{{ c.id }}" data-msg="¿Eliminar cita de {{ c.nombre_cliente }}?" onclick="confirmDelete(this.dataset.url, this.dataset.msg)" class="btn btn-danger btn-sm delete-cita">🗑️</button>
             </div>
           </td>
         </tr>

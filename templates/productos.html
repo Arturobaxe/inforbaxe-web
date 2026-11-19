@@ -20,7 +20,7 @@
            style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--bg3); border-radius:8px; margin-bottom:8px;">
         <span class="prod-name" style="flex:1; font-size:14px; font-weight:500;">{{ p.nombre }}</span>
         <button onclick="startEdit({{ p.id }})" class="btn btn-blue btn-sm">✏️ Renombrar</button>
-        <button onclick="confirmDelete('/api/productos/{{ p.id }}', '¿Eliminar {{ p.nombre }}?')" class="btn btn-danger btn-sm">🗑️</button>
+        <button data-url="/api/productos/{{ p.id }}" data-msg="¿Eliminar {{ p.nombre }}?" onclick="confirmDelete(this.dataset.url, this.dataset.msg)" class="btn btn-danger btn-sm">🗑️</button>
       </div>
       {% else %}
       <div class="empty-state"><div class="empty-state-icon">📦</div><div class="empty-state-text">Sin productos</div></div>

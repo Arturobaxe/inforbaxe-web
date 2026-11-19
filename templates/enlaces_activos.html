@@ -68,7 +68,7 @@
         </div>
         <div class="link-actions">
           <a class="btn btn-secondary btn-sm" href="{{ url_for('seguimiento_reparaciones.admin_cliente',id_cliente=item.id_cliente) }}">Ver ficha</a>
-          <form method="post" action="{{ url_for('seguimiento_reparaciones.revocar_enlace',id_seguimiento=item.id) }}" onsubmit="return confirm('¿Revocar el enlace de {{ item.nombre_cliente }}? El cliente perderá el acceso y se eliminará la fotografía asociada.');">
+          <form method="post" action="{{ url_for('seguimiento_reparaciones.revocar_enlace',id_seguimiento=item.id) }}" data-nombre="{{ item.nombre_cliente }}" onsubmit="return confirm('¿Revocar el enlace de ' + this.dataset.nombre + '? El cliente perderá el acceso y se eliminará la fotografía asociada.');">
             <input type="hidden" name="origen" value="panel">
             <button class="btn btn-danger btn-sm" type="submit">Revocar</button>
           </form>

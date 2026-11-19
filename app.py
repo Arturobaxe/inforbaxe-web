@@ -1,6 +1,8 @@
 """
 app.py - Main Flask application for INFORBAXE web.
 """
+import logging
+import math
 import os
 import json
 import io
@@ -31,6 +33,10 @@ IS_RENDER = bool(os.environ.get("RENDER_SERVICE_ID") or os.environ.get("RENDER")
 SECRET_KEY = os.environ.get("SECRET_KEY")
 if IS_RENDER and not SECRET_KEY:
     raise RuntimeError("Falta SECRET_KEY: configura una clave persistente en el entorno de Render.")
+_KNOWN_WEAK = {"dev-secret-change-me", "inforbaxe2025", "micontrasena123",
+               "mi-clave-super-secreta-2025-inforbaxe", "admin", "password", "changeme"}
+if IS_RENDER and (SECRET_KEY or "").strip().lower() in _KNOWN_WEAK:
+    raise RuntimeError("SECRET_KEY es un valor conocido. Genera una clave aleatoria nueva.")
 
 app = Flask(__name__)
 app.config.update(
@@ -40,6 +46,7 @@ app.config.update(
     SESSION_COOKIE_SECURE=IS_RENDER,
     PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
     SESSION_REFRESH_EACH_REQUEST=False,
+    MAX_CONTENT_LENGTH=10 * 1024 * 1024,
 )
 # Render termina TLS delante de Gunicorn y reenvía la IP/protocolo originales.
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
@@ -49,6 +56,10 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 ADMIN_USER      = os.environ.get("ADMIN_USER", "").strip()
 ADMIN_PASS      = os.environ.get("ADMIN_PASS", "")
 ADMIN_EMAIL     = os.environ.get("ADMIN_EMAIL", "inforbaxe@gmail.com").strip()
+if IS_RENDER and ADMIN_PASS.strip().lower() in _KNOWN_WEAK:
+    raise RuntimeError("ADMIN_PASS es un valor conocido. Cámbiala en Render antes de desplegar.")
+if IS_RENDER and (len(ADMIN_PASS) < 12 or len(SECRET_KEY or "") < 32):
+    logging.getLogger(__name__).warning("ADMIN_PASS debería tener 12+ caracteres y SECRET_KEY 32+.")
 METODOS_PAGO    = ["Efectivo", "Tarjeta", "Bizum", "Transferencia", "Otro"]
 
 MAX_ATTEMPTS  = 5
@@ -57,6 +68,47 @@ _RATE_LIMITS  = {}
 
 app.register_blueprint(despiece_bp)
 app.register_blueprint(seguimiento_bp)
+
+
+_PRODUCT_NUMBERS = ("coste", "pvp", "beneficio", "cantidad")
+
+
+def _bounded_number(value):
+    try:
+        number = float(str(value).replace(",", "."))
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if not math.isfinite(number) or abs(number) > 10_000_000:
+        return None
+    return round(number, 2)
+
+
+def _sanitizar_productos(productos):
+    if not isinstance(productos, list):
+        return []
+    limpio = []
+    for linea in productos[:200]:
+        if not isinstance(linea, dict):
+            continue
+        item = {}
+        for key, value in list(linea.items())[:20]:
+            key = str(key)[:40]
+            if key in _PRODUCT_NUMBERS:
+                number = _bounded_number(value)
+                if key == "cantidad":
+                    number = int(min(max(round(number if number is not None else 1), 1), 100000))
+                item[key] = number if number is not None else 0.0
+            elif isinstance(value, str):
+                item[key] = value.strip()[:300]
+            elif isinstance(value, (int, float, bool)):
+                try:
+                    if math.isfinite(float(value)):
+                        item[key] = value
+                except (TypeError, ValueError, OverflowError):
+                    continue
+        item.setdefault("nombre", "")
+        limpio.append(item)
+    return limpio
 
 
 def _constant_time_equal(left, right):
@@ -149,6 +201,21 @@ def inject_csrf_token():
     return {"csrf_token": _csrf_token}
 
 
+_SESSION_STATUS = {}
+SESSION_CHECK_SECONDS = 60
+
+
+def _session_revoked(sid, now):
+    cached = _SESSION_STATUS.get(sid)
+    if cached and now - cached[0] < SESSION_CHECK_SECONDS:
+        return cached[1] in ("revoked", "missing")
+    status = auth_module.estado_sesion(sid)
+    if len(_SESSION_STATUS) > 256:
+        _SESSION_STATUS.clear()
+    _SESSION_STATUS[sid] = (now, status)
+    return status in ("revoked", "missing")
+
+
 @app.before_request
 def enforce_session_timeouts():
     """Cierra sesiones tras 2 h inactivas o 8 h desde el inicio."""
@@ -166,6 +233,11 @@ def enforce_session_timeouts():
         return redirect(url_for("login"))
 
     if now - last_activity > 2 * 60 * 60 or now - created > 8 * 60 * 60:
+        session.clear()
+        return redirect(url_for("login"))
+
+    sid = session.get("_sid")
+    if sid and session.get("_sid_tracked") and _session_revoked(sid, now):
         session.clear()
         return redirect(url_for("login"))
 
@@ -251,6 +323,11 @@ def login():
         if blocked:
             return _rate_limited_response(1, retry_after)
 
+        global_login_key = _rate_key("login-global", "all")
+        global_blocked, global_retry, _ = _is_rate_limited(global_login_key, 200, 3600)
+        if global_blocked:
+            return _rate_limited_response(1, global_retry)
+
         if not ADMIN_USER or not ADMIN_PASS:
             return render_template(
                 "login.html",
@@ -291,6 +368,7 @@ def login():
             return render_template("login.html", step=2, msg=f"Código enviado a {destino}")
 
         _record_rate_attempt(rate_key, BLOCK_SECONDS)
+        _record_rate_attempt(global_login_key, 3600)
         blocked, retry_after, count = _is_rate_limited(rate_key, MAX_ATTEMPTS, BLOCK_SECONDS)
         restantes = max(MAX_ATTEMPTS - count, 0)
         response = make_response(
@@ -339,6 +417,9 @@ def login_verificar():
         session["username"] = username
         session["_session_created_at"] = time.time()
         session["_last_activity"] = session["_session_created_at"]
+        sid = secrets.token_urlsafe(32)
+        session["_sid"] = sid
+        session["_sid_tracked"] = auth_module.registrar_sesion(sid, 8 * 60 * 60)
         _clear_rate_attempts(rate_key)
         return redirect(url_for("dashboard"))
 
@@ -388,6 +469,10 @@ def sw():
 
 @app.route("/logout", methods=["POST"])
 def logout():
+    sid = session.get("_sid")
+    if sid and session.get("_sid_tracked"):
+        auth_module.revocar_sesion(sid)
+        _SESSION_STATUS.pop(sid, None)
     session.clear()
     return redirect(url_for("login"))
 
@@ -774,7 +859,7 @@ def venta_nueva():
                 productos_nombres=productos_lista, metodos=METODOS_PAGO,
                 venta=None, today=date.today().isoformat(), creation_token=creation_token)
         try:
-            productos = json.loads(request.form.get("productos_json", "[]"))
+            productos = _sanitizar_productos(json.loads(request.form.get("productos_json", "[]")))
             if not isinstance(productos, list):
                 productos = []
         except (ValueError, TypeError):
@@ -799,7 +884,7 @@ def venta_editar(id_venta):
     clientes_lista  = db.get_clientes()
     productos_lista = db.get_productos()
     if request.method == "POST":
-        try: productos = json.loads(request.form.get("productos_json", "[]"))
+        try: productos = _sanitizar_productos(json.loads(request.form.get("productos_json", "[]")))
         except: productos = []
         db.update_venta(id_venta, request.form.get("id_cliente"),
                         request.form.get("fecha"), productos,
@@ -828,10 +913,14 @@ def api_ventas_chart():
 @app.route("/api/ventas/<int:id_venta>/cobrar", methods=["POST"])
 @login_required
 def api_cobrar_venta(id_venta):
-    data = request.get_json() or {}
-    db.get_db().table("ventas").update(
-        {"pagado": "Sí", "metodo_pago": data.get("metodo", "Efectivo")}
-    ).eq("id", id_venta).execute()
+    data = request.get_json(silent=True) or {}
+    metodo = data.get("metodo", "Efectivo")
+    if metodo not in METODOS_PAGO:
+        return jsonify({"ok": False, "error": "Método de pago no válido"}), 400
+    updated = (db.get_db().table("ventas").update({"pagado": "Sí", "metodo_pago": metodo})
+               .eq("id", id_venta).select("id").execute())
+    if not updated.data:
+        return jsonify({"ok": False, "error": "Venta no encontrada"}), 404
     return jsonify({"ok": True})
 
 @app.route("/api/ventas/<int:id_venta>/duplicar", methods=["POST"])
@@ -963,7 +1052,12 @@ def _generar_pdf_albaran(doc, cliente, tipo="Albarán"):
 @app.route("/mensualidades")
 @login_required
 def mensualidades():
-    año        = int(request.args.get("año", date.today().year))
+    try:
+        año = int(request.args.get("año", date.today().year))
+    except (TypeError, ValueError):
+        año = date.today().year
+    if not 2000 <= año <= 2100:
+        año = date.today().year
     filtro     = request.args.get("filtro", "all")
     buscar_str = request.args.get("buscar", "").strip().lower()
     hoy        = date.today()
@@ -1035,8 +1129,11 @@ def mensualidad_nueva():
 @app.route("/api/mensualidades/<int:id_mens>/toggle", methods=["POST"])
 @login_required
 def api_toggle_mensualidad(id_mens):
-    data = request.get_json() or {}
-    db.toggle_mensualidad_pago(id_mens, data.get("pagado", "No"))
+    data = request.get_json(silent=True) or {}
+    pagado = data.get("pagado", "No")
+    if pagado not in ("Sí", "No"):
+        return jsonify({"error": "Estado de pago no válido"}), 400
+    db.toggle_mensualidad_pago(id_mens, pagado)
     return jsonify({"ok": True})
 
 @app.route("/api/mensualidades/<int:id_mens>/editar", methods=["PATCH"])
@@ -1047,8 +1144,11 @@ def api_editar_mensualidad(id_mens):
     mes      = data.get("mes", "").strip()
     pagado   = data.get("pagado", "No")
     if not concepto or not mes: return jsonify({"error": "Faltan campos"}), 400
-    try: importe = round(float(data.get("importe", 0)), 2)
-    except: return jsonify({"error": "Importe inválido"}), 400
+    if pagado not in ("Sí", "No") or not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", mes) or len(concepto) > 200:
+        return jsonify({"error": "Datos no válidos"}), 400
+    importe = _bounded_number(data.get("importe", 0))
+    if importe is None or importe <= 0:
+        return jsonify({"error": "Importe inválido"}), 400
     db.update_mensualidad(id_mens, concepto, importe, mes, pagado)
     return jsonify({"ok": True})
 
@@ -1402,6 +1502,8 @@ def api_delete_presupuesto(id_presupuesto):
 @login_required
 def propinas():
     mes   = request.args.get("mes", date.today().strftime("%Y-%m"))
+    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", mes or ""):
+        mes = date.today().strftime("%Y-%m")
     lista = db.get_propinas(mes=mes)
     total = round(sum(float(p.get("importe", 0)) for p in lista), 2)
     return render_template("propinas.html", propinas=lista, total=total,
@@ -1410,12 +1512,16 @@ def propinas():
 @app.route("/api/propinas", methods=["POST"])
 @login_required
 def api_add_propina():
-    data = request.get_json() or {}
-    fecha      = data.get("fecha", date.today().isoformat())
-    comentario = data.get("comentario", "").strip()
-    try: importe = round(float(str(data.get("importe", 0)).replace(",",".")), 2)
-    except: return jsonify({"error": "Importe inválido"}), 400
-    if importe <= 0: return jsonify({"error": "Importe debe ser mayor que 0"}), 400
+    data = request.get_json(silent=True) or {}
+    fecha = data.get("fecha", date.today().isoformat())
+    comentario = str(data.get("comentario", "")).strip()[:300]
+    try:
+        fecha = date.fromisoformat(str(fecha)[:10]).isoformat()
+    except (TypeError, ValueError):
+        return jsonify({"error": "Fecha inválida"}), 400
+    importe = _bounded_number(data.get("importe", 0))
+    if importe is None or importe <= 0:
+        return jsonify({"error": "Importe debe ser mayor que 0 y menor que 10.000.000 €"}), 400
     return jsonify(db.add_propina(fecha, importe, comentario))
 
 @app.route("/api/propinas/<int:id_propina>", methods=["DELETE"])
@@ -1425,4 +1531,4 @@ def api_delete_propina(id_propina):
     return jsonify({"ok": True})
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(debug=os.environ.get("FLASK_DEBUG") == "1", host="127.0.0.1", port=5000)

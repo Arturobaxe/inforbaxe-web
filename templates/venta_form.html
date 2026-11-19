@@ -397,7 +397,7 @@ function guardarBorrador() {
   try {
     const fields = {};
     ventaForm.querySelectorAll('[name]').forEach(el => {
-      if (el.name !== 'productos_json') fields[el.name] = el.value;
+      if (!['productos_json', 'equipo_contrasena', 'equipo_patron', '_csrf_token'].includes(el.name)) fields[el.name] = el.value;
     });
     const draft = {
       savedAt: new Date().toISOString(),
@@ -432,6 +432,9 @@ function restaurarBorrador() {
   try { draft = JSON.parse(sessionStorage.getItem(draftKey) || 'null'); }
   catch (_) { sessionStorage.removeItem(draftKey); return; }
   if (!draft || !draft.fields) return;
+  // Elimina datos sensibles que pudieran haberse guardado con una versión anterior.
+  ['equipo_contrasena', 'equipo_patron', '_csrf_token'].forEach(key => delete draft.fields[key]);
+  try { sessionStorage.setItem(draftKey, JSON.stringify(draft)); } catch (_) {}
   const guardado = draft.savedAt ? new Date(draft.savedAt).toLocaleString() : 'anteriormente';
   if (!confirm('He encontrado un borrador de venta guardado el ' + guardado + '. ¿Quieres recuperarlo?')) {
     sessionStorage.removeItem(draftKey);
