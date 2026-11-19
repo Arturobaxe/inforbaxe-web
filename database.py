@@ -3,6 +3,7 @@ database.py - Supabase client and all DB operations for INFORBAXE web.
 """
 import os
 import json
+import datos_sensibles
 from datetime import date, datetime
 from typing import Optional
 from supabase import create_client, Client
@@ -229,6 +230,9 @@ def _calc_totales(productos):
 def _normalizar_ventas(data):
     """Normaliza las relaciones y el JSON de productos devueltos por Supabase."""
     for venta in data or []:
+        for campo in datos_sensibles.CAMPOS_SENSIBLES_VENTA:
+            if campo in venta:
+                venta[campo] = datos_sensibles.descifrar(venta[campo])
         venta["nombre_cliente"] = (venta.get("clientes") or {}).get("nombre", "—")
         venta.pop("clientes", None)
         if isinstance(venta.get("productos"), str):
@@ -337,8 +341,8 @@ def add_venta(id_cliente, fecha, productos, metodo, pagado, comentarios, equipo_
         "comentarios": comentarios,
         "equipo_modelo": equipo_modelo.strip(),
         "equipo_imei": equipo_imei.strip(),
-        "equipo_contrasena": equipo_contrasena.strip(),
-        "equipo_patron": equipo_patron.strip(),
+        "equipo_contrasena": datos_sensibles.cifrar(equipo_contrasena.strip()),
+        "equipo_patron": datos_sensibles.cifrar(equipo_patron.strip()),
     }
     if creation_token:
         payload["creation_token"] = str(creation_token)
@@ -352,7 +356,7 @@ def add_venta(id_cliente, fecha, productos, metodo, pagado, comentarios, equipo_
             existing = (db.table("ventas").select("*")
                         .eq("creation_token", str(creation_token)).limit(1).execute().data or [])
             if existing:
-                return existing[0]
+                return _normalizar_ventas([existing[0]])[0]
         raise
 
 def update_venta(id_venta, id_cliente, fecha, productos, metodo, pagado, comentarios, equipo_modelo="", equipo_imei="", equipo_contrasena="", equipo_patron=""):
@@ -370,8 +374,8 @@ def update_venta(id_venta, id_cliente, fecha, productos, metodo, pagado, comenta
         "comentarios": comentarios,
         "equipo_modelo": equipo_modelo.strip(),
         "equipo_imei": equipo_imei.strip(),
-        "equipo_contrasena": equipo_contrasena.strip(),
-        "equipo_patron": equipo_patron.strip()
+        "equipo_contrasena": datos_sensibles.cifrar(equipo_contrasena.strip()),
+        "equipo_patron": datos_sensibles.cifrar(equipo_patron.strip())
     }).eq("id", id_venta).execute()
 
 def delete_venta(id_venta):
@@ -440,7 +444,11 @@ def get_citas(fecha_desde=None, fecha_hasta=None, id_cliente=None):
          .order("fecha").order("hora"))
     if fecha_desde:
         # Mantiene visibles las citas atrasadas mientras sigan pendientes.
-        q = q.or_(f"fecha.gte.{str(fecha_desde)},estado.eq.pendiente")
+        try:
+            desde = date.fromisoformat(str(fecha_desde)[:10])
+        except (TypeError, ValueError):
+            desde = date.today()
+        q = q.or_(f"fecha.gte.{desde.isoformat()},estado.eq.pendiente")
     if fecha_hasta:
         q = q.lte("fecha", str(fecha_hasta))
     if id_cliente:

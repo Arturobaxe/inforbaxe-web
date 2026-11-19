@@ -6,6 +6,7 @@ reemplazar ni reescribir las rutas existentes de la aplicación.
 from __future__ import annotations
 
 import json
+import http.client
 import logging
 import os
 import re
@@ -14,7 +15,7 @@ import socket
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from urllib.parse import parse_qsl, urlencode, quote_plus, urlparse, parse_qs, unquote, urljoin
-from urllib.request import Request, urlopen, HTTPRedirectHandler, build_opener
+from urllib.request import Request, urlopen, HTTPRedirectHandler, HTTPSHandler, ProxyHandler, build_opener
 from urllib.error import HTTPError, URLError
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from html import unescape
@@ -85,7 +86,7 @@ def _provider_request(path, params=None):
         url += "?" + urlencode(params)
     req = Request(url, headers={"Authorization": f"Token {key}", "Accept": "application/json"})
     try:
-        with urlopen(req, timeout=API_TIMEOUT) as response:
+        with _PROVIDER_OPENER.open(req, timeout=API_TIMEOUT) as response:
             payload = response.read(2_000_000)
             return json.loads(payload.decode("utf-8"))
     except HTTPError as exc:
@@ -966,37 +967,66 @@ def _domain_allowed(url):
     return bool(host) and any(host == domain or host.endswith("." + domain) for domain in _REFERENCE_SOURCES)
 
 
+_SEARCH_ENGINE_HOSTS = frozenset({
+    "www.google.com", "google.com", "www.bing.com", "bing.com",
+    "duckduckgo.com", "lite.duckduckgo.com", "html.duckduckgo.com",
+    "search.yahoo.com", "r.search.yahoo.com", "www.mojeek.com", "mojeek.com",
+})
+
+
 def _validate_external_target(url):
-    """Acepta solo HTTPS en catálogos permitidos y con resolución DNS pública."""
     parsed = urlparse(url)
     if parsed.scheme != "https" or not parsed.hostname:
-        raise ValueError("Solo se permiten destinos HTTPS de catálogos autorizados.")
-    if parsed.username or parsed.password or not _domain_allowed(url):
-        raise ValueError("El destino externo no pertenece a un catálogo autorizado.")
+        raise ValueError("Solo se permiten destinos HTTPS autorizados.")
+    host = _domain_host(url)
+    if parsed.username or parsed.password or not (_domain_allowed(url) or host in _SEARCH_ENGINE_HOSTS):
+        raise ValueError("El destino externo no pertenece a un catálogo ni a un buscador autorizado.")
     try:
         port = parsed.port
     except ValueError as exc:
         raise ValueError("Puerto externo no válido.") from exc
     if port not in (None, 443):
         raise ValueError("No se permiten puertos externos alternativos.")
+    _resolve_public(host, port or 443)
 
-    host = _domain_host(url)
+
+def _resolve_public(host, port):
     try:
-        resolved = socket.getaddrinfo(host, port or 443, type=socket.SOCK_STREAM)
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
     except OSError as exc:
-        raise ValueError("No se pudo resolver el catálogo externo.") from exc
-
-    addresses = set()
-    for item in resolved:
+        raise ValueError("No se pudo resolver el destino externo.") from exc
+    if not infos:
+        raise ValueError("El destino externo no tiene direcciones.")
+    for info in infos:
         try:
-            address = ipaddress.ip_address(item[4][0].split("%", 1)[0])
+            address = ipaddress.ip_address(info[4][0].split("%", 1)[0])
         except ValueError as exc:
-            raise ValueError("El catálogo devolvió una dirección IP no válida.") from exc
+            raise ValueError("Dirección IP no válida.") from exc
         if not address.is_global:
             raise ValueError("El destino externo resuelve a una dirección no pública.")
-        addresses.add(address)
-    if not addresses:
-        raise ValueError("El catálogo no tiene direcciones públicas.")
+    return infos
+
+
+class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+    """Conecta a una IP pública resuelta al conectar; valida TLS con el host original."""
+    def connect(self):
+        infos = _resolve_public(self.host, self.port or 443)
+        last_error = None
+        sock = None
+        for _family, _type, _proto, _canon, sockaddr in infos:
+            try:
+                sock = socket.create_connection((sockaddr[0], sockaddr[1]), self.timeout, self.source_address)
+                break
+            except OSError as exc:
+                last_error = exc
+        if sock is None:
+            raise last_error or OSError("No se pudo conectar al destino.")
+        self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+
+
+class _PinnedHTTPSHandler(HTTPSHandler):
+    def https_open(self, req):
+        return self.do_open(_PinnedHTTPSConnection, req, context=self._context)
 
 
 class _SafeCatalogRedirectHandler(HTTPRedirectHandler):
@@ -1005,10 +1035,18 @@ class _SafeCatalogRedirectHandler(HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
+class _NoRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 def _safe_catalog_open(req, timeout):
     _validate_external_target(req.full_url)
-    opener = build_opener(_SafeCatalogRedirectHandler())
+    opener = build_opener(ProxyHandler({}), _PinnedHTTPSHandler(), _SafeCatalogRedirectHandler())
     return opener.open(req, timeout=timeout)
+
+
+_PROVIDER_OPENER = build_opener(_NoRedirectHandler())
 
 
 def _http_text(url, limit=1_200_000, timeout=7):

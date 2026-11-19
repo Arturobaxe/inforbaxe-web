@@ -5,3 +5,4 @@ Werkzeug==3.1.9
 reportlab==5.1.0
 Pillow==13.0.0
 gunicorn==27.0.1
+cryptography==50.0.2

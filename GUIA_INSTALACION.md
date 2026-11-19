@@ -97,9 +97,9 @@ git push -u origin main
 |----------|-------|
 | `SUPABASE_URL` | La URL que copiaste en el Paso 1 (`https://xxxx.supabase.co`) |
 | `SUPABASE_KEY` | La service_role key que copiaste en el Paso 1 |
-| `SECRET_KEY` | Escribe cualquier texto largo aleatorio, ej: `mi-clave-super-secreta-2025-inforbaxe` |
+| `SECRET_KEY` | Genera una clave aleatoria de 48+ caracteres con `python -c "import secrets; print(secrets.token_urlsafe(48))"`. No reutilices ejemplos ni contraseñas. |
 | `ADMIN_USER` | El usuario con el que quieres entrar, ej: `arturo` |
-| `ADMIN_PASS` | La contraseña con la que quieres entrar, ej: `micontrasena123` |
+| `ADMIN_PASS` | Una contraseña única de al menos 12 caracteres, guardada en un gestor de contraseñas. |
 
 8. Railway reiniciará la app automáticamente
 
