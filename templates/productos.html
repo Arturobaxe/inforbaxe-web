@@ -8,7 +8,7 @@
     <div class="card-title" style="margin-bottom:12px;">➕ Añadir producto</div>
     <div style="display:flex; gap:10px;">
       <input type="text" id="nuevo-nombre" class="form-control" placeholder="Nombre del producto..." style="flex:1;">
-      <button onclick="addProducto()" class="btn btn-primary">Añadir</button>
+      <button data-product-action="add" class="btn btn-primary">Añadir</button>
     </div>
   </div>
 
@@ -19,8 +19,8 @@
       <div class="prod-item" data-id="{{ p.id }}" data-nombre="{{ p.nombre }}"
            style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--bg3); border-radius:8px; margin-bottom:8px;">
         <span class="prod-name" style="flex:1; font-size:14px; font-weight:500;">{{ p.nombre }}</span>
-        <button onclick="startEdit({{ p.id }})" class="btn btn-blue btn-sm">✏️ Renombrar</button>
-        <button data-url="/api/productos/{{ p.id }}" data-msg="¿Eliminar {{ p.nombre }}?" onclick="confirmDelete(this.dataset.url, this.dataset.msg)" class="btn btn-danger btn-sm">🗑️</button>
+        <button data-product-action="edit" data-product-id="{{ p.id }}" class="btn btn-blue btn-sm">✏️ Renombrar</button>
+        <button data-url="/api/productos/{{ p.id }}" data-msg="¿Eliminar {{ p.nombre }}?" data-product-action="delete" class="btn btn-danger btn-sm">🗑️</button>
       </div>
       {% else %}
       <div class="empty-state"><div class="empty-state-icon">📦</div><div class="empty-state-text">Sin productos</div></div>
@@ -30,36 +30,5 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script>
-document.getElementById('search-prod').addEventListener('input', function() {
-  const q = this.value.toLowerCase();
-  document.querySelectorAll('.prod-item').forEach(el => {
-    el.style.display = el.dataset.nombre.toLowerCase().includes(q) ? '' : 'none';
-  });
-});
-
-function addProducto() {
-  const nombre = document.getElementById('nuevo-nombre').value.trim();
-  if (!nombre) return;
-  fetch('/api/productos', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({nombre})
-  }).then(() => location.reload());
-}
-document.getElementById('nuevo-nombre').addEventListener('keydown', e => { if(e.key==='Enter') addProducto(); });
-
-function startEdit(id) {
-  const row = document.querySelector(`.prod-item[data-id="${id}"]`);
-  const nameEl = row.querySelector('.prod-name');
-  const oldName = nameEl.textContent.trim();
-  const newName = prompt('Nuevo nombre:', oldName);
-  if (!newName || newName === oldName) return;
-  fetch(`/api/productos/${id}`, {
-    method: 'PATCH',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({nombre: newName})
-  }).then(() => location.reload());
-}
-</script>
+<script src="{{ url_for('static', filename='js/pages/products.js') }}"></script>
 {% endblock %}
