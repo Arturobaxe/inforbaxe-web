@@ -138,6 +138,7 @@ class SecurityHelpersTests(unittest.TestCase):
             "templates/seguimientos_cliente.html": "js/pages/client-followups.js",
             "templates/despiece_modelos.html": "js/pages/despiece-models.js",
             "templates/estadisticas.html": "js/pages/statistics.js",
+            "templates/dashboard.html": "js/pages/dashboard.js",
         }
         for template_path, script_path in pages.items():
             template = (root / template_path).read_text(encoding="utf-8")
@@ -176,6 +177,13 @@ class SecurityHelpersTests(unittest.TestCase):
         self.assertIn("data-labels=", statistics)
         self.assertIn("data-expenses=", statistics)
         self.assertIn("data-propina-action=", tips)
+        dashboard = (root / "templates/dashboard.html").read_text(encoding="utf-8")
+        history = (root / "templates/cliente_historial.html").read_text(encoding="utf-8")
+        budgets = (root / "templates/presupuestos.html").read_text(encoding="utf-8")
+        self.assertIn("data-provider-search=", dashboard)
+        self.assertIn('data-notes-action="clear"', dashboard)
+        self.assertNotRegex(history, r"\\son(?:mouseover|mouseout)\\s*=")
+        self.assertIn('data-confirm-delete="true"', budgets)
 
     def test_external_scripts_and_styles_have_sri(self):
         from pathlib import Path
