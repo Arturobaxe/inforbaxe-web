@@ -133,6 +133,11 @@ class SecurityHelpersTests(unittest.TestCase):
             "templates/citas.html": "js/pages/appointments.js",
             "templates/despiece.html": "js/pages/despiece.js",
             "templates/averias_frecuentes.html": "js/pages/fault-chart.js",
+            "templates/propinas.html": "js/pages/tips.js",
+            "templates/seguimiento_publico.html": "js/pages/public-tracking.js",
+            "templates/seguimientos_cliente.html": "js/pages/client-followups.js",
+            "templates/despiece_modelos.html": "js/pages/despiece-models.js",
+            "templates/estadisticas.html": "js/pages/statistics.js",
         }
         for template_path, script_path in pages.items():
             template = (root / template_path).read_text(encoding="utf-8")
@@ -159,6 +164,18 @@ class SecurityHelpersTests(unittest.TestCase):
         self.assertIn('data-confirm-message=', despiece)
         self.assertIn('data-labels=', averias)
         self.assertIn('data-values=', averias)
+        public_tracking = (root / "templates/seguimiento_publico.html").read_text(encoding="utf-8")
+        followups = (root / "templates/seguimientos_cliente.html").read_text(encoding="utf-8")
+        models = (root / "templates/despiece_modelos.html").read_text(encoding="utf-8")
+        statistics = (root / "templates/estadisticas.html").read_text(encoding="utf-8")
+        tips = (root / "templates/propinas.html").read_text(encoding="utf-8")
+        self.assertIn("data-photo-url=", public_tracking)
+        self.assertIn("data-confirm-message=", followups)
+        self.assertIn("data-sync-endpoint=", models)
+        self.assertIn("data-auto-sync=", models)
+        self.assertIn("data-labels=", statistics)
+        self.assertIn("data-expenses=", statistics)
+        self.assertIn("data-propina-action=", tips)
 
     def test_external_scripts_and_styles_have_sri(self):
         from pathlib import Path
