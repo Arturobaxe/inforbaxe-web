@@ -1,0 +1,53 @@
+(() => {
+  "use strict";
+(() => {
+  const form=document.getElementById('referenceSearchForm');
+  if (!form) return;
+  const endpoint = form.dataset.searchEndpoint;
+  const saveUrl = form.dataset.saveUrl;
+  const repuestoId = Number(form.dataset.repuestoId || 0);
+  let pieza = null;
+  try { pieza = JSON.parse(form.dataset.pieza || "null"); } catch (_) { pieza = null; }
+  const input=document.getElementById('referencia');
+  const button=document.getElementById('searchButton');
+  const status=document.getElementById('searchStatus');
+  const statusText=document.getElementById('searchStatusText');
+  const results=document.getElementById('searchResults');
+  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  function attemptRows(d){
+    return (Array.isArray(d.attempts)?d.attempts:[]).map(a=>`<div class="text-muted" style="font-size:11px;margin:0 0 5px 12px;word-break:break-all;">⇢ ${esc(a.kind||'intento')}: ${esc(a.url||'')}<br>HTTP ${esc(a.http==null?'—':a.http)} · final: ${esc(a.final_url||'—')} · título: ${esc(a.title||'—')} · ${esc(a.status||'')}${a.formularios_de_busqueda!=null?' · '+Number(a.formularios_de_busqueda)+' formulario(s) de búsqueda':''}</div>`).join('');
+  }
+  function pageRows(d){
+    const pages=(Array.isArray(d.found_pages)&&d.found_pages.length)?d.found_pages:(Array.isArray(d.urls)?d.urls.map(u=>({url:u.url,title:u.title,pending:true})):[]);
+    return pages.map(p=>{
+      const safe=/^https?:\/\//i.test(p.url||'');
+      const link=safe?`<a href="${esc(p.url)}" target="_blank" rel="noopener noreferrer">${esc(p.title||p.url)}</a>`:esc(p.title||p.url||'');
+      const state=p.pending?'localizada por buscador (lectura en "Páginas leídas de buscadores")':`${p.read?'leída':'no leída'} · ${p.has_reference?'con referencia':'sin referencia'} · ${Number(p.candidates||0)} modelos extraídos${p.status?' · '+esc(p.status):''}`;
+      return `<div class="text-muted" style="font-size:11px;margin:0 0 5px 12px;word-break:break-all;">↳ ${link}<br>${esc(p.url||'')} — ${state}</div>`;
+    }).join('');
+  }
+  function render(data){
+    const sources=(data.sources||[]);
+    const diagnostics=(data.source_diagnostics||data.diagnostics||[]);
+    const distinctDomains=new Set(sources.map(s=>s.domain).filter(Boolean)).size;
+    const independentSources=new Set(sources.map(s=>s.source_group||s.domain).filter(Boolean)).size;
+    let html=`<div class="card" style="background:var(--bg2);"><div style="font-weight:700;">${esc(data.message)}</div><div class="text-muted" style="font-size:12px;margin-top:4px;">${distinctDomains} dominios con referencia comprobada · ${independentSources} fuentes independientes · ${Number(data.pages_read||0)} páginas leídas · ${data.cached?'Resultado en caché':'Consulta nueva'}</div><div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:9px;">${sources.map(s=>`<a class="badge badge-gray" href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.domain)} ↗</a>`).join('')}</div>${diagnostics.length?`<details style="margin-top:12px;"><summary style="cursor:pointer;font-size:12px;font-weight:650;">Diagnóstico por fuente</summary><div style="display:grid;gap:6px;margin-top:8px;">${diagnostics.map(d=>`<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;border-bottom:1px solid var(--border);padding:5px 0;"><span>${esc(d.source||d.domain||'Fuente')}</span><span class="text-muted">${esc(d.status||'sin estado')} · ${Number(d.product_links||d.links||0)} enlaces · ${Number(d.pages_read||0)} páginas</span></div>${attemptRows(d)}${pageRows(d)}`).join('')}</div></details>`:''}</div>`;
+    if(data.models?.length){
+      html+=data.models.map((m,i)=>{
+        const source=m.sources?.[0]||{};
+        return `<div class="card" style="display:grid;gap:10px;"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;"><div><div style="font-weight:750;font-size:16px;">${esc(m.model_name)}</div><div class="text-muted" style="font-size:13px;">${esc(m.brand||'Marca por confirmar')} · Códigos: <strong>${esc((m.codes||[]).join(', ')||'No publicado')}</strong></div></div><span class="badge badge-green">Consenso ${m.matches}/${m.total_sources} · ${m.confidence}%</span></div><div style="display:flex;flex-wrap:wrap;gap:7px;">${m.sources.map(s=>`<a class="badge badge-gray" href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.domain)} ↗</a>`).join('')}</div>${repuestoId?`<form method="post" action="${saveUrl}" style="display:grid;gap:9px;"><input type="hidden" name="repuesto_id" value="${repuestoId}"><input type="hidden" name="referencia" value="${esc(data.reference)}"><input type="hidden" name="fuente_url" value="${esc(source.url||'')}"><input type="hidden" name="fuentes_json" value="${esc(JSON.stringify(m.sources||[]))}"><input type="hidden" name="consenso" value="${esc(m.confidence+'% ('+m.matches+'/'+m.total_sources+' fuentes independientes)')}"><input type="hidden" name="tipo_dispositivo" value="phone"><div><label class="form-label">Marca (puedes corregirla)</label><input class="form-control" name="marca" maxlength="80" required value="${esc(m.brand||'')}"></div><div><label class="form-label">Nombre del modelo (puedes corregirlo)</label><input class="form-control" name="modelo" maxlength="140" required value="${esc(m.model_name)}"></div><div><label class="form-label">Código de modelo</label><input class="form-control" name="numeros_modelo" value="${esc((m.codes||[]).join(', '))}"></div><label style="display:flex;gap:8px;align-items:flex-start;font-size:12px;color:var(--t2);"><input type="checkbox" name="verificada" value="1" style="margin-top:2px;"> Confirmo guardar esta compatibilidad respaldada por el consenso mostrado.</label><button class="btn btn-primary" type="submit">Añadir compatibilidad a INFORBAXE</button></form>`:'<div class="text-muted" style="font-size:12px;">Abre esta búsqueda desde una pieza para poder guardar compatibilidades.</div>'}</div>`;
+      }).join('');
+    } else {html+=`<div class="card"><strong>${sources.length?'Se encontraron páginas con la referencia, pero los modelos no alcanzaron el consenso mínimo.':'No se encontraron páginas de producto accesibles con evidencia verificable.'}</strong><p class="text-muted" style="font-size:12px;margin:5px 0 0;">${sources.length?'No se guardará ninguna compatibilidad hasta que haya coincidencia suficiente entre dominios independientes.':'Abre “Diagnóstico por fuente” para ver si los catálogos no tienen resultados, bloquean la consulta o no permiten la lectura automática.'}</p></div>`;}
+    results.innerHTML=html;
+  }
+  form.addEventListener('submit',async ev=>{
+    ev.preventDefault(); const ref=input.value.trim(); if(ref.length<4)return;
+    button.disabled=true; button.textContent='Investigando…'; status.style.display='block'; statusText.textContent='Consultando varias fuentes en segundo plano. Puede tardar unos segundos…'; results.innerHTML='';
+    try{const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({referencia:ref,pieza})});const data=await response.json().catch(()=>null);if(!data)throw new Error(response.redirected||response.status===401?'La sesión ha caducado. Recarga la página e inicia sesión.':'El servidor devolvió una respuesta no válida.');if(!response.ok)throw new Error(data.message||'No se pudo completar la búsqueda.');render(data);}
+    catch(err){results.innerHTML=`<div class="card"><strong>No se pudo completar la investigación.</strong><p class="text-muted">${esc(err.message)}</p></div>`;}
+    finally{button.disabled=false;button.textContent='🔎 Investigar compatibilidad';status.style.display='none';}
+  });
+  if(input.value.trim().length>=4) form.requestSubmit();
+})();
+
+})();
