@@ -9,7 +9,7 @@
     <div>
       <label class="form-label">Mes</label>
       <input type="month" id="mes-sel" class="form-control" value="{{ mes }}"
-             onchange="location.href='/propinas?mes='+this.value" style="max-width:160px;">
+             id="propinas-month-filter" style="max-width:160px;">
     </div>
     <div class="stat-card green" style="padding:12px 20px;margin:0;">
       <div class="stat-label">Total mes</div>
@@ -33,7 +33,7 @@
       <label class="form-label">Comentario</label>
       <input type="text" id="p-comentario" class="form-control" placeholder="De quién o por qué...">
     </div>
-    <button onclick="addPropina()" class="btn btn-primary">Añadir</button>
+    <button data-propina-action="add" class="btn btn-primary">Añadir</button>
   </div>
 </div>
 
@@ -47,7 +47,7 @@
           <td class="td-mono">{{ p.fecha }}</td>
           <td class="td-mono" style="color:var(--green);font-weight:700;">{{ "%.2f"|format(p.importe|float) }}€</td>
           <td style="color:var(--t2);">{{ p.comentario or '—' }}</td>
-          <td><button onclick="confirmDelete('/api/propinas/{{ p.id }}','¿Eliminar propina?')" class="btn btn-danger btn-sm">🗑️</button></td>
+          <td><button data-url="/api/propinas/{{ p.id }}" data-msg="¿Eliminar propina?" data-propina-action="delete" class="btn btn-danger btn-sm">🗑️</button></td>
         </tr>
         {% else %}
         <tr><td colspan="4"><div class="empty-state"><div class="empty-state-icon">💰</div><div class="empty-state-text">Sin propinas este mes</div></div></td></tr>
@@ -58,21 +58,5 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script>
-function addPropina() {
-  const importe = parseFloat(document.getElementById('p-importe').value);
-  if (!importe || importe <= 0) { alert('Introduce un importe válido'); return; }
-  fetch('/api/propinas', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({
-      fecha: document.getElementById('p-fecha').value,
-      importe,
-      comentario: document.getElementById('p-comentario').value
-    })
-  }).then(r=>r.json()).then(()=>location.reload()).catch(()=>alert('Error'));
-}
-document.getElementById('p-comentario').addEventListener('keydown',e=>{
-  if(e.key==='Enter') addPropina();
-});
-</script>
+<script src="{{ url_for('static', filename='js/pages/tips.js') }}"></script>
 {% endblock %}
