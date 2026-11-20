@@ -7,7 +7,7 @@
   const countLabel = document.getElementById("clients-filter-count");
 
   const normalize = (value) => String(value || "")
-    .normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase("es");
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("es");
 
   function filterClients() {
     if (!searchField || !activeFilter) return;
