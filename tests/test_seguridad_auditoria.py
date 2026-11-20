@@ -130,6 +130,9 @@ class SecurityHelpersTests(unittest.TestCase):
             "templates/despiece_compatibilidades.html": "js/pages/despiece-compatibilidades.js",
             "templates/enlaces_activos.html": "js/pages/active-links.js",
             "templates/productos.html": "js/pages/products.js",
+            "templates/citas.html": "js/pages/appointments.js",
+            "templates/despiece.html": "js/pages/despiece.js",
+            "templates/averias_frecuentes.html": "js/pages/fault-chart.js",
         }
         for template_path, script_path in pages.items():
             template = (root / template_path).read_text(encoding="utf-8")
@@ -149,6 +152,13 @@ class SecurityHelpersTests(unittest.TestCase):
         self.assertIn('data-product-action="edit"', products)
         self.assertIn('data-product-action="delete"', products)
         self.assertIn('data-confirm-revoke="true"', links)
+        citas = (root / "templates/citas.html").read_text(encoding="utf-8")
+        despiece = (root / "templates/despiece.html").read_text(encoding="utf-8")
+        averias = (root / "templates/averias_frecuentes.html").read_text(encoding="utf-8")
+        self.assertIn('data-cita-action="resolver"', citas)
+        self.assertIn('data-confirm-message=', despiece)
+        self.assertIn('data-labels=', averias)
+        self.assertIn('data-values=', averias)
 
     def test_external_scripts_and_styles_have_sri(self):
         from pathlib import Path
