@@ -153,11 +153,16 @@ class SecurityHelpersTests(unittest.TestCase):
             self.assertNotRegex(template, r"<script\b(?![^>]*\bsrc\s*=)[^>]*>", str(template_path))
             self.assertNotRegex(
                 template,
-                r"\son(?:click|submit|change|input|mouseover|mouseout|keydown|keyup)\s*=",
+                r"\son[a-z]+\s*=",
                 template_path,
             )
             self.assertNotIn("{{", script, script_path)
             self.assertNotIn("{%", script, script_path)
+            self.assertNotRegex(
+                script,
+                r"(?:onclick|onsubmit|onchange|oninput|onmouseover|onmouseout)\\s*=",
+                script_path,
+            )
 
         products = (root / "templates/productos.html").read_text(encoding="utf-8")
         links = (root / "templates/enlaces_activos.html").read_text(encoding="utf-8")
@@ -206,7 +211,7 @@ class SecurityHelpersTests(unittest.TestCase):
             self.assertNotRegex(template, r"<script\b(?![^>]*\bsrc\s*=)[^>]*>", str(template_path))
             self.assertNotRegex(
                 template,
-                r"\son(?:click|submit|change|input|mouseover|mouseout|keydown|keyup)\s*=",
+                r"\son[a-z]+\s*=",
                 str(template_path),
             )
 
