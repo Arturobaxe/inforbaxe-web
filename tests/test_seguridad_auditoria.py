@@ -101,6 +101,7 @@ class SecurityHelpersTests(unittest.TestCase):
         base = (root / "templates/base.html").read_text(encoding="utf-8")
         base_js = (root / "static/js/base.js").read_text(encoding="utf-8")
         sales = (root / "templates/ventas.html").read_text(encoding="utf-8")
+        sales_js = (root / "static/js/pages/sales.js").read_text(encoding="utf-8")
         form = (root / "templates/venta_form.html").read_text(encoding="utf-8")
         citas = (root / "templates/citas.html").read_text(encoding="utf-8")
         products = (root / "templates/productos.html").read_text(encoding="utf-8")
@@ -112,7 +113,7 @@ class SecurityHelpersTests(unittest.TestCase):
         self.assertIn("X-CSRF-Token", base_js)
         self.assertNotRegex(base, r"<script\b(?![^>]*\bsrc\s*=)[^>]*>")
         self.assertNotRegex(base, r"\son[a-z]+\s*=")
-        self.assertIn("celebrarPago", sales)
+        self.assertIn("celebrarPago", sales_js)
         self.assertIn("moneyFloat", sales)
         self.assertIn("equipo_contrasena", form)
         self.assertIn("includes(el.name)", form)
@@ -219,7 +220,7 @@ class SecurityHelpersTests(unittest.TestCase):
         response = A.app.test_client().get("/login")
         self.assertEqual(response.status_code, 200)
         csp = response.headers.get("Content-Security-Policy", "")
-        directives = {part.split(" ", 1)[0]: part for part in csp.split(";") if part.strip()}
+        directives = {part.strip().split(" ", 1)[0]: part.strip() for part in csp.split(";") if part.strip()}
         self.assertIn("script-src", directives)
         self.assertNotIn("'unsafe-inline'", directives["script-src"])
         self.assertIn("'self'", directives["script-src"])
