@@ -79,7 +79,7 @@
 <div class="fault-grid">
   <section class="fault-card">
     <div class="fault-card-head"><div><h3 class="fault-title">Evolución mensual</h3><p class="fault-sub">Registros en los que se ha detectado alguna avería</p></div></div>
-    {% if meses_labels %}<div class="fault-chart"><canvas id="fault-trend-chart" aria-label="Evolución mensual de averías detectadas"></canvas></div>{% else %}<div class="fault-empty">Todavía no hay datos suficientes para mostrar una evolución.</div>{% endif %}
+    {% if meses_labels %}<div class="fault-chart"><canvas id="fault-trend-chart" data-labels='{{ meses_labels|tojson }}' data-values='{{ meses_valores|tojson }}' aria-label="Evolución mensual de averías detectadas"></canvas></div>{% else %}<div class="fault-empty">Todavía no hay datos suficientes para mostrar una evolución.</div>{% endif %}
   </section>
   <section class="fault-card">
     <div class="fault-card-head"><div><h3 class="fault-title">Modelo + avería</h3><p class="fault-sub">Combinaciones que aparecen más veces</p></div><span class="fault-count">{{ patrones|length }} patrones</span></div>
@@ -100,21 +100,6 @@
 {% block scripts %}
 {% if meses_labels %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js" integrity="sha256-Mh46P6mNpKqpV9EL5Xy7UU3gmJ7tj51ya10FkCzQGQQ=" crossorigin="anonymous"></script>
-<script>
-(() => {
-  if (typeof Chart === 'undefined') return;
-  Chart.defaults.font.family = "'Sora',system-ui,sans-serif";
-  Chart.defaults.color = '#7d879e';
-  const canvas = document.getElementById('fault-trend-chart');
-  if (!canvas) return;
-  const labels = {{ meses_labels|tojson }};
-  const values = {{ meses_valores|tojson }};
-  new Chart(canvas, {
-    type: 'line',
-    data: {labels, datasets: [{label: 'Averías detectadas', data: values, borderColor: '#269a78', backgroundColor: 'rgba(38,154,120,.13)', fill: true, tension: .32, pointRadius: 4, pointHoverRadius: 6, pointBackgroundColor: '#269a78'}]},
-    options: {responsive: true, maintainAspectRatio: false, plugins: {legend: {display: false}}, scales: {x: {grid: {display: false}}, y: {beginAtZero: true, ticks: {precision: 0}, grid: {color: 'rgba(120,130,150,.12)'}}}}
-  });
-})();
-</script>
+<script src="{{ url_for('static', filename='js/pages/fault-chart.js') }}"></script>
 {% endif %}
 {% endblock %}

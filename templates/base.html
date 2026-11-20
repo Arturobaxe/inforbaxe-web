@@ -745,10 +745,10 @@ tbody tr:nth-child(7){animation-delay:0.28s} tbody tr:nth-child(8){animation-del
 </style>
   {% block extra_head %}{% endblock %}
 </head>
-<body>
+<body data-sale-created="{{ 'true' if request.endpoint == 'ventas' and request.args.get('venta_guardada') == '1' else 'false' }}">
 
 <!-- Mobile overlay -->
-<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+<div class="sidebar-overlay" id="sidebar-overlay" data-action="close-sidebar"></div>
 
 
 <div class="layout">
@@ -846,7 +846,7 @@ tbody tr:nth-child(7){animation-delay:0.28s} tbody tr:nth-child(8){animation-del
       <div class="sidebar-user">
         <div class="sidebar-avatar">{{ session.get('username', 'A')[0].upper() }}</div>
         <span>{{ session.get('username', 'Admin') }}</span>
-        <form method="POST" action="{{ url_for('logout') }}" style="display:inline;margin-left:auto;" onsubmit="try{sessionStorage.clear();localStorage.clear();}catch(e){}">
+        <form method="POST" action="{{ url_for('logout') }}" style="display:inline;margin-left:auto;" data-clear-browser-storage="true">
           <button type="submit" class="btn-logout" title="Cerrar sesión" aria-label="Cerrar sesión">
             <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
           </button>
@@ -863,7 +863,7 @@ tbody tr:nth-child(7){animation-delay:0.28s} tbody tr:nth-child(8){animation-del
   <!-- ── Main ────────────────────────────────────────── -->
   <div class="main">
     <div class="topbar">
-      <button class="mobile-menu-btn" onclick="openSidebar()">
+      <button class="mobile-menu-btn" data-action="open-sidebar">
         <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       </button>
 
@@ -897,246 +897,17 @@ tbody tr:nth-child(7){animation-delay:0.28s} tbody tr:nth-child(8){animation-del
   </div>
 </div>
 
-<!-- ── JS ──────────────────────────────────────────────────── -->
-<script>
-// Mobile sidebar
-function openSidebar() {
-  document.getElementById('sidebar').classList.add('open');
-  document.getElementById('sidebar-overlay').classList.add('open');
-}
-function closeSidebar() {
-  document.getElementById('sidebar').classList.remove('open');
-  document.getElementById('sidebar-overlay').classList.remove('open');
-}
-// Cerrar sidebar al cambiar a desktop
-window.addEventListener('resize', () => {
-  if (window.innerWidth > 768) closeSidebar();
-});
-
-// Global search
-const searchInput = document.getElementById('global-search');
-const searchResults = document.getElementById('search-results');
-let searchTimer;
-searchInput.addEventListener('input', () => {
-  clearTimeout(searchTimer);
-  const q = searchInput.value.trim();
-  if (q.length < 2) { searchResults.style.display = 'none'; return; }
-  searchTimer = setTimeout(() => {
-    fetch(`/api/buscar?q=${encodeURIComponent(q)}`)
-      .then(r => r.json())
-      .then(data => renderSearchResults(data));
-  }, 250);
-});
-document.addEventListener('click', e => {
-  if (!e.target.closest('.sidebar-search-wrap')) {
-    searchResults.style.display = 'none';
-  }
-});
-function renderSearchResults(data) {
-  const payload = data && typeof data === 'object' ? data : {};
-  searchResults.replaceChildren();
-
-  function appendGroup(label, records, buildItem) {
-    if (!Array.isArray(records) || !records.length) return;
-
-    const heading = document.createElement('div');
-    heading.className = 'search-group-label';
-    heading.textContent = label;
-    searchResults.appendChild(heading);
-
-    records.forEach(record => {
-      if (!record || !Number.isSafeInteger(Number(record.id)) || Number(record.id) <= 0) return;
-
-      const details = buildItem(record);
-      const link = document.createElement('a');
-      link.href = details.href;
-      link.className = 'search-result-item';
-
-      const title = document.createElement('div');
-      title.className = 'search-result-name';
-      title.textContent = details.title;
-
-      const subtitle = document.createElement('div');
-      subtitle.className = 'search-result-sub';
-      subtitle.textContent = details.subtitle;
-
-      link.append(title, subtitle);
-      searchResults.appendChild(link);
-    });
-  }
-
-  appendGroup('Clientes', payload.clientes, c => ({
-    href: `/clientes/${encodeURIComponent(String(c.id))}/historial`,
-    title: String(c.nombre || ''),
-    subtitle: `${c.email || ''} ${c.telefono || ''}`
-  }));
-
-  appendGroup('Ventas', payload.ventas, v => ({
-    href: `/ventas/${encodeURIComponent(String(v.id))}/editar`,
-    title: `${v.nombre_cliente || ''} — ${v.total_pvp ?? ''}€`,
-    subtitle: `${v.fecha || ''} · ${v.comentarios || ''}`
-  }));
-
-  appendGroup('Citas', payload.citas, c => ({
-    href: `/citas/${encodeURIComponent(String(c.id))}/editar`,
-    title: String(c.nombre_cliente || ''),
-    subtitle: `${c.fecha || ''} ${c.hora || ''}`
-  }));
-
-  if (!searchResults.hasChildNodes()) {
-    const empty = document.createElement('div');
-    empty.style.cssText = 'padding:14px;color:var(--t3);font-size:13px;';
-    empty.textContent = 'Sin resultados';
-    searchResults.appendChild(empty);
-  }
-  searchResults.style.display = 'block';
-}
-
-// ── Confirm delete ────────────────────────────────────────
-function confirmDelete(url, msg) {
-  if (!confirm(msg || '¿Eliminar este registro?')) return;
-  fetch(url, { method: 'DELETE' })
-    .then(r => r.json())
-    .then(() => location.reload())
-    .catch(() => alert('Error al eliminar'));
-}
-
-
-</script>
-<script>
-document.querySelectorAll('.stat-value').forEach(el => {
-  const text = el.textContent.trim();
-  const hasEuro = text.includes('€');
-  const hasDot  = text.includes('.');
-  const final   = parseFloat(text.replace('€','').replace(',','.').trim());
-  if (isNaN(final) || final === 0) return;
-  el.textContent = '0' + (hasEuro ? '€' : '');
-  let start = null;
-  const step = ts => {
-    if (!start) start = ts;
-    const p    = Math.min((ts - start) / 1000, 1);
-    const ease = 1 - Math.pow(1 - p, 3);
-    el.textContent = (hasDot ? (final*ease).toFixed(2) : Math.round(final*ease)) + (hasEuro ? '€' : '');
-    if (p < 1) requestAnimationFrame(step);
-    else el.textContent = (hasDot ? final.toFixed(2) : final) + (hasEuro ? '€' : '');
-  };
-  requestAnimationFrame(step);
-});
-</script>
-<script>
-// Token CSRF para los formularios clásicos y las llamadas fetch de la aplicación.
-(() => {
-  const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
-  const originalFetch = window.fetch.bind(window);
-  window.fetch = (input, init = {}) => {
-    let url;
-    try {
-      const requestUrl = (typeof Request !== 'undefined' && input instanceof Request) ? input.url : input;
-      url = new URL(requestUrl, window.location.href);
-    } catch (_) {
-      return originalFetch(input, init);
-    }
-
-    const requestMethod = (init.method || (
-      typeof Request !== 'undefined' && input instanceof Request ? input.method : 'GET'
-    )).toUpperCase();
-
-    if (url.origin === window.location.origin &&
-        !['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(requestMethod)) {
-      const headers = new Headers(
-        typeof Request !== 'undefined' && input instanceof Request ? input.headers : undefined
-      );
-      new Headers(init.headers || undefined).forEach((value, key) => headers.set(key, value));
-      headers.set('X-CSRF-Token', token);
-      return originalFetch(input, {...init, headers});
-    }
-    return originalFetch(input, init);
-  };
-
-  function addFormToken(form) {
-    if (!form || form.method.toUpperCase() === 'GET' || form.querySelector('input[name="_csrf_token"]')) return;
-    const input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = '_csrf_token';
-    input.value = token;
-    form.appendChild(input);
-  }
-
-  document.querySelectorAll('form').forEach(addFormToken);
-  document.addEventListener('submit', event => addFormToken(event.target), true);
-})();
-</script>
+<script src="{{ url_for('static', filename='js/base.js') }}"></script>
 {% block scripts %}{% endblock %}
 
-<button class="fab" id="fab-btn" onclick="toggleFab()" style="display: none;">＋</button>
+<button class="fab" id="fab-btn" data-action="toggle-fab" style="display: none;">＋</button>
 <div class="fab-menu" id="fab-menu" style="display: none;">
   <a href="/ventas/nueva" class="fab-menu-item">🛒 Nueva venta</a>
   <a href="/citas/nueva" class="fab-menu-item">🗓️ Nueva cita</a>
   <a href="/clientes/nuevo" class="fab-menu-item">👤 Nuevo cliente</a>
 </div>
 
-<script>
-function toggleFab() {
-  const m = document.getElementById('fab-menu');
-  const b = document.getElementById('fab-btn');
-  const isOpen = m.classList.toggle('open');
-  m.style.display = isOpen ? 'flex' : 'none';
-  b.textContent = isOpen ? '✕' : '＋';
-}
 
-document.addEventListener('click', e => {
-  if (!e.target.closest('#fab-btn') && !e.target.closest('#fab-menu')) {
-    const m = document.getElementById('fab-menu');
-    if (m.classList.contains('open')) {
-      m.classList.remove('open');
-      m.style.display = 'none';
-      document.getElementById('fab-btn').textContent = '＋';
-    }
-  }
-});
-</script>
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js" integrity="sha256-bl5dZlrBcWpmPlZGgBBy9VGPGacsZVi7vHCAfZ2by6A=" crossorigin="anonymous"></script>
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-  document.querySelectorAll('select[name="id_cliente"]').forEach(el => {
-    new TomSelect(el, {
-      create: false,
-      sortField: { field: "text", direction: "asc" },
-      placeholder: "Escribe para buscar..."
-    });
-  });
-});
-</script>
-<script>
-// La ruta solo añade venta_guardada=1 después de confirmar que la venta se ha guardado.
-(() => {
-  // Flask marca la petición de la lista de ventas después de guardar correctamente.
-  const saleCreated = {{ 'true' if request.endpoint == 'ventas' and request.args.get('venta_guardada') == '1' else 'false' }};
-  if (!saleCreated) return;
-
-  const layer = document.createElement('div');
-  layer.className = 'sale-confetti-layer';
-  layer.setAttribute('aria-hidden', 'true');
-  const colors = ['#f97316', '#facc15', '#22c55e', '#3b82f6', '#ec4899', '#a855f7', '#ffffff'];
-
-  for (let i = 0; i < 90; i++) {
-    const piece = document.createElement('span');
-    piece.className = 'sale-confetti-piece';
-    piece.style.left = (Math.random() * 100) + '%';
-    piece.style.width = (6 + Math.random() * 7) + 'px';
-    piece.style.height = (9 + Math.random() * 10) + 'px';
-    piece.style.backgroundColor = colors[i % colors.length];
-    if (i % 4 === 0) piece.style.borderRadius = '50%';
-    piece.style.setProperty('--confetti-drift', ((Math.random() - .5) * 260) + 'px');
-    piece.style.setProperty('--confetti-spin', ((Math.random() - .5) * 1100) + 'deg');
-    piece.style.animationDuration = (2.7 + Math.random() * .55) + 's';
-    piece.style.animationDelay = (Math.random() * .28) + 's';
-    layer.appendChild(piece);
-  }
-
-  document.body.appendChild(layer);
-  window.setTimeout(() => layer.remove(), 3900);
-})();
-</script>
 </body>
 </html>

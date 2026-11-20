@@ -1,0 +1,266 @@
+(() => {
+  "use strict";
+(function () {
+  const form = document.getElementById('smart-part-form');
+  const brandInput = document.getElementById('marca');
+  const modelInput = document.getElementById('modelo');
+  const suggestions = document.getElementById('model-suggestions');
+  const selectedBox = document.getElementById('selected-models');
+  const hiddenBox = document.getElementById('selected-hidden');
+  const selected = new Map();
+  let primaryModelId = null;
+  let timer = null;
+  let controller = null;
+
+  function renderSelected() {
+    selectedBox.innerHTML = '';
+    hiddenBox.innerHTML = '';
+    if (!selected.size && (!researchSelected || !researchSelected.size)) {
+      const span = document.createElement('span');
+      span.className = 'text-muted'; span.style.fontSize = '12px';
+      span.textContent = 'Selecciona modelos del autocompletado. Puedes añadir varios.';
+      selectedBox.appendChild(span);
+    }
+    selected.forEach((item, id) => {
+      const chip = document.createElement('span');
+      chip.style.cssText = 'display:inline-flex;align-items:center;gap:7px;padding:6px 9px;border-radius:18px;background:var(--bg3);font-size:12px;';
+      chip.textContent = `${item.marca} ${item.modelo}`;
+      const remove = document.createElement('button');
+      remove.type = 'button'; remove.textContent = '×'; remove.title = 'Quitar';
+      remove.style.cssText = 'border:0;background:none;color:var(--red);font-size:16px;cursor:pointer;padding:0;';
+      remove.addEventListener('click', () => {
+        selected.delete(id);
+        if (primaryModelId === id) {
+          const next = selected.values().next();
+          if (!next.done) {
+            const item = next.value;
+            primaryModelId = String(item.id);
+            brandInput.value = item.marca;
+            modelInput.value = item.modelo;
+          } else {
+            primaryModelId = null;
+          }
+        }
+        renderSelected();
+      });
+      chip.appendChild(remove); selectedBox.appendChild(chip);
+      const hidden = document.createElement('input'); hidden.type = 'hidden'; hidden.name = 'modelo_id'; hidden.value = id; hiddenBox.appendChild(hidden);
+    });
+    researchSelected.forEach((item, index) => {
+      const chip = document.createElement('span');
+      chip.style.cssText = 'display:inline-flex;align-items:center;gap:7px;padding:6px 9px;border-radius:18px;background:var(--bg3);font-size:12px;';
+      chip.textContent = `${item.brand} ${item.model_name} · consenso`;
+      const remove = document.createElement('button');
+      remove.type = 'button'; remove.textContent = '×'; remove.title = 'Quitar';
+      remove.style.cssText = 'border:0;background:none;color:var(--red);font-size:16px;cursor:pointer;padding:0;';
+      remove.addEventListener('click', () => { researchSelected.delete(index); renderResearchSelection(); });
+      chip.appendChild(remove); selectedBox.appendChild(chip);
+    });
+  }
+  function choose(item) {
+    const id = String(item.id);
+    if (!selected.has(id)) selected.set(id, item);
+    if (primaryModelId === null) {
+      primaryModelId = id;
+      brandInput.value = item.marca;
+      modelInput.value = item.modelo;
+    }
+    renderSelected(); suggestions.style.display = 'none';
+  }
+  async function searchLocal() {
+    const q = modelInput.value.trim();
+    if (q.length < 2) { suggestions.style.display = 'none'; return; }
+    if (controller) controller.abort();
+    controller = new AbortController();
+    try {
+      const params = new URLSearchParams({q, marca: brandInput.value.trim()});
+      const response = await fetch(`${form.dataset.suggestionsEndpoint}?${params}`, {signal: controller.signal});
+      const data = await response.json();
+      suggestions.innerHTML = '';
+      (data.modelos || []).forEach(item => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.style.cssText = 'display:block;width:100%;text-align:left;padding:9px;border:0;border-radius:7px;background:transparent;color:var(--t1);cursor:pointer;';
+        button.innerHTML = `<strong>${escapeHtml(item.modelo)}</strong><div style="font-size:11px;color:var(--t2);">${escapeHtml(item.marca)}${item.numero_modelo ? ' · ' + escapeHtml(item.numero_modelo) : ''}</div>`;
+        button.addEventListener('click', () => choose(item));
+        suggestions.appendChild(button);
+      });
+      if (!data.modelos || !data.modelos.length) {
+        const empty = document.createElement('div'); empty.className = 'text-muted'; empty.style.cssText = 'padding:10px;font-size:12px;'; empty.textContent = 'No hay coincidencias en el catálogo local. Puedes investigar por referencia de pieza más abajo.'; suggestions.appendChild(empty);
+      }
+      suggestions.style.display = 'block';
+    } catch (error) {
+      if (error.name !== 'AbortError') console.warn('No se pudo buscar el modelo localmente.');
+    }
+  }
+  function escapeHtml(value) { return String(value || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  modelInput.addEventListener('input', () => { window.clearTimeout(timer); timer = window.setTimeout(searchLocal, 220); });
+  brandInput.addEventListener('input', () => { if (modelInput.value.trim().length >= 2) { window.clearTimeout(timer); timer = window.setTimeout(searchLocal, 220); } });
+  document.addEventListener('click', event => { if (!suggestions.contains(event.target) && event.target !== modelInput) suggestions.style.display = 'none'; });
+
+  document.addEventListener('click', event => {
+    const sourceLink = event.target instanceof Element
+      ? event.target.closest('[data-stop-propagation="true"]')
+      : null;
+    if (sourceLink) event.stopPropagation();
+  }, true);
+
+  const referenceInput = document.getElementById('referencia');
+  const researchButton = document.getElementById('reference-research-button');
+  const researchStatus = document.getElementById('reference-research-status');
+  const researchResults = document.getElementById('reference-research-results');
+  const researchToken = document.getElementById('investigacion-token');
+  const researchIndexesInput = document.getElementById('investigacion-indices');
+  const researchSelected = new Map();
+  let lastResearchModels = [];
+
+  function renderResearchSelection() {
+    researchIndexesInput.value = JSON.stringify(Array.from(researchSelected.keys()).map(Number));
+    researchResults.querySelectorAll('[data-research-index]').forEach(card => {
+      const index = Number(card.getAttribute('data-research-index'));
+      const checkbox = card.querySelector('input[type="checkbox"]');
+      if (checkbox) checkbox.checked = researchSelected.has(index);
+    });
+    const first = researchSelected.values().next();
+    if (!first.done && selected.size === 0) {
+      brandInput.value = first.value.brand || '';
+      modelInput.value = first.value.model_name || '';
+    }
+    renderSelected();
+  }
+
+  function researchSourcesHtml(list) {
+    // Devuelve HTML ya saneado: cada valor dinámico pasa por escapeHtml y solo se admiten enlaces http(s).
+    return (list || []).map(source => /^https?:\/\//i.test(source.url || '')
+      ? `<a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer" data-stop-propagation="true">${escapeHtml(source.domain)} ↗</a>`
+      : escapeHtml(source.domain)).join(' · ');
+  }
+
+  function diagnosticAttemptRows(d) {
+    return (Array.isArray(d.attempts) ? d.attempts : []).map(a => `<div class="text-muted" style="font-size:11px;margin-left:12px;word-break:break-all;">⇢ ${escapeHtml(a.kind || 'intento')}: ${escapeHtml(a.url || '')}<br>HTTP ${escapeHtml(a.http == null ? '—' : a.http)} · final: ${escapeHtml(a.final_url || '—')} · título: ${escapeHtml(a.title || '—')} · ${escapeHtml(a.status || '')}${a.formularios_de_busqueda != null ? ' · ' + Number(a.formularios_de_busqueda) + ' formulario(s) de búsqueda' : ''}</div>`).join('');
+  }
+
+  function diagnosticPageRows(d) {
+    const pages = Array.isArray(d.found_pages) && d.found_pages.length ? d.found_pages
+      : (Array.isArray(d.urls) ? d.urls.map(u => ({url: u.url, title: u.title, pending: true})) : []);
+    if (!pages.length) return '';
+    return pages.map(p => {
+      const safe = /^https?:\/\//i.test(p.url || '');
+      const link = safe ? `<a href="${escapeHtml(p.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(p.title || p.url)}</a>` : escapeHtml(p.title || p.url || '');
+      const state = p.pending ? 'localizada por buscador (la lectura se detalla en "Páginas leídas de buscadores")'
+        : `${p.read ? 'leída' : 'no leída'} · ${p.has_reference ? 'con referencia' : 'sin referencia'} · ${Number(p.candidates || 0)} modelos extraídos${p.status ? ' · ' + escapeHtml(p.status) : ''}`;
+      return `<div class="text-muted" style="font-size:11px;margin-left:12px;word-break:break-all;">↳ ${link}<br>${escapeHtml(p.url || '')} — ${state}</div>`;
+    }).join('');
+  }
+
+  function renderResearchResults(data) {
+    lastResearchModels = Array.isArray(data.models) ? data.models : [];
+    researchSelected.clear();
+    researchToken.value = data.research_token || '';
+    researchIndexesInput.value = '[]';
+    const rawDiagnostics = data.diagnostics || [];
+    const diagnostics = data.diagnostics_summary || (Array.isArray(rawDiagnostics) ? {
+      domains_consulted: (data.checked_domains || []).length || rawDiagnostics.filter(d => d.domain).length,
+      domains_with_search_results: rawDiagnostics.filter(d => Number(d.product_links || 0) > 0).length,
+      pages_discovered: rawDiagnostics.reduce((sum, d) => sum + Number(d.product_links || d.links || 0), 0),
+      pages_checked: rawDiagnostics.reduce((sum, d) => sum + Number(d.pages_read || 0), 0),
+      pages_with_exact_reference: rawDiagnostics.reduce((sum, d) => sum + Number(d.reference_pages || 0), 0),
+      domains_with_evidence: Number(data.successful_domains || 0),
+      search_errors: rawDiagnostics.filter(d => /bloquead|error|http_/i.test(String(d.status || ''))),
+      source_diagnostics: rawDiagnostics
+    } : rawDiagnostics);
+    const sourceDiagnostics = diagnostics.source_diagnostics || data.source_diagnostics || (Array.isArray(rawDiagnostics) ? rawDiagnostics : []);
+    const diagnosticLines = [
+      `${Number(diagnostics.domains_consulted || 0)} catálogos consultados`,
+      `${Number(diagnostics.domains_with_search_results || 0)} catálogos devolvieron enlaces`,
+      `${Number(diagnostics.pages_discovered || 0)} páginas localizadas`,
+      `${Number(diagnostics.pages_checked || 0)} páginas leídas`,
+      `${Number(diagnostics.pages_with_exact_reference || 0)} páginas contenían la referencia`,
+      `${Number(diagnostics.domains_with_evidence || data.successful_domains || 0)} dominios aportaron modelos`
+    ];
+    const sourceDetails = sourceDiagnostics.length
+      ? `<details style="margin-top:7px;"><summary style="cursor:pointer;font-size:11px;">Ver diagnóstico por fuente</summary><div style="display:grid;gap:4px;margin-top:6px;">${sourceDiagnostics.map(d => `<div class="text-muted" style="font-size:11px;">${escapeHtml(d.source || d.domain || 'Fuente')}: ${escapeHtml(d.status || 'sin estado')} · ${Number(d.search_pages || 0)} búsquedas · ${Number(d.product_links || d.links || 0)} enlaces · ${Number(d.pages_read || 0)} páginas leídas</div>${diagnosticAttemptRows(d)}${diagnosticPageRows(d)}`).join('')}</div></details>`
+      : '';
+    const diagnosticHtml = `<div class="text-muted" style="font-size:11px;line-height:1.6;margin-top:7px;">${diagnosticLines.map(escapeHtml).join(' · ')}</div>` +
+      (diagnostics.search_errors && diagnostics.search_errors.length
+        ? `<div class="text-muted" style="font-size:11px;margin-top:5px;">Algunas consultas fueron bloqueadas o no respondieron (${diagnostics.search_errors.length}).</div>` : '') + sourceDetails;
+    if (!lastResearchModels.length) {
+      researchResults.innerHTML = `<div class="card"><strong>${escapeHtml(data.message || 'No se ha encontrado consenso suficiente.')}</strong>${diagnosticHtml}<div class="text-muted" style="font-size:11px;margin-top:7px;">No se guardará ninguna compatibilidad cuando la evidencia sea insuficiente o contradictoria.</div></div>`;
+      return;
+    }
+    researchResults.innerHTML = `<div class="card"><div style="font-weight:700;">Modelos con consenso suficiente</div><div class="text-muted" style="font-size:12px;margin-top:4px;">Se exige un mínimo de ${Number(data.minimum_consensus || 2)} fuentes independientes por modelo. Marca los modelos que quieres asociar a esta pieza.</div>${diagnosticHtml}</div>` +
+      lastResearchModels.map((item, index) => {
+        const sources = researchSourcesHtml(item.sources);
+        return `<label class="card" data-research-index="${index}" style="display:flex;gap:10px;align-items:flex-start;cursor:pointer;">\
+          <input type="checkbox" style="margin-top:4px;" aria-label="Seleccionar ${escapeHtml(item.model_name)}">\
+          <span style="display:grid;gap:4px;flex:1;min-width:0;">\
+            <strong>${escapeHtml(item.brand)} ${escapeHtml(item.model_name)}</strong>\
+            <span class="text-muted" style="font-size:12px;">Códigos: ${escapeHtml((item.codes || []).join(', ') || 'No publicados')}</span>\
+            <span class="text-muted" style="font-size:11px;">${sources}</span>\
+          </span>\
+          <span class="badge badge-green">${Number(item.matches)}/${Number(item.total_sources)} · ${Number(item.confidence)}%</span>\
+        </label>`;
+      }).join('');
+    researchResults.querySelectorAll('[data-research-index]').forEach(card => {
+      const index = Number(card.getAttribute('data-research-index'));
+      const checkbox = card.querySelector('input[type="checkbox"]');
+      checkbox.addEventListener('change', () => {
+        if (checkbox.checked) researchSelected.set(index, lastResearchModels[index]);
+        else researchSelected.delete(index);
+        renderResearchSelection();
+      });
+    });
+  }
+
+  researchButton.addEventListener('click', async () => {
+    const reference = referenceInput.value.trim();
+    const partName = document.getElementById('pieza').value.trim();
+    if (reference.length < 4) {
+      researchStatus.textContent = 'Introduce una referencia de al menos 4 caracteres.';
+      referenceInput.focus();
+      return;
+    }
+    researchButton.disabled = true;
+    researchButton.textContent = 'Investigando…';
+    researchStatus.textContent = 'Consultando fuentes independientes desde INFORBAXE…';
+    researchResults.innerHTML = '';
+    researchToken.value = '';
+    researchSelected.clear();
+    researchIndexesInput.value = '[]';
+    try {
+      const response = await fetch('${form.dataset.researchEndpoint}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: JSON.stringify({referencia: reference, pieza: partName})
+      });
+      const data = await response.json().catch(() => null);
+      if (!data) throw new Error(response.redirected || response.status === 401 ? 'La sesión ha caducado. Recarga la página e inicia sesión.' : 'El servidor devolvió una respuesta no válida.');
+      if (!response.ok) throw new Error(data.message || 'No se pudo completar la investigación.');
+      renderResearchResults(data);
+      researchStatus.textContent = data.models?.length
+        ? `Investigación terminada: ${data.models.length} candidatos superan el consenso.`
+        : (Number(data.diagnostics_summary?.domains_with_search_results || 0) === 0
+            ? 'No se pudieron localizar páginas en los catálogos públicos.'
+            : `Investigación terminada: ${Number(data.successful_domains || 0)} dominios aportaron evidencia, sin consenso suficiente.`);
+    } catch (error) {
+      researchStatus.textContent = error.message || 'No se pudo completar la búsqueda automática.';
+    } finally {
+      researchButton.disabled = false;
+      researchButton.textContent = '🔎 Investigar compatibilidades automáticamente';
+    }
+  });
+
+  // Si cambia la referencia después de investigar, invalidar los candidatos anteriores.
+  function clearResearchResults() {
+    researchToken.value = '';
+    researchIndexesInput.value = '[]';
+    researchSelected.clear();
+    researchResults.innerHTML = '';
+    researchStatus.textContent = '';
+    renderSelected();
+  }
+  referenceInput.addEventListener('input', clearResearchResults);
+  document.getElementById('pieza').addEventListener('input', clearResearchResults);
+})();
+
+})();

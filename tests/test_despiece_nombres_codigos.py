@@ -6,6 +6,7 @@ import despiece_inteligente as d  # noqa: E402
 
 REF = "EB-BN980ABY"
 TEMPLATE = pathlib.Path(__file__).resolve().parent.parent / "templates" / "despiece_form_inteligente.html"
+SCRIPT = pathlib.Path(__file__).resolve().parent.parent / "static" / "js" / "pages" / "smart-despiece-form.js"
 
 P_OVISAT = f"<html><body><p>Batería {REF} Compatible con: Samsung Galaxy Note 20 SM-N980F, Samsung Galaxy Note 20 5G SM-N981B</p></body></html>"
 P_TECHTEK = f"<html><body><h1>Batería {REF}</h1><p>Compatible con: Galaxy Note 20 (SM-N980F, SM-N980F/DS), Galaxy Note 20 5G (SM-N981B, SM-N981U)</p></body></html>"
@@ -87,7 +88,7 @@ class EndToEnd(unittest.TestCase):
 @unittest.skipUnless(shutil.which("node"), "node no disponible")
 class SourceLinks(unittest.TestCase):
     def render(self, sources):
-        html = TEMPLATE.read_text(encoding="utf-8")
+        html = SCRIPT.read_text(encoding="utf-8")
         esc = re.search(r"  function escapeHtml\(value\)[^\n]*\n", html).group(0)
         fn = re.search(r"  function researchSourcesHtml\(list\) \{.*?\n  \}\n", html, re.S).group(0)
         with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as f:
