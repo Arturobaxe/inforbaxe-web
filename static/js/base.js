@@ -147,6 +147,15 @@
     });
   }
 
+  // Confirmación genérica para acciones declaradas en atributos data-*.
+  document.addEventListener("click", (event) => {
+    const button = event.target instanceof Element
+      ? event.target.closest("[data-confirm-delete='true']")
+      : null;
+    if (!button || typeof window.confirmDelete !== "function") return;
+    window.confirmDelete(button.dataset.url, button.dataset.msg);
+  });
+
   // Función global usada por acciones de borrado en varias páginas.
   window.confirmDelete = function confirmDelete(url, message) {
     if (!confirm(message || "¿Eliminar este registro?")) return;
