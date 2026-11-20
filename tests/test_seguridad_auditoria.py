@@ -160,7 +160,7 @@ class SecurityHelpersTests(unittest.TestCase):
             self.assertNotIn("{%", script, script_path)
             self.assertNotRegex(
                 script,
-                r"(?:onclick|onsubmit|onchange|oninput|onmouseover|onmouseout)\\s*=",
+                r"(?:onclick|onsubmit|onchange|oninput|onmouseover|onmouseout)\s*=",
                 script_path,
             )
 
