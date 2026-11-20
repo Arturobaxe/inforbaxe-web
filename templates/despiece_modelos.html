@@ -21,7 +21,7 @@
       <br><span style="font-size:12px;">La sincronización periódica del catálogo general de dispositivos mediante MobileAPI es una función independiente y opcional; permanece desactivada porque requiere una cuenta y una clave de ese proveedor. No afecta a la búsqueda por referencia.</span>
     </div>
     {% else %}
-    <div class="flash flash-success" id="sync-status" style="margin:10px 0;">Proveedor externo configurado.</div>
+    <div class="flash flash-success" id="sync-status" data-sync-endpoint="{{ url_for('despiece_inteligente.api_sincronizar_modelos') }}" data-auto-sync="{{ 'true' if sincronizacion_auto else 'false' }}" style="margin:10px 0;">Proveedor externo configurado.</div>
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px;">
       <button class="btn btn-secondary btn-sm" type="button" id="sync-now">Comprobar novedades ahora</button>
       <span class="text-muted" style="font-size:12px;">{% if sincronizacion_auto %}Comprobación automática como máximo una vez cada 7 días al abrir esta página.{% else %}La comprobación automática está desactivada; puedes lanzarla manualmente.{% endif %}</span>
@@ -53,7 +53,7 @@
         <td>{{ m.marca }}</td><td style="font-weight:700;">{{ m.modelo }}</td><td class="td-mono">{{ m.numero_modelo or '—' }}</td><td><span class="badge badge-orange">{{ m.origen or 'externo' }}</span></td>
         <td style="white-space:nowrap;">
           <form method="post" action="{{ url_for('despiece_inteligente.aprobar_modelo', model_id=m.id) }}" style="display:inline;"><button class="btn btn-green btn-sm" type="submit">Aprobar</button></form>
-          <form method="post" action="{{ url_for('despiece_inteligente.ignorar_modelo', model_id=m.id) }}" style="display:inline;" onsubmit="return confirm('¿Descartar esta sugerencia?');"><button class="btn btn-danger btn-sm" type="submit">Ignorar</button></form>
+          <form method="post" action="{{ url_for('despiece_inteligente.ignorar_modelo', model_id=m.id) }}" style="display:inline;" data-confirm-message="¿Descartar esta sugerencia?"><button class="btn btn-danger btn-sm" type="submit">Ignorar</button></form>
         </td>
       </tr>
       {% endfor %}
@@ -76,34 +76,6 @@
 {% endblock %}
 {% block scripts %}
 {% if api_configurada %}
-<script>
-(function () {
-  const status = document.getElementById('sync-status');
-  const syncButton = document.getElementById('sync-now');
-  let running = false;
-  async function runSync(force) {
-    if (running) return;
-    running = true;
-    if (status) status.textContent = 'Comprobando novedades del catálogo externo…';
-    if (syncButton) syncButton.disabled = true;
-    try {
-      const response = await fetch('{{ url_for("despiece_inteligente.api_sincronizar_modelos") }}', {
-        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({force: !!force})
-      });
-      const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.message || 'No se pudo comprobar el catálogo.');
-      if (status) status.textContent = data.message || 'Catálogo comprobado.';
-      if (data.added > 0) window.setTimeout(() => window.location.reload(), 700);
-    } catch (error) {
-      if (status) status.textContent = error.message || 'No se pudo comprobar el catálogo externo.';
-    } finally {
-      running = false;
-      if (syncButton) syncButton.disabled = false;
-    }
-  }
-  {% if sincronizacion_auto %}runSync(false);{% endif %}
-  if (syncButton) syncButton.addEventListener('click', () => runSync(true));
-})();
-</script>
+<script src="{{ url_for('static', filename='js/pages/despiece-models.js') }}"></script>
 {% endif %}
 {% endblock %}
