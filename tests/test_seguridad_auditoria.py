@@ -135,10 +135,10 @@ class SecurityHelpersTests(unittest.TestCase):
             template = (root / template_path).read_text(encoding="utf-8")
             script = (root / "static" / script_path).read_text(encoding="utf-8")
             self.assertIn(f"filename='{script_path}'", template, template_path)
-            self.assertNotRegex(template, r"<script\\b(?![^>]*\\bsrc\\s*=)[^>]*>", template_path)
+            self.assertNotRegex(template, r"<script\b(?![^>]*\bsrc\s*=)[^>]*>", template_path)
             self.assertNotRegex(
                 template,
-                r"\\son(?:click|submit|change|input|mouseover|mouseout|keydown|keyup)\\s*=",
+                r"\son(?:click|submit|change|input|mouseover|mouseout|keydown|keyup)\s*=",
                 template_path,
             )
             self.assertNotIn("{{", script, script_path)
