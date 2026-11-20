@@ -59,7 +59,7 @@
                 <button type="submit" class="btn btn-green btn-sm" title="Convertir a venta">🛒</button>
               </form>
               {% endif %}
-              <button onclick="confirmDelete('/api/presupuestos/{{ p.id }}', '¿Eliminar presupuesto #{{ p.id }}?')" class="btn btn-danger btn-sm">🗑️</button>
+              <button data-confirm-delete="true" data-url="/api/presupuestos/{{ p.id }}" data-msg="¿Eliminar presupuesto #{{ p.id }}?" class="btn btn-danger btn-sm">🗑️</button>
             </div>
           </td>
         </tr>
