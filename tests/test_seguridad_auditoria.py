@@ -110,8 +110,8 @@ class SecurityHelpersTests(unittest.TestCase):
         self.assertIn("dataset.saleCreated", base_js)
         self.assertIn("window.confirmDelete", base_js)
         self.assertIn("X-CSRF-Token", base_js)
-        self.assertNotRegex(base, r"<script\\b(?![^>]*\\bsrc\\s*=)[^>]*>")
-        self.assertNotRegex(base, r"\\son[a-z]+\\s*=")
+        self.assertNotRegex(base, r"<script\b(?![^>]*\bsrc\s*=)[^>]*>")
+        self.assertNotRegex(base, r"\son[a-z]+\s*=")
         self.assertIn("celebrarPago", sales)
         self.assertIn("moneyFloat", sales)
         self.assertIn("equipo_contrasena", form)
@@ -119,6 +119,36 @@ class SecurityHelpersTests(unittest.TestCase):
         self.assertIn("data-msg=", citas)
         self.assertIn("data-msg=", products)
         self.assertIn("data-nombre=", links)
+
+
+    def test_externalized_page_scripts_have_no_inline_code_or_handlers(self):
+        from pathlib import Path
+        root = Path(__file__).resolve().parent.parent
+        pages = {
+            "templates/cliente_form.html": "js/pages/client-form.js",
+            "templates/clientes.html": "js/pages/clients.js",
+            "templates/despiece_compatibilidades.html": "js/pages/despiece-compatibilidades.js",
+            "templates/enlaces_activos.html": "js/pages/active-links.js",
+            "templates/productos.html": "js/pages/products.js",
+        }
+        for template_path, script_path in pages.items():
+            template = (root / template_path).read_text(encoding="utf-8")
+            script = (root / "static" / script_path).read_text(encoding="utf-8")
+            self.assertIn(f"filename='{script_path}'", template, template_path)
+            self.assertNotRegex(template, r"<script\\b(?![^>]*\\bsrc\\s*=)[^>]*>", template_path)
+            self.assertNotRegex(
+                template,
+                r"\\son(?:click|submit|change|input|mouseover|mouseout|keydown|keyup)\\s*=",
+                template_path,
+            )
+            self.assertNotIn("{{", script, script_path)
+            self.assertNotIn("{%", script, script_path)
+
+        products = (root / "templates/productos.html").read_text(encoding="utf-8")
+        links = (root / "templates/enlaces_activos.html").read_text(encoding="utf-8")
+        self.assertIn('data-product-action="edit"', products)
+        self.assertIn('data-product-action="delete"', products)
+        self.assertIn('data-confirm-revoke="true"', links)
 
     def test_external_scripts_and_styles_have_sri(self):
         from pathlib import Path
