@@ -210,6 +210,18 @@ class SecurityHelpersTests(unittest.TestCase):
                 str(template_path),
             )
 
+    def test_csp_blocks_inline_javascript_but_keeps_inline_styles(self):
+        response = A.app.test_client().get("/login")
+        self.assertEqual(response.status_code, 200)
+        csp = response.headers.get("Content-Security-Policy", "")
+        directives = {part.split(" ", 1)[0]: part for part in csp.split(";") if part.strip()}
+        self.assertIn("script-src", directives)
+        self.assertNotIn("'unsafe-inline'", directives["script-src"])
+        self.assertIn("'self'", directives["script-src"])
+        self.assertIn("https://cdn.jsdelivr.net", directives["script-src"])
+        self.assertIn("https://cdnjs.cloudflare.com", directives["script-src"])
+        self.assertIn("'unsafe-inline'", directives.get("style-src", ""))
+
     def test_external_scripts_and_styles_have_sri(self):
         from pathlib import Path
         root = Path(__file__).resolve().parent.parent
