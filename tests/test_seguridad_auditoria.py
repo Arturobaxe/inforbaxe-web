@@ -150,7 +150,7 @@ class SecurityHelpersTests(unittest.TestCase):
             template = (root / template_path).read_text(encoding="utf-8")
             script = (root / "static" / script_path).read_text(encoding="utf-8")
             self.assertIn(f"filename='{script_path}'", template, template_path)
-            self.assertNotRegex(template, r"<script\b(?![^>]*\bsrc\s*=)[^>]*>", template_path)
+            self.assertNotRegex(template, r"<script\b(?![^>]*\bsrc\s*=)[^>]*>", str(template_path))
             self.assertNotRegex(
                 template,
                 r"\son(?:click|submit|change|input|mouseover|mouseout|keydown|keyup)\s*=",
@@ -203,10 +203,10 @@ class SecurityHelpersTests(unittest.TestCase):
         # Regresión global: ninguna plantilla puede reintroducir JS o eventos inline.
         for template_path in (root / "templates").glob("*.html"):
             template = template_path.read_text(encoding="utf-8")
-            self.assertNotRegex(template, r"<script\\b(?![^>]*\\bsrc\\s*=)[^>]*>", str(template_path))
+            self.assertNotRegex(template, r"<script\b(?![^>]*\bsrc\s*=)[^>]*>", str(template_path))
             self.assertNotRegex(
                 template,
-                r"\\son(?:click|submit|change|input|mouseover|mouseout|keydown|keyup)\\s*=",
+                r"\son(?:click|submit|change|input|mouseover|mouseout|keydown|keyup)\s*=",
                 str(template_path),
             )
 
