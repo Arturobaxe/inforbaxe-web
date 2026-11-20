@@ -62,11 +62,11 @@
           <td>
             <div style="display:flex; gap:4px; justify-content:flex-end;">
               {% if c.estado == 'pendiente' %}
-              <button onclick="resolverCita({{ c.id }}, 'completada')" class="btn btn-green btn-sm" title="Ha asistido">✓ Ha asistido</button>
-              <button onclick="resolverCita({{ c.id }}, 'no_asistio')" class="btn btn-danger btn-sm" title="No ha asistido">✕ No</button>
+              <button data-cita-action="resolver" data-cita-id="{{ c.id }}" data-cita-estado="completada" class="btn btn-green btn-sm" title="Ha asistido">✓ Ha asistido</button>
+              <button data-cita-action="resolver" data-cita-id="{{ c.id }}" data-cita-estado="no_asistio" class="btn btn-danger btn-sm" title="No ha asistido">✕ No</button>
               {% endif %}
               <a href="{{ url_for('cita_editar', id_cita=c.id) }}" class="btn btn-blue btn-sm">✏️</a>
-              <button data-url="/api/citas/{{ c.id }}" data-msg="¿Eliminar cita de {{ c.nombre_cliente }}?" onclick="confirmDelete(this.dataset.url, this.dataset.msg)" class="btn btn-danger btn-sm delete-cita">🗑️</button>
+              <button data-url="/api/citas/{{ c.id }}" data-msg="¿Eliminar cita de {{ c.nombre_cliente }}?" data-cita-action="delete" class="btn btn-danger btn-sm delete-cita">🗑️</button>
             </div>
           </td>
         </tr>
@@ -79,31 +79,5 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script>
-async function resolverCita(id, estado) {
-  const texto = estado === 'completada' ? '¿Confirmas que el cliente ha asistido?' : '¿Confirmas que el cliente no ha asistido?';
-  if (!confirm(texto)) return;
-  try {
-    const endpoint = estado === 'completada' ? 'completar' : 'no-asistio';
-    const response = await fetch(`/api/citas/${id}/${endpoint}`, { method: 'POST' });
-    if (!response.ok) throw new Error('No se pudo actualizar la cita');
-    location.reload();
-  } catch (error) { alert(error.message || 'Error al actualizar la cita'); }
-}
-
-// Swipe para borrar en móvil
-if ('ontouchstart' in window) {
-  document.querySelectorAll('tbody tr[id^="cita-row-"]').forEach(row => {
-    let startX = 0;
-    row.addEventListener('touchstart', e => startX = e.touches[0].clientX, {passive:true});
-    row.addEventListener('touchend', e => {
-      const diff = startX - e.changedTouches[0].clientX;
-      if (diff > 80) {
-        const btn = row.querySelector('.delete-cita');
-        if (btn) btn.click();
-      }
-    }, {passive:true});
-  });
-}
-</script>
+<script src="{{ url_for('static', filename='js/pages/appointments.js') }}"></script>
 {% endblock %}
