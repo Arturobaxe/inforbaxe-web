@@ -141,6 +141,10 @@ class SecurityHelpersTests(unittest.TestCase):
             "templates/dashboard.html": "js/pages/dashboard.js",
             "templates/despiece_form_inteligente.html": "js/pages/smart-despiece-form.js",
             "templates/despiece_buscar_referencia.html": "js/pages/reference-search.js",
+            "templates/ventas.html": "js/pages/sales.js",
+            "templates/mensualidades.html": "js/pages/monthly-payments.js",
+            "templates/presupuesto_form.html": "js/pages/budget-form.js",
+            "templates/venta_form.html": "js/pages/sale-form.js",
         }
         for template_path, script_path in pages.items():
             template = (root / template_path).read_text(encoding="utf-8")
@@ -195,6 +199,16 @@ class SecurityHelpersTests(unittest.TestCase):
         self.assertNotIn("{{", smart_js)
         self.assertNotIn("{{", reference_js)
         self.assertIn('data-stop-propagation="true"', smart_js)
+
+        # Regresión global: ninguna plantilla puede reintroducir JS o eventos inline.
+        for template_path in (root / "templates").glob("*.html"):
+            template = template_path.read_text(encoding="utf-8")
+            self.assertNotRegex(template, r"<script\\b(?![^>]*\\bsrc\\s*=)[^>]*>", str(template_path))
+            self.assertNotRegex(
+                template,
+                r"\\son(?:click|submit|change|input|mouseover|mouseout|keydown|keyup)\\s*=",
+                str(template_path),
+            )
 
     def test_external_scripts_and_styles_have_sri(self):
         from pathlib import Path
