@@ -139,6 +139,8 @@ class SecurityHelpersTests(unittest.TestCase):
             "templates/despiece_modelos.html": "js/pages/despiece-models.js",
             "templates/estadisticas.html": "js/pages/statistics.js",
             "templates/dashboard.html": "js/pages/dashboard.js",
+            "templates/despiece_form_inteligente.html": "js/pages/smart-despiece-form.js",
+            "templates/despiece_buscar_referencia.html": "js/pages/reference-search.js",
         }
         for template_path, script_path in pages.items():
             template = (root / template_path).read_text(encoding="utf-8")
@@ -182,8 +184,17 @@ class SecurityHelpersTests(unittest.TestCase):
         budgets = (root / "templates/presupuestos.html").read_text(encoding="utf-8")
         self.assertIn("data-provider-search=", dashboard)
         self.assertIn('data-notes-action="clear"', dashboard)
-        self.assertNotRegex(history, r"\\son(?:mouseover|mouseout)\\s*=")
+        self.assertNotRegex(history, r"\son(?:mouseover|mouseout)\s*=")
         self.assertIn('data-confirm-delete="true"', budgets)
+        smart_despiece = (root / "templates/despiece_form_inteligente.html").read_text(encoding="utf-8")
+        reference_search = (root / "templates/despiece_buscar_referencia.html").read_text(encoding="utf-8")
+        smart_js = (root / "static/js/pages/smart-despiece-form.js").read_text(encoding="utf-8")
+        reference_js = (root / "static/js/pages/reference-search.js").read_text(encoding="utf-8")
+        self.assertIn("data-suggestions-endpoint=", smart_despiece)
+        self.assertIn("data-search-endpoint=", reference_search)
+        self.assertNotIn("{{", smart_js)
+        self.assertNotIn("{{", reference_js)
+        self.assertIn('data-stop-propagation="true"', smart_js)
 
     def test_external_scripts_and_styles_have_sri(self):
         from pathlib import Path
