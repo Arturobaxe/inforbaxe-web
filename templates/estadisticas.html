@@ -20,10 +20,10 @@
 </div>
 <div class="profit-layout">
   <section class="profit-card"><div class="profit-card-head"><div><h3 class="profit-card-title">Beneficio generado por cliente</h3><p class="profit-card-sub">Clientes ordenados de mayor a menor beneficio</p></div></div>
-    {% if clientes_grafico %}<div class="profit-chart"><canvas id="profit-clients-chart" aria-label="Beneficio por cliente"></canvas></div>{% else %}<div class="profit-empty">Todavía no hay ventas registradas en este periodo.</div>{% endif %}
+    {% if clientes_grafico %}<div class="profit-chart"><canvas id="profit-clients-chart" data-labels="{{ clientes_grafico|map(attribute='nombre')|list|tojson|forceescape }}" data-values="{{ clientes_grafico|map(attribute='beneficio')|list|tojson|forceescape }}" aria-label="Beneficio por cliente"></canvas></div>{% else %}<div class="profit-empty">Todavía no hay ventas registradas en este periodo.</div>{% endif %}
   </section>
   <section class="profit-card"><div class="profit-card-head"><div><h3 class="profit-card-title">Gastos frente a beneficio</h3><p class="profit-card-sub">Reparto del importe registrado en ventas</p></div></div>
-    {% if total_ventas %}<div class="profit-chart doughnut"><canvas id="profit-split-chart" aria-label="Comparación entre gastos y beneficio"></canvas></div>{% else %}<div class="profit-empty">Sin datos para comparar.</div>{% endif %}
+    {% if total_ventas %}<div class="profit-chart doughnut"><canvas id="profit-split-chart" data-expenses="{{ gastos_totales|tojson|forceescape }}" data-profit="{{ beneficio_total|tojson|forceescape }}" aria-label="Comparación entre gastos y beneficio"></canvas></div>{% else %}<div class="profit-empty">Sin datos para comparar.</div>{% endif %}
     <div class="profit-note">Los gastos se calculan con el coste de piezas y productos guardado en cada venta. No incluye alquiler, suministros u otros gastos que no estén registrados en INFORBAXE.</div>
   </section>
 </div>
@@ -34,22 +34,6 @@
 {% block scripts %}
 {% if clientes_grafico or total_ventas %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js" integrity="sha256-Mh46P6mNpKqpV9EL5Xy7UU3gmJ7tj51ya10FkCzQGQQ=" crossorigin="anonymous"></script>
-<script>
-(() => {
-  if (typeof Chart === 'undefined') return;
-  Chart.defaults.font.family = "'Sora', system-ui, sans-serif";
-  Chart.defaults.color = '#7d879e';
-  Chart.defaults.plugins.legend.labels.usePointStyle = true;
-  const names = {{ clientes_grafico|map(attribute='nombre')|list|tojson }};
-  const profits = {{ clientes_grafico|map(attribute='beneficio')|list|tojson }};
-  const canvas = document.getElementById('profit-clients-chart');
-  if (canvas) {
-    const colors = ['#e88a2c','#24a477','#527fd0','#9c70c6','#e4b64a','#38a6b7','#e06f86','#668cbb','#a3a45c','#dc955b','#6b9e83','#9576a8'];
-    new Chart(canvas,{type:'bar',data:{labels:names,datasets:[{label:'Beneficio',data:profits,backgroundColor:profits.map((_,i)=>colors[i%colors.length]),borderRadius:7,borderSkipped:false,maxBarThickness:24}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'Beneficio: '+Number(c.raw||0).toLocaleString('es-ES',{style:'currency',currency:'EUR'})}}},scales:{x:{beginAtZero:true,grid:{color:'rgba(120,130,150,.12)'},ticks:{callback:v=>v+' €'}},y:{grid:{display:false}}}}});
-  }
-  const split=document.getElementById('profit-split-chart');
-  if(split) new Chart(split,{type:'doughnut',data:{labels:['Gastos en piezas','Beneficio'],datasets:[{data:[{{ gastos_totales }},{{ beneficio_total }}],backgroundColor:['#ed9b35','#27a577'],borderColor:'#fff',borderWidth:4,hoverOffset:9}]},options:{responsive:true,maintainAspectRatio:false,cutout:'66%',plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>c.label+': '+Number(c.raw||0).toLocaleString('es-ES',{style:'currency',currency:'EUR'})}}}}});
-})();
-</script>
+<script src="{{ url_for('static', filename='js/pages/statistics.js') }}"></script>
 {% endif %}
 {% endblock %}
