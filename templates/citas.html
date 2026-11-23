@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Citas — INFORBAXE{% endblock %}
 {% block page_title %}🗓️ Citas{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/citas-calendar.css') }}">
+{% endblock %}
 {% block page_sub %}{{ citas|length }} citas{% endblock %}
 {% block topbar_actions %}
   <a href="{{ url_for('cita_nueva') }}" class="btn btn-primary">
@@ -33,6 +36,50 @@
     <a href="{{ url_for('citas') }}" class="btn btn-danger" style="margin-top:auto;">✖</a>
   </form>
 </div>
+
+<section id="appointments-calendar"
+         class="card appointments-calendar mb-4"
+         data-appointments="{{ citas_calendario|tojson|forceescape }}"
+         data-today="{{ hoy }}"
+         data-min-month="{{ calendario_min }}"
+         data-max-month="{{ calendario_max }}">
+  <div class="calendar-main">
+    <div class="calendar-heading">
+      <div>
+        <h2>Calendario de citas</h2>
+        <p>Consulta de un vistazo tus citas próximas</p>
+      </div>
+      <div class="calendar-navigation">
+        <button type="button" data-calendar-nav="previous" aria-label="Mes anterior">‹</button>
+        <button type="button" data-calendar-nav="today">Hoy</button>
+        <button type="button" data-calendar-nav="next" aria-label="Mes siguiente">›</button>
+      </div>
+    </div>
+    <div id="calendar-month-label" class="calendar-month-label" aria-live="polite"></div>
+    <div class="calendar-weekdays" aria-hidden="true">
+      <span>Lun</span><span>Mar</span><span>Mié</span><span>Jue</span><span>Vie</span><span>Sáb</span><span>Dom</span>
+    </div>
+    <div id="calendar-days" class="calendar-days" role="group" aria-label="Días del mes"></div>
+    <div class="calendar-legend" aria-label="Leyenda de estados">
+      <span><i class="calendar-dot pending"></i>Pendiente</span>
+      <span><i class="calendar-dot completed"></i>Completada</span>
+      <span><i class="calendar-dot no-show"></i>No asistió</span>
+      <span><i class="calendar-dot cancelled"></i>Cancelada</span>
+    </div>
+  </div>
+  <aside class="calendar-agenda">
+    <div class="calendar-agenda-heading">
+      <div>
+        <h3 id="calendar-agenda-title">Próximas citas</h3>
+        <p id="calendar-agenda-subtitle">Selecciona un día para ver su agenda</p>
+      </div>
+    </div>
+    <div id="calendar-agenda-list" class="calendar-agenda-list" aria-live="polite"></div>
+    <a id="calendar-new-appointment" class="btn btn-primary calendar-new-appointment"
+       href="{{ url_for('cita_nueva') }}">＋ Nueva cita</a>
+  </aside>
+</section>
+
 <div class="card">
   <div class="table-wrap">
     <table>
