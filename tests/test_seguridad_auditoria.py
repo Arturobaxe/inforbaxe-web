@@ -31,6 +31,28 @@ class SecurityHelpersTests(unittest.TestCase):
         self.assertLessEqual(len(rows), 200)
         self.assertEqual(A._sanitizar_productos("bad"), [])
 
+    def test_calendar_events_are_minimal_sorted_and_reject_invalid_rows(self):
+        rows = A._preparar_citas_calendario([
+            {"id": 2, "fecha": "2026-11-25", "hora": "10:30:00",
+             "nombre_cliente": "Ana", "estado": "pendiente", "equipo_contrasena": "NO_EXPORTAR"},
+            {"id": 1, "fecha": "2026-11-24", "hora": "09:00",
+             "nombre_cliente": "Luis", "estado": "completada"},
+            {"id": 3, "fecha": "2026-11-26", "hora": "11:00",
+             "nombre_cliente": "Eva", "estado": "estado_desconocido"},
+            {"id": "inválido", "fecha": "2026-11-27", "estado": "pendiente"},
+            {"id": 4, "fecha": "fecha incorrecta", "estado": "pendiente"},
+            None,
+        ])
+        self.assertEqual([row["id"] for row in rows], [1, 2, 3])
+        self.assertEqual(rows[0]["estado"], "completada")
+        self.assertEqual(rows[1]["hora"], "10:30")
+        self.assertEqual(rows[2]["estado"], "otro")
+        self.assertNotIn("equipo_contrasena", rows[1])
+
+    def test_calendar_month_navigation_handles_year_boundaries(self):
+        self.assertEqual(A._mes_calendario_desplazado(2026, 1, -1).isoformat(), "2025-12-01")
+        self.assertEqual(A._mes_calendario_desplazado(2026, 12, 1).isoformat(), "2027-01-01")
+
     def test_cipher_encrypts_and_keeps_legacy_plaintext_readable(self):
         from cryptography.fernet import Fernet
         key = Fernet.generate_key().decode()
