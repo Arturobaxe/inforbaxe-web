@@ -31,6 +31,28 @@ class SecurityHelpersTests(unittest.TestCase):
         self.assertLessEqual(len(rows), 200)
         self.assertEqual(A._sanitizar_productos("bad"), [])
 
+    def test_calendar_events_are_minimal_sorted_and_reject_invalid_rows(self):
+        rows = A._preparar_citas_calendario([
+            {"id": 2, "fecha": "2026-11-25", "hora": "10:30:00",
+             "nombre_cliente": "Ana", "estado": "pendiente", "equipo_contrasena": "NO_EXPORTAR"},
+            {"id": 1, "fecha": "2026-11-24", "hora": "09:00",
+             "nombre_cliente": "Luis", "estado": "completada"},
+            {"id": 3, "fecha": "2026-11-26", "hora": "11:00",
+             "nombre_cliente": "Eva", "estado": "estado_desconocido"},
+            {"id": "inválido", "fecha": "2026-11-27", "estado": "pendiente"},
+            {"id": 4, "fecha": "fecha incorrecta", "estado": "pendiente"},
+            None,
+        ])
+        self.assertEqual([row["id"] for row in rows], [1, 2, 3])
+        self.assertEqual(rows[0]["estado"], "completada")
+        self.assertEqual(rows[1]["hora"], "10:30")
+        self.assertEqual(rows[2]["estado"], "otro")
+        self.assertNotIn("equipo_contrasena", rows[1])
+
+    def test_calendar_month_navigation_handles_year_boundaries(self):
+        self.assertEqual(A._mes_calendario_desplazado(2026, 1, -1).isoformat(), "2025-12-01")
+        self.assertEqual(A._mes_calendario_desplazado(2026, 12, 1).isoformat(), "2027-01-01")
+
     def test_cipher_encrypts_and_keeps_legacy_plaintext_readable(self):
         from cryptography.fernet import Fernet
         key = Fernet.generate_key().decode()
@@ -99,20 +121,135 @@ class SecurityHelpersTests(unittest.TestCase):
         from pathlib import Path
         root = Path(__file__).resolve().parent.parent
         base = (root / "templates/base.html").read_text(encoding="utf-8")
+        base_js = (root / "static/js/base.js").read_text(encoding="utf-8")
         sales = (root / "templates/ventas.html").read_text(encoding="utf-8")
+        sales_js = (root / "static/js/pages/sales.js").read_text(encoding="utf-8")
         form = (root / "templates/venta_form.html").read_text(encoding="utf-8")
+        sale_form_js = (root / "static/js/pages/sale-form.js").read_text(encoding="utf-8")
         citas = (root / "templates/citas.html").read_text(encoding="utf-8")
         products = (root / "templates/productos.html").read_text(encoding="utf-8")
         links = (root / "templates/enlaces_activos.html").read_text(encoding="utf-8")
         self.assertIn("saleConfettiFall", base)
-        self.assertIn("saleCreated", base)
-        self.assertIn("celebrarPago", sales)
+        self.assertIn("data-sale-created=", base)
+        self.assertIn("dataset.saleCreated", base_js)
+        self.assertIn("window.confirmDelete", base_js)
+        self.assertIn("X-CSRF-Token", base_js)
+        self.assertNotRegex(base, r"<script\b(?![^>]*\bsrc\s*=)[^>]*>")
+        self.assertNotRegex(base, r"\son[a-z]+\s*=")
+        self.assertIn("celebrarPago", sales_js)
         self.assertIn("moneyFloat", sales)
         self.assertIn("equipo_contrasena", form)
-        self.assertIn("includes(el.name)", form)
+        self.assertIn("includes(el.name)", sale_form_js)
         self.assertIn("data-msg=", citas)
         self.assertIn("data-msg=", products)
         self.assertIn("data-nombre=", links)
+
+
+    def test_externalized_page_scripts_have_no_inline_code_or_handlers(self):
+        from pathlib import Path
+        root = Path(__file__).resolve().parent.parent
+        pages = {
+            "templates/cliente_form.html": "js/pages/client-form.js",
+            "templates/clientes.html": "js/pages/clients.js",
+            "templates/despiece_compatibilidades.html": "js/pages/despiece-compatibilidades.js",
+            "templates/enlaces_activos.html": "js/pages/active-links.js",
+            "templates/productos.html": "js/pages/products.js",
+            "templates/citas.html": "js/pages/appointments.js",
+            "templates/despiece.html": "js/pages/despiece.js",
+            "templates/averias_frecuentes.html": "js/pages/fault-chart.js",
+            "templates/propinas.html": "js/pages/tips.js",
+            "templates/seguimiento_publico.html": "js/pages/public-tracking.js",
+            "templates/seguimientos_cliente.html": "js/pages/client-followups.js",
+            "templates/despiece_modelos.html": "js/pages/despiece-models.js",
+            "templates/estadisticas.html": "js/pages/statistics.js",
+            "templates/dashboard.html": "js/pages/dashboard.js",
+            "templates/despiece_form_inteligente.html": "js/pages/smart-despiece-form.js",
+            "templates/despiece_buscar_referencia.html": "js/pages/reference-search.js",
+            "templates/ventas.html": "js/pages/sales.js",
+            "templates/mensualidades.html": "js/pages/monthly-payments.js",
+            "templates/presupuesto_form.html": "js/pages/budget-form.js",
+            "templates/venta_form.html": "js/pages/sale-form.js",
+        }
+        for template_path, script_path in pages.items():
+            template = (root / template_path).read_text(encoding="utf-8")
+            script = (root / "static" / script_path).read_text(encoding="utf-8")
+            self.assertIn(f"filename='{script_path}'", template, template_path)
+            self.assertNotRegex(template, r"<script\b(?![^>]*\bsrc\s*=)[^>]*>", str(template_path))
+            self.assertNotRegex(
+                template,
+                r"\son[a-z]+\s*=",
+                template_path,
+            )
+            self.assertNotIn("{{", script, script_path)
+            self.assertNotIn("{%", script, script_path)
+            self.assertNotRegex(
+                script,
+                r"(?:onclick|onsubmit|onchange|oninput|onmouseover|onmouseout)\s*=",
+                script_path,
+            )
+
+        products = (root / "templates/productos.html").read_text(encoding="utf-8")
+        links = (root / "templates/enlaces_activos.html").read_text(encoding="utf-8")
+        self.assertIn('data-product-action="edit"', products)
+        self.assertIn('data-product-action="delete"', products)
+        self.assertIn('data-confirm-revoke="true"', links)
+        citas = (root / "templates/citas.html").read_text(encoding="utf-8")
+        despiece = (root / "templates/despiece.html").read_text(encoding="utf-8")
+        averias = (root / "templates/averias_frecuentes.html").read_text(encoding="utf-8")
+        self.assertIn('data-cita-action="resolver"', citas)
+        self.assertIn('data-confirm-message=', despiece)
+        self.assertIn('data-labels=', averias)
+        self.assertIn('data-values=', averias)
+        public_tracking = (root / "templates/seguimiento_publico.html").read_text(encoding="utf-8")
+        followups = (root / "templates/seguimientos_cliente.html").read_text(encoding="utf-8")
+        models = (root / "templates/despiece_modelos.html").read_text(encoding="utf-8")
+        statistics = (root / "templates/estadisticas.html").read_text(encoding="utf-8")
+        tips = (root / "templates/propinas.html").read_text(encoding="utf-8")
+        self.assertIn("data-photo-url=", public_tracking)
+        self.assertIn("data-confirm-message=", followups)
+        self.assertIn("data-sync-endpoint=", models)
+        self.assertIn("data-auto-sync=", models)
+        self.assertIn("data-labels=", statistics)
+        self.assertIn("data-expenses=", statistics)
+        self.assertIn("data-propina-action=", tips)
+        dashboard = (root / "templates/dashboard.html").read_text(encoding="utf-8")
+        history = (root / "templates/cliente_historial.html").read_text(encoding="utf-8")
+        budgets = (root / "templates/presupuestos.html").read_text(encoding="utf-8")
+        self.assertIn("data-provider-search=", dashboard)
+        self.assertIn('data-notes-action="clear"', dashboard)
+        self.assertNotRegex(history, r"\son(?:mouseover|mouseout)\s*=")
+        self.assertIn('data-confirm-delete="true"', budgets)
+        smart_despiece = (root / "templates/despiece_form_inteligente.html").read_text(encoding="utf-8")
+        reference_search = (root / "templates/despiece_buscar_referencia.html").read_text(encoding="utf-8")
+        smart_js = (root / "static/js/pages/smart-despiece-form.js").read_text(encoding="utf-8")
+        reference_js = (root / "static/js/pages/reference-search.js").read_text(encoding="utf-8")
+        self.assertIn("data-suggestions-endpoint=", smart_despiece)
+        self.assertIn("data-search-endpoint=", reference_search)
+        self.assertNotIn("{{", smart_js)
+        self.assertNotIn("{{", reference_js)
+        self.assertIn('data-stop-propagation="true"', smart_js)
+
+        # Regresión global: ninguna plantilla puede reintroducir JS o eventos inline.
+        for template_path in (root / "templates").glob("*.html"):
+            template = template_path.read_text(encoding="utf-8")
+            self.assertNotRegex(template, r"<script\b(?![^>]*\bsrc\s*=)[^>]*>", str(template_path))
+            self.assertNotRegex(
+                template,
+                r"\son[a-z]+\s*=",
+                str(template_path),
+            )
+
+    def test_csp_blocks_inline_javascript_but_keeps_inline_styles(self):
+        response = A.app.test_client().get("/login")
+        self.assertEqual(response.status_code, 200)
+        csp = response.headers.get("Content-Security-Policy", "")
+        directives = {part.strip().split(" ", 1)[0]: part.strip() for part in csp.split(";") if part.strip()}
+        self.assertIn("script-src", directives)
+        self.assertNotIn("'unsafe-inline'", directives["script-src"])
+        self.assertIn("'self'", directives["script-src"])
+        self.assertIn("https://cdn.jsdelivr.net", directives["script-src"])
+        self.assertIn("https://cdnjs.cloudflare.com", directives["script-src"])
+        self.assertIn("'unsafe-inline'", directives.get("style-src", ""))
 
     def test_external_scripts_and_styles_have_sri(self):
         from pathlib import Path

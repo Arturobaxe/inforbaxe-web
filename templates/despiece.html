@@ -20,8 +20,8 @@
       {% for familia in familias %}
       <div style="display:flex;align-items:center;gap:4px;background:var(--bg3);border-radius:8px;padding:3px 5px 3px 9px;">
         <a href="{{ url_for('despiece', familia=familia.id, q=q or None) }}" style="font-size:12px;font-weight:600;color:{% if familia_id == familia.id %}var(--accent){% else %}var(--t2){% endif %};padding:4px;">{{ familia.nombre }}</a>
-        <button type="button" class="btn btn-sm" style="padding:3px 6px;" title="Renombrar familia" data-family-id="{{ familia.id }}" data-family-name="{{ familia.nombre }}" onclick="editFamily(this)">✎</button>
-        <form method="post" action="{{ url_for('despiece_familia_eliminar', id_familia=familia.id) }}" onsubmit="return confirm('¿Eliminar esta familia? Solo se permite si está vacía.');" style="display:inline;">
+        <button type="button" class="btn btn-sm" style="padding:3px 6px;" title="Renombrar familia" data-family-id="{{ familia.id }}" data-family-name="{{ familia.nombre }}" data-family-action="edit">✎</button>
+        <form method="post" action="{{ url_for('despiece_familia_eliminar', id_familia=familia.id) }}" data-confirm-message="¿Eliminar esta familia? Solo se permite si está vacía." style="display:inline;">
           <button type="submit" class="btn btn-sm" style="padding:3px 6px;color:var(--red);" title="Eliminar familia">×</button>
         </form>
       </div>
@@ -83,7 +83,7 @@
               <a href="{{ url_for('despiece_inteligente.buscar_referencia', repuesto_id=p.id) }}" class="btn btn-green btn-sm">Buscar ref.</a>
               <a href="{{ url_for('despiece_inteligente.gestionar_compatibilidades', repuesto_id=p.id) }}" class="btn btn-secondary btn-sm">Compatibilidad</a>
               <a href="{{ url_for('despiece_repuesto_editar', id_repuesto=p.id) }}" class="btn btn-blue btn-sm">Editar</a>
-              <form method="post" action="{{ url_for('despiece_repuesto_eliminar', id_repuesto=p.id) }}" style="display:inline;" onsubmit="return confirm('¿Eliminar esta pieza del catálogo?');">
+              <form method="post" action="{{ url_for('despiece_repuesto_eliminar', id_repuesto=p.id) }}" style="display:inline;" data-confirm-message="¿Eliminar esta pieza del catálogo?">
                 <button class="btn btn-danger btn-sm" type="submit">Eliminar</button>
               </form>
             </td>
@@ -106,18 +106,5 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script>
-function editFamily(button) {
-  const id = button.dataset.familyId;
-  const currentName = button.dataset.familyName;
-  const name = prompt('Nuevo nombre de la familia:', currentName);
-  if (!name || !name.trim() || name.trim() === currentName) return;
-  const form = document.createElement('form');
-  form.method = 'POST';
-  form.action = `/despiece/familias/${id}/editar`;
-  const input = document.createElement('input');
-  input.type = 'hidden'; input.name = 'nombre'; input.value = name.trim();
-  form.appendChild(input); document.body.appendChild(form); form.submit();
-}
-</script>
+<script src="{{ url_for('static', filename='js/pages/despiece.js') }}"></script>
 {% endblock %}

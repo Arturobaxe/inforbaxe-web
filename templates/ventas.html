@@ -250,12 +250,12 @@
           <td><span class="badge badge-blue">{{ v.metodo_pago }}</span></td>
           <td>{% if v.pagado == 'Sí' %}<span class="badge badge-green">✓ Sí</span>{% else %}<span class="badge badge-red">✗ No</span>{% endif %}</td>
           <td><div class="sales-actions">
-            {% if v.pagado == 'No' %}<button type="button" onclick="marcarPagado({{ v.id }},this.dataset.nombre)" data-nombre="{{ v.nombre_cliente|e }}" class="btn btn-sale-cobrar" title="Cobrar" aria-label="Cobrar venta">💰</button>{% endif %}
+            {% if v.pagado == 'No' %}<button type="button" data-sale-action="mark-paid" data-sale-id="{{ v.id }}" data-nombre="{{ v.nombre_cliente|e }}" class="btn btn-sale-cobrar" title="Cobrar" aria-label="Cobrar venta">💰</button>{% endif %}
             <a href="{{ url_for('albaran_pdf', id_venta=v.id) }}" target="_blank" class="btn btn-secondary btn-sm" title="Albarán">🖨️</a>
-            <button type="button" onclick="duplicarVenta({{ v.id }})" class="btn btn-secondary btn-sm" title="Duplicar">📋</button>
-            <form method="post" action="{{ url_for('seguimiento_reparaciones.crear_desde_venta', id_venta=v.id) }}"><button type="submit" class="btn btn-sale-follow" title="Crear enlace de seguimiento" onclick="return confirm('¿Crear un seguimiento privado para esta venta?')">🔗 Enlace</button></form>
+            <button type="button" data-sale-action="duplicate" data-sale-id="{{ v.id }}" class="btn btn-secondary btn-sm" title="Duplicar">📋</button>
+            <form method="post" action="{{ url_for('seguimiento_reparaciones.crear_desde_venta', id_venta=v.id) }}" data-confirm-message="¿Crear un seguimiento privado para esta venta?"><button type="submit" class="btn btn-sale-follow" title="Crear enlace de seguimiento" >🔗 Enlace</button></form>
             <a href="{{ url_for('venta_editar', id_venta=v.id) }}" class="btn btn-blue btn-sm" title="Editar">✏️</a>
-            <button type="button" onclick="confirmDelete('/api/ventas/{{ v.id }}','¿Eliminar venta #{{ v.id }}?')" class="btn btn-danger btn-sm" title="Eliminar">🗑️</button>
+            <button type="button" data-confirm-delete="true" data-url="/api/ventas/{{ v.id }}" data-msg="¿Eliminar venta #{{ v.id }}?" class="btn btn-danger btn-sm" title="Eliminar">🗑️</button>
           </div></td>
         </tr>
         {% else %}<tr><td colspan="9"><div class="empty-state"><div class="empty-state-icon">🛒</div><div class="empty-state-text">Sin ventas</div></div></td></tr>{% endfor %}
@@ -270,7 +270,7 @@
     {% for v in ventas %}
     <article class="sale-swipe" data-sale-swipe="{{ v.id }}">
       <div class="sale-delete-back">
-        <button type="button" onclick="confirmDelete('/api/ventas/{{ v.id }}','¿Eliminar venta #{{ v.id }}?')"><span>🗑️</span>Eliminar</button>
+        <button type="button" data-confirm-delete="true" data-url="/api/ventas/{{ v.id }}" data-msg="¿Eliminar venta #{{ v.id }}?"><span>🗑️</span>Eliminar</button>
       </div>
       <div class="sale-card-front">
         <div class="sale-card-top">
@@ -292,12 +292,12 @@
             {% if v.pagado == 'Sí' %}<span class="badge badge-green">✓ Cobrado</span>{% else %}<span class="badge badge-red">Pendiente</span>{% endif %}
           </div>
           <div class="sale-card-actions">
-            {% if v.pagado == 'No' %}<button type="button" onclick="marcarPagado({{ v.id }},this.dataset.nombre)" data-nombre="{{ v.nombre_cliente|e }}" class="btn btn-green btn-sm" title="Cobrar">💰</button>{% endif %}
+            {% if v.pagado == 'No' %}<button type="button" data-sale-action="mark-paid" data-sale-id="{{ v.id }}" data-nombre="{{ v.nombre_cliente|e }}" class="btn btn-green btn-sm" title="Cobrar">💰</button>{% endif %}
             <a href="{{ url_for('albaran_pdf', id_venta=v.id) }}" target="_blank" class="btn btn-secondary btn-sm" title="Albarán">🖨️</a>
-            <button type="button" onclick="duplicarVenta({{ v.id }})" class="btn btn-secondary btn-sm" title="Duplicar">📋</button>
-            <form method="post" action="{{ url_for('seguimiento_reparaciones.crear_desde_venta', id_venta=v.id) }}" style="display:inline;margin:0"><button type="submit" class="btn btn-follow" title="Crear enlace de seguimiento" aria-label="Crear enlace de seguimiento" onclick="return confirm('¿Crear un seguimiento privado para esta venta?')">🔗 Enlace</button></form>
+            <button type="button" data-sale-action="duplicate" data-sale-id="{{ v.id }}" class="btn btn-secondary btn-sm" title="Duplicar">📋</button>
+            <form method="post" action="{{ url_for('seguimiento_reparaciones.crear_desde_venta', id_venta=v.id) }}" data-confirm-message="¿Crear un seguimiento privado para esta venta?" style="display:inline;margin:0"><button type="submit" class="btn btn-follow" title="Crear enlace de seguimiento" aria-label="Crear enlace de seguimiento" >🔗 Enlace</button></form>
             <a href="{{ url_for('venta_editar', id_venta=v.id) }}" class="btn btn-blue btn-sm" title="Editar" aria-label="Editar venta">✏️</a>
-            <button type="button" onclick="confirmDelete('/api/ventas/{{ v.id }}','¿Eliminar venta #{{ v.id }}?')" class="btn btn-delete" title="Eliminar" aria-label="Eliminar venta">🗑️</button>
+            <button type="button" data-confirm-delete="true" data-url="/api/ventas/{{ v.id }}" data-msg="¿Eliminar venta #{{ v.id }}?" class="btn btn-delete" title="Eliminar" aria-label="Eliminar venta">🗑️</button>
           </div>
         </div>
         <div class="sale-swipe-hint">Desliza a la izquierda para eliminar</div>
@@ -330,161 +330,13 @@
       </select>
     </div>
     <div style="display:flex;gap:10px;margin-top:16px;">
-      <button onclick="cerrarModal()" class="btn btn-secondary" style="flex:1;">Cancelar</button>
-      <button id="btn-confirmar-cobro" onclick="confirmarCobro()" class="btn btn-primary" style="flex:1;">✓ Cobrado</button>
+      <button data-sale-action="close-payment" class="btn btn-secondary" style="flex:1;">Cancelar</button>
+      <button id="btn-confirmar-cobro" data-sale-action="confirm-payment" class="btn btn-primary" style="flex:1;">✓ Cobrado</button>
     </div>
   </div>
 </div>
 {% endblock %}
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.js" integrity="sha256-mvTaORw+RTgKnX6ZHT4P5Sc9DNP2TBpSGII7F3sT8iE=" crossorigin="anonymous"></script>
-<script>
-let ventaIdCobro = null;
-if (new URLSearchParams(window.location.search).get('venta_guardada') === '1') {
-  try { sessionStorage.removeItem('inforbaxe:venta:nueva:v2'); } catch (_) {}
-}
-
-function marcarPagado(id, nombre) {
-  ventaIdCobro = id;
-  document.getElementById('modal-cliente-name').textContent = 'Cliente: ' + nombre;
-  document.getElementById('modal-cobro').style.display = 'flex';
-}
-function cerrarModal() {
-  document.getElementById('modal-cobro').style.display = 'none';
-  ventaIdCobro = null;
-}
-
-function celebrarPago() {
-  const overlay = document.createElement('div');
-  overlay.className = 'payment-celebration';
-  overlay.setAttribute('aria-live', 'polite');
-  overlay.setAttribute('aria-atomic', 'true');
-
-  const toast = document.createElement('div');
-  toast.className = 'payment-toast';
-  const title = document.createElement('strong');
-  title.textContent = '¡PAGO RECIBIDO!';
-  const subtitle = document.createElement('span');
-  subtitle.textContent = 'Cobro registrado correctamente';
-  toast.append(title, subtitle);
-  overlay.appendChild(toast);
-
-  const reduceMotion = window.matchMedia &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (!reduceMotion) {
-    const symbols = ['€', '💶', '🪙', '💸', '€', '💶', '🪙', '€'];
-    for (let i = 0; i < 30; i++) {
-      const coin = document.createElement('span');
-      coin.className = 'payment-coin';
-      coin.textContent = symbols[i % symbols.length];
-      coin.style.left = (24 + Math.random() * 52) + '%';
-      coin.style.top = (51 + Math.random() * 15) + '%';
-      coin.style.fontSize = (22 + Math.random() * 21) + 'px';
-      coin.style.setProperty('--money-drift', ((Math.random() - .5) * 520) + 'px');
-      coin.style.setProperty('--money-spin', ((Math.random() - .5) * 760) + 'deg');
-      coin.style.animationDelay = (Math.random() * 280) + 'ms';
-      overlay.appendChild(coin);
-    }
-
-    const notes = ['€5', '€10', '€20', '€50', '€100', '€20', '€50', '€10', '€100', '€20', '€50', '€10'];
-    notes.forEach((amount, index) => {
-      const note = document.createElement('span');
-      note.className = 'payment-note';
-      note.textContent = amount;
-      note.style.left = (20 + Math.random() * 60) + '%';
-      note.style.top = (52 + Math.random() * 13) + '%';
-      note.style.setProperty('--money-drift', ((Math.random() - .5) * 620) + 'px');
-      note.style.setProperty('--money-spin', ((Math.random() - .5) * 680) + 'deg');
-      note.style.animationDelay = (Math.random() * 280) + 'ms';
-      overlay.appendChild(note);
-    });
-  }
-
-  document.body.appendChild(overlay);
-  requestAnimationFrame(() => overlay.classList.add('is-active'));
-
-  if (!reduceMotion && typeof window.confetti === 'function') {
-    window.confetti({
-      particleCount: 78, spread: 74, startVelocity: 38,
-      origin: { x: .5, y: .58 },
-      colors: ['#16a34a', '#facc15', '#0ea5e9', '#ffffff']
-    });
-  }
-
-  window.setTimeout(() => {
-    overlay.classList.remove('is-active');
-    window.setTimeout(() => overlay.remove(), 350);
-  }, 3450);
-}
-
-function confirmarCobro() {
-  if (!ventaIdCobro) return;
-  const button = document.getElementById('btn-confirmar-cobro');
-  const metodo = document.getElementById('modal-metodo').value;
-  if (button) { button.disabled = true; button.textContent = 'Registrando…'; }
-
-  fetch(`/api/ventas/${ventaIdCobro}/cobrar`, {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({metodo})
-  }).then(async response => {
-    if (!response.ok) throw new Error('No se pudo registrar el cobro.');
-    const result = await response.json();
-    if (!result || result.ok !== true) throw new Error('El servidor no ha confirmado el cobro.');
-    cerrarModal();
-    celebrarPago();
-    window.setTimeout(() => location.reload(), 3650);
-  }).catch(error => {
-    if (button) { button.disabled = false; button.textContent = '✓ Cobrado'; }
-    alert(error.message || 'No se ha podido registrar el cobro. Inténtalo de nuevo.');
-  });
-}
-document.getElementById('modal-cobro').addEventListener('click', e => {
-  if(e.target===document.getElementById('modal-cobro')) cerrarModal();
-});
-
-// Si se cambió una venta de pendiente a pagada desde su ficha, celebrar al volver al listado.
-(() => {
-  let pending = false;
-  try {
-    pending = sessionStorage.getItem('inforbaxe:celebrate-payment') === '1';
-    if (pending) sessionStorage.removeItem('inforbaxe:celebrate-payment');
-  } catch (_) {}
-  if (pending) window.setTimeout(celebrarPago, 180);
-})();
-
-function duplicarVenta(id) {
-  if (!confirm('¿Duplicar esta venta con fecha de hoy?')) return;
-  fetch(`/api/ventas/${id}/duplicar`, {method:'POST'})
-    .then(r=>r.json()).then(d=>{ if(d.ok) location.reload(); });
-}
-
-(() => {
-  const cards = [...document.querySelectorAll('[data-sale-swipe]')];
-  cards.forEach(card => {
-    let startX = 0, startY = 0;
-    card.addEventListener('touchstart', event => {
-      if (event.target.closest('a,button,form,input,select')) return;
-      startX = event.changedTouches[0].clientX;
-      startY = event.changedTouches[0].clientY;
-    }, { passive: true });
-    card.addEventListener('touchend', event => {
-      if (!startX && !startY) return;
-      const dx = event.changedTouches[0].clientX - startX;
-      const dy = event.changedTouches[0].clientY - startY;
-      if (Math.abs(dx) > 58 && Math.abs(dx) > Math.abs(dy) * 1.25) {
-        if (dx < 0) {
-          cards.forEach(other => { if (other !== card) other.classList.remove('is-open'); });
-          card.classList.add('is-open');
-        } else {
-          card.classList.remove('is-open');
-        }
-      }
-      startX = 0; startY = 0;
-    }, { passive: true });
-  });
-  document.addEventListener('touchstart', event => {
-    if (!event.target.closest('[data-sale-swipe]')) cards.forEach(card => card.classList.remove('is-open'));
-  }, { passive: true });
-})();
-</script>
+<script src="{{ url_for('static', filename='js/pages/sales.js') }}"></script>
 {% endblock %}

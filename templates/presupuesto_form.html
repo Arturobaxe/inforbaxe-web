@@ -20,7 +20,7 @@
 {% endblock %}
 {% block content %}
 <div style="max-width:860px; margin:0 auto;">
-  <form method="POST" id="presup-form">
+  <form method="POST" id="presup-form" data-initial-products="{{ (presupuesto.productos if presupuesto and presupuesto.productos else [])|tojson|forceescape }}">
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
       <div>
         <div class="card mb-4">
@@ -35,13 +35,13 @@
             </select>
           </div>
           <div class="form-group">
-            <button type="button" onclick="toggleNuevoClientePresupuesto()" class="btn btn-secondary" style="width:100%;">➕ Crear cliente nuevo</button>
+            <button type="button" data-budget-action="toggle-client" class="btn btn-secondary" style="width:100%;">➕ Crear cliente nuevo</button>
             <div id="nuevo-cliente-presupuesto" style="display:none;margin-top:10px;padding:10px;background:var(--bg3);border-radius:8px;">
               <input type="text" id="ncp-nombre" class="form-control" placeholder="Nombre *" style="margin-bottom:8px;">
               <input type="text" id="ncp-tel" class="form-control" placeholder="Teléfono" style="margin-bottom:8px;">
               <input type="text" id="ncp-email" class="form-control" placeholder="Email" style="margin-bottom:8px;">
               <textarea id="ncp-notas" class="form-control" rows="2" placeholder="Comentarios / notas del cliente" style="margin-bottom:8px;"></textarea>
-              <button type="button" onclick="crearClientePresupuesto()" class="btn btn-primary" style="width:100%;">✓ Crear y seleccionar</button>
+              <button type="button" data-budget-action="create-client" class="btn btn-primary" style="width:100%;">✓ Crear y seleccionar</button>
             </div>
           </div>
           <div class="form-grid form-grid-2">
@@ -85,11 +85,11 @@
             <div class="form-grid form-grid-3" style="margin-bottom:8px;">
               <div class="form-group" style="margin:0;">
                 <label class="form-label">Mi coste (€)</label>
-                <input type="number" id="prod-coste" class="form-control" step="0.01" min="0" placeholder="0.00" oninput="calcPVP()">
+                <input type="number" id="prod-coste" class="form-control" step="0.01" min="0" placeholder="0.00" data-budget-calc="true">
               </div>
               <div class="form-group" style="margin:0;">
                 <label class="form-label">Beneficio (€)</label>
-                <input type="number" id="prod-benef" class="form-control" step="0.01" min="0" placeholder="0.00" oninput="calcPVP()">
+                <input type="number" id="prod-benef" class="form-control" step="0.01" min="0" placeholder="0.00" data-budget-calc="true">
               </div>
               <div class="form-group" style="margin:0;">
                 <label class="form-label">Cantidad</label>
@@ -100,7 +100,7 @@
               <label class="form-label">PVP al cliente</label>
               <div class="pvp-display" id="pvp-display">0.00 €</div>
             </div>
-            <button type="button" onclick="addProducto()" class="btn btn-primary" style="width:100%;">➕ Añadir línea</button>
+            <button type="button" data-budget-action="add-product" class="btn btn-primary" style="width:100%;">➕ Añadir línea</button>
           </div>
           <div id="productos-list"></div>
           <input type="hidden" name="productos_json" id="productos-json">
@@ -121,112 +121,5 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script>
-let productos = {{ presupuesto.productos | tojson if presupuesto and presupuesto.productos else '[]' }};
-
-function calcPVP() {
-  const c = parseFloat(document.getElementById('prod-coste').value)||0;
-  const b = parseFloat(document.getElementById('prod-benef').value)||0;
-  document.getElementById('pvp-display').textContent = (c+b).toFixed(2)+' €';
-}
-
-function toggleNuevoClientePresupuesto() {
-  const panel = document.getElementById('nuevo-cliente-presupuesto');
-  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-}
-
-async function crearClientePresupuesto() {
-  const nombre = document.getElementById('ncp-nombre').value.trim();
-  if (!nombre) { alert('El nombre es obligatorio'); return; }
-  try {
-    const response = await fetch('/api/clientes/nuevo', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({
-        nombre,
-        telefono: document.getElementById('ncp-tel').value,
-        email: document.getElementById('ncp-email').value,
-        notas: document.getElementById('ncp-notas').value
-      })
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'No se pudo crear el cliente');
-    const select = document.querySelector('select[name="id_cliente"]');
-    if (select.tomselect) {
-      select.tomselect.addOption({value: String(data.id), text: data.nombre});
-      select.tomselect.setValue(String(data.id));
-    } else {
-      const option = document.createElement('option');
-      option.value = data.id; option.textContent = data.nombre; option.selected = true;
-      select.appendChild(option);
-    }
-    ['ncp-nombre','ncp-tel','ncp-email','ncp-notas'].forEach(id => document.getElementById(id).value = '');
-    document.getElementById('nuevo-cliente-presupuesto').style.display = 'none';
-  } catch (error) {
-    alert(error.message || 'Error al crear cliente');
-  }
-}
-
-function escapeHtml(value) {
-  return String(value ?? '').replace(/[&<>"']/g, char => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-  })[char]);
-}
-
-function renderProductos() {
-  const list = document.getElementById('productos-list');
-  let pvpT=0, benT=0, costeT=0;
-  list.innerHTML = productos.map((p,i)=>{
-    pvpT += p.pvp*p.cantidad; benT += p.beneficio*p.cantidad; costeT += (p.coste||0)*p.cantidad;
-    return `<div class="prod-row" style="flex-wrap:wrap;">
-      <div class="prod-row-name" style="width:100%;margin-bottom:4px;">${escapeHtml(p.nombre)}</div>
-      <div class="prod-row-nums" style="flex:1;">
-        <span style="color:var(--t3)">coste:${parseFloat(p.coste||0).toFixed(2)}€</span>
-        <span style="color:var(--green)">+${parseFloat(p.beneficio).toFixed(2)}€</span>
-        <span style="color:var(--blue);font-weight:700;">PVP:${parseFloat(p.pvp).toFixed(2)}€</span>
-        <span>×${p.cantidad}</span>
-      </div>
-      <button type="button" onclick="editProducto(${i})" style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:14px;padding:0 4px;" title="Editar">✏️</button>
-      <button type="button" class="prod-row-delete" onclick="removeProducto(${i})">✕</button>
-    </div>`;
-  }).join('');
-  document.getElementById('total-pvp').textContent = pvpT.toFixed(2)+' €';
-  document.getElementById('total-coste').textContent = costeT.toFixed(2)+' €';
-  document.getElementById('total-benef').textContent = benT.toFixed(2)+' €';
-  document.getElementById('productos-json').value = JSON.stringify(productos);
-}
-
-function editProducto(i) {
-  const p = productos[i];
-  document.getElementById('prod-nombre').value = p.nombre;
-  document.getElementById('prod-coste').value  = (p.coste||0).toFixed(2);
-  document.getElementById('prod-benef').value  = p.beneficio.toFixed(2);
-  document.getElementById('prod-cant').value   = p.cantidad;
-  calcPVP();
-  productos.splice(i, 1);
-  renderProductos();
-  document.getElementById('prod-nombre').focus();
-}
-
-function addProducto() {
-  const nombre = document.getElementById('prod-nombre').value.trim();
-  const coste = parseFloat(document.getElementById('prod-coste').value)||0;
-  const benef = parseFloat(document.getElementById('prod-benef').value)||0;
-  const pvp = coste+benef;
-  const cant = parseInt(document.getElementById('prod-cant').value)||1;
-  if (!nombre) { alert('Introduce el nombre'); return; }
-  productos.push({nombre,coste,pvp,beneficio:benef,cantidad:cant});
-  renderProductos();
-  ['prod-nombre','prod-coste','prod-benef'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('prod-cant').value='1';
-  document.getElementById('pvp-display').textContent='0.00 €';
-  document.getElementById('prod-nombre').focus();
-}
-
-function removeProducto(i) { productos.splice(i,1); renderProductos(); }
-
-document.getElementById('presup-form').addEventListener('submit',()=>{
-  document.getElementById('productos-json').value=JSON.stringify(productos);
-});
-renderProductos();
-</script>
+<script src="{{ url_for('static', filename='js/pages/budget-form.js') }}"></script>
 {% endblock %}

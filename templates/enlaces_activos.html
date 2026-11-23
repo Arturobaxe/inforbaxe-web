@@ -68,7 +68,7 @@
         </div>
         <div class="link-actions">
           <a class="btn btn-secondary btn-sm" href="{{ url_for('seguimiento_reparaciones.admin_cliente',id_cliente=item.id_cliente) }}">Ver ficha</a>
-          <form method="post" action="{{ url_for('seguimiento_reparaciones.revocar_enlace',id_seguimiento=item.id) }}" data-nombre="{{ item.nombre_cliente }}" onsubmit="return confirm('¿Revocar el enlace de ' + this.dataset.nombre + '? El cliente perderá el acceso y se eliminará la fotografía asociada.');">
+          <form method="post" action="{{ url_for('seguimiento_reparaciones.revocar_enlace',id_seguimiento=item.id) }}" data-nombre="{{ item.nombre_cliente }}" data-confirm-revoke="true">
             <input type="hidden" name="origen" value="panel">
             <button class="btn btn-danger btn-sm" type="submit">Revocar</button>
           </form>
@@ -84,25 +84,5 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script>
-(() => {
-  const input = document.getElementById('link-search');
-  const list = document.getElementById('links-list');
-  if (!input || !list) return;
-  const rows = [...list.querySelectorAll('.link-row')];
-  const count = document.getElementById('link-count');
-  const empty = document.getElementById('no-search-results');
-  input.addEventListener('input', () => {
-    const q = input.value.trim().toLocaleLowerCase('es');
-    let shown = 0;
-    rows.forEach(row => {
-      const match = (row.dataset.search || '').includes(q);
-      row.hidden = !match;
-      if (match) shown++;
-    });
-    count.textContent = shown + (shown === 1 ? ' enlace' : ' enlaces');
-    empty.hidden = shown !== 0;
-  });
-})();
-</script>
+<script src="{{ url_for('static', filename='js/pages/active-links.js') }}"></script>
 {% endblock %}
