@@ -1158,6 +1158,39 @@ def api_delete_mensualidad(id_mens):
     db.delete_mensualidad(id_mens)
     return jsonify({"ok": True})
 
+def _mes_calendario_desplazado(year, month, offset):
+    """Devuelve el primer día del mes desplazado respecto al mes indicado."""
+    total = year * 12 + (month - 1) + offset
+    return date(total // 12, total % 12 + 1, 1)
+
+
+def _preparar_citas_calendario(citas):
+    """Reduce las citas a los campos mínimos que necesita el calendario."""
+    eventos = []
+    estados_validos = {"pendiente", "completada", "no_asistio", "cancelada"}
+    for cita in citas or []:
+        if not isinstance(cita, dict):
+            continue
+        try:
+            id_cita = int(cita.get("id"))
+            if id_cita <= 0:
+                continue
+            fecha = date.fromisoformat(str(cita.get("fecha") or "")[:10]).isoformat()
+        except (TypeError, ValueError, OverflowError):
+            continue
+        estado = str(cita.get("estado") or "").strip().lower()
+        if estado not in estados_validos:
+            estado = "otro"
+        eventos.append({
+            "id": id_cita,
+            "fecha": fecha,
+            "hora": str(cita.get("hora") or "").strip()[:5],
+            "cliente": str(cita.get("nombre_cliente") or "Cliente")[:100],
+            "estado": estado,
+        })
+    return sorted(eventos, key=lambda item: (item["fecha"], item["hora"], item["id"]))
+
+
 @app.route("/citas")
 @login_required
 def citas():
@@ -1177,8 +1210,18 @@ def citas():
     if estado:     lista = [c for c in lista if c.get("estado") == estado]
     if buscar_str: lista = [c for c in lista if buscar_str in c.get("nombre_cliente","").lower()
                             or buscar_str in c.get("observaciones","").lower()]
+    calendario_min = _mes_calendario_desplazado(hoy.year, hoy.month, -6)
+    calendario_max = _mes_calendario_desplazado(hoy.year, hoy.month, 12)
+    calendario_hasta = _mes_calendario_desplazado(hoy.year, hoy.month, 13) - timedelta(days=1)
+    citas_calendario = _preparar_citas_calendario(db.get_citas(
+        fecha_desde=calendario_min.isoformat(),
+        fecha_hasta=calendario_hasta.isoformat(),
+    ))
     return render_template("citas.html", citas=lista, clientes=db.get_clientes(),
-        hoy=hoy.isoformat(), filtros={"desde": fecha_desde, "buscar": buscar_str, "estado": estado})
+        hoy=hoy.isoformat(), citas_calendario=citas_calendario,
+        calendario_min=calendario_min.strftime("%Y-%m"),
+        calendario_max=calendario_max.strftime("%Y-%m"),
+        filtros={"desde": fecha_desde, "buscar": buscar_str, "estado": estado})
 
 @app.route("/citas/nueva", methods=["GET", "POST"])
 @login_required
